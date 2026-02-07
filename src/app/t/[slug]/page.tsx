@@ -40,16 +40,14 @@ export default async function TenantPurchasePage({ params }: Props) {
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-20 lg:py-28">
         <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr] lg:items-center">
           <div className="space-y-8">
-            <div>
-              <span className="inline-flex items-center rounded-lg bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
-                {tenant.name}
-              </span>
-              <h1 className="font-display mt-6 text-5xl font-semibold leading-tight tracking-tight sm:text-6xl text-balance">
-                Instant Wi-Fi access for your guests
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold uppercase tracking-widest text-primary">{tenant.name}</h2>
+              <h1 className="font-display text-6xl font-bold leading-tight tracking-tight sm:text-7xl text-balance">
+                Buy instant WiFi
               </h1>
             </div>
             <p className="text-lg leading-relaxed text-muted-foreground max-w-lg">
-              Choose your Wi-Fi package, complete a secure payment with Paystack, and get your access code delivered to your phone by SMS instantly.
+              Select a WiFi package, pay securely with Paystack, and get instant access via SMS. Get online in seconds.
             </p>
             
             <div className="flex flex-col gap-3">

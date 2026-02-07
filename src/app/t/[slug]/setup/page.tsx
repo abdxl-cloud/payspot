@@ -41,17 +41,15 @@ export default async function TenantSetupPage({ params }: Props) {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16 lg:py-24">
         <div className="mx-auto max-w-2xl space-y-8">
-          <div className="space-y-3">
-            <span className="inline-flex items-center rounded-lg bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
-              {tenant.name}
-            </span>
-            <div className="space-y-2">
-              <h1 className="font-display text-4xl font-semibold tracking-tight">
-                Complete your setup
+          <div className="space-y-4">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-primary">{tenant.name}</h2>
+            <div className="space-y-3">
+              <h1 className="font-display text-5xl font-bold tracking-tight">
+                Activate your link
               </h1>
-              <p className="text-muted-foreground text-base">
-                Secure your account and connect Paystack to activate your purchase link at{" "}
-                <span className="font-mono bg-muted px-2 py-1 rounded">/t/{tenant.slug}</span>
+              <p className="text-lg text-muted-foreground">
+                Secure your account and connect Paystack to start accepting payments at{" "}
+                <code className="font-mono bg-muted px-2 py-1 rounded text-sm">/t/{tenant.slug}</code>
               </p>
             </div>
           </div>

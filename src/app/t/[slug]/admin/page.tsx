@@ -40,19 +40,17 @@ export default async function TenantAdminPage({ params }: Props) {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16 lg:py-24">
-        <div className="space-y-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-3">
-              <span className="inline-flex items-center rounded-lg bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
-                {tenant.name}
-              </span>
-              <div className="space-y-2">
-                <h1 className="font-display text-4xl font-semibold tracking-tight">
-                  Sales dashboard
+        <div className="space-y-10">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold uppercase tracking-widest text-primary">{tenant.name}</h2>
+              <div className="space-y-3">
+                <h1 className="font-display text-5xl font-bold tracking-tight">
+                  Revenue dashboard
                 </h1>
-                <p className="text-muted-foreground text-base">
-                  Manage inventory, track sales, and monitor revenue for your link at{" "}
-                  <span className="font-mono bg-muted px-2 py-1 rounded">/t/{tenant.slug}</span>
+                <p className="text-lg text-muted-foreground max-w-xl">
+                  Manage inventory, track sales, and monitor revenue for your PaySpot link at{" "}
+                  <code className="font-mono bg-muted px-2 py-1 rounded text-sm">/t/{tenant.slug}</code>
                 </p>
               </div>
             </div>

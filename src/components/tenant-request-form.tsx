@@ -69,15 +69,12 @@ export function TenantRequestForm() {
   }
 
   return (
-    <Card className="border border-border bg-card shadow-lg">
-      <CardHeader className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Get started
-        </p>
-        <CardTitle className="text-2xl font-semibold">Request your Wi-Fi page</CardTitle>
-        <p className="text-sm text-muted-foreground">Set up your venue in minutes and start accepting payments</p>
+    <Card className="border-0 bg-card shadow-2xl">
+      <CardHeader className="space-y-4 pb-6">
+        <CardTitle className="font-display text-4xl font-bold leading-tight">Get started with PaySpot</CardTitle>
+        <p className="text-base text-muted-foreground">Create your venue page and start accepting WiFi payments in minutes.</p>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="grid gap-5">
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>Request failed</AlertTitle>
@@ -92,12 +89,12 @@ export function TenantRequestForm() {
           </Alert>
         ) : null}
 
-        <form className="grid gap-4" onSubmit={handleSubmit}>
+        <form className="grid gap-6" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <Label htmlFor="businessName">Business name</Label>
+            <Label htmlFor="businessName" className="text-sm font-semibold">Business name</Label>
             <Input
               id="businessName"
-              className="h-11"
+              className="h-12"
               placeholder="Acme Cafe"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
@@ -137,8 +134,8 @@ export function TenantRequestForm() {
             />
           </div>
 
-          <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={!canSubmit || loading}>
-            {loading ? "Submitting..." : "Create my page"}
+          <Button type="submit" className="h-12 w-full text-base font-bold mt-2" disabled={!canSubmit || loading}>
+            {loading ? "Setting up..." : "Create my page"}
           </Button>
         </form>
       </CardContent>

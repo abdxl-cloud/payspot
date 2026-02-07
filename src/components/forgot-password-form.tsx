@@ -46,12 +46,9 @@ export function ForgotPasswordForm() {
 
   return (
     <Card className="border border-border bg-card shadow-lg">
-      <CardHeader className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Send reset link
-        </p>
-        <CardTitle className="text-2xl font-semibold">Enter your email</CardTitle>
-        <p className="text-sm text-muted-foreground">We'll send you a password reset link</p>
+      <CardHeader className="space-y-4">
+        <CardTitle className="font-display text-3xl font-bold">Reset password</CardTitle>
+        <p className="text-base text-muted-foreground">Enter your email to receive a reset link</p>
       </CardHeader>
       <CardContent className="grid gap-6">
         {error ? (

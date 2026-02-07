@@ -46,12 +46,9 @@ export function LoginForm() {
 
   return (
     <Card className="border border-border bg-card shadow-lg">
-      <CardHeader className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Sign in
-        </p>
-        <CardTitle className="text-2xl font-semibold">Welcome back</CardTitle>
-        <p className="text-sm text-muted-foreground">Enter your credentials to access your account</p>
+      <CardHeader className="space-y-4">
+        <CardTitle className="font-display text-3xl font-bold">Sign in</CardTitle>
+        <p className="text-base text-muted-foreground">Access your PaySpot dashboard</p>
       </CardHeader>
       <CardContent className="grid gap-6">
         {error ? (

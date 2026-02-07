@@ -68,12 +68,9 @@ export function ResetPasswordForm({ token }: Props) {
 
   return (
     <Card className="border border-border bg-card shadow-lg">
-      <CardHeader className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Secure your account
-        </p>
-        <CardTitle className="text-2xl font-semibold">Create new password</CardTitle>
-        <p className="text-sm text-muted-foreground">Choose a strong password to secure your account</p>
+      <CardHeader className="space-y-4">
+        <CardTitle className="font-display text-3xl font-bold">New password</CardTitle>
+        <p className="text-base text-muted-foreground">Create a strong password to secure your account</p>
       </CardHeader>
       <CardContent className="grid gap-6">
         {error ? (

@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const { APP_URL } = getAppEnv();
     const resetUrl = new URL(`/reset-password/${token}`, APP_URL).toString();
 
-    const subject = "Reset your Vince Stack password";
+    const subject = "Reset your PaySpot password";
     const text = [
       "We received a password reset request for your account.",
       "",
