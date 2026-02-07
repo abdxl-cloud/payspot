@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
 import { getSessionUser } from "@/lib/store";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -20,21 +21,24 @@ export default async function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.25),_transparent_55%),_linear-gradient(135deg,_#f0fdf4,_#ecfeff_45%,_#ffffff)] text-slate-900">
-      <div className="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-12 sm:px-6 sm:py-16 lg:py-24">
-        <div className="mx-auto w-full max-w-md">
-          <div className="mb-6 space-y-2 text-center">
-            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/70 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-800">
-              Vince Stack
-            </div>
-            <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              Welcome back
-            </h1>
-            <p className="text-slate-600">Sign in to manage your portal.</p>
-          </div>
-
-          <LoginForm />
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/30 flex items-center justify-center px-4">
+      <div className="w-full max-w-md space-y-8">
+        <div className="text-center space-y-3">
+          <Link href="/" className="inline-block font-display text-3xl font-bold text-primary hover:text-primary/80 transition">
+            PaySpot
+          </Link>
+          <h1 className="font-display text-3xl font-bold">Welcome back</h1>
+          <p className="text-foreground/70">Sign in to manage your dashboard and sales</p>
         </div>
+
+        <LoginForm />
+
+        <p className="text-center text-sm text-foreground/60">
+          Don't have an account?{" "}
+          <Link href="/" className="text-primary hover:text-primary/80 font-semibold transition">
+            Request access
+          </Link>
+        </p>
       </div>
     </div>
   );

@@ -67,71 +67,71 @@ export function ResetPasswordForm({ token }: Props) {
       : null;
 
   return (
-    <Card className="border-white/60 bg-white/70 shadow-[0_30px_80px_rgba(15,23,42,0.15)] backdrop-blur">
-      <CardHeader className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-          New password
-        </p>
-        <CardTitle className="text-base">Update</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4">
+    <Card className="border border-border/40 bg-card/50 backdrop-blur-sm shadow-xl">
+      <CardContent className="pt-8">
         {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Reset failed</AlertTitle>
+          <Alert variant="destructive" className="mb-6 border-destructive/40 bg-destructive/5">
+            <AlertTitle className="font-semibold">Reset failed</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
 
         {success ? (
-          <Alert>
-            <AlertTitle>Success</AlertTitle>
-            <AlertDescription>{success}</AlertDescription>
+          <Alert className="mb-6 border-primary/40 bg-primary/5">
+            <AlertTitle className="font-semibold text-primary">Password updated</AlertTitle>
+            <AlertDescription className="text-primary/80">{success}</AlertDescription>
           </Alert>
         ) : null}
 
-        <form className="grid gap-4" onSubmit={handleSubmit}>
+        <form className="grid gap-6" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <Label htmlFor="newPassword">New password</Label>
+            <Label htmlFor="newPassword" className="font-semibold text-sm">
+              New password
+            </Label>
             <Input
               id="newPassword"
               type="password"
-              className="h-11"
+              className="h-11 rounded-lg border-border bg-background placeholder:text-foreground/40 focus:border-primary focus:ring-primary/10"
+              placeholder="••••••••"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               required
+              autoComplete="new-password"
             />
-            <p className="text-xs text-muted-foreground">
-              At least 8 characters, with upper/lowercase and a number.
+            <p className="text-xs text-foreground/60">
+              At least 8 characters, with upper/lowercase and a number
             </p>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="confirmPassword">Confirm password</Label>
+            <Label htmlFor="confirmPassword" className="font-semibold text-sm">
+              Confirm password
+            </Label>
             <Input
               id="confirmPassword"
               type="password"
-              className="h-11"
+              className="h-11 rounded-lg border-border bg-background placeholder:text-foreground/40 focus:border-primary focus:ring-primary/10"
+              placeholder="••••••••"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
+              autoComplete="new-password"
             />
           </div>
 
           {passwordError ? (
-            <p className="text-sm text-red-700">{passwordError}</p>
+            <p className="text-sm font-medium text-destructive">{passwordError}</p>
           ) : null}
-          {mismatch ? <p className="text-sm text-red-700">{mismatch}</p> : null}
+          {mismatch ? <p className="text-sm font-medium text-destructive">{mismatch}</p> : null}
 
-          <Button type="submit" className="h-12" disabled={!canSubmit}>
+          <Button 
+            type="submit" 
+            className="h-12 rounded-lg font-semibold mt-2 bg-primary hover:bg-primary/90 text-primary-foreground w-full"
+            disabled={!canSubmit}
+          >
             {loading ? "Saving..." : "Set new password"}
           </Button>
         </form>
-
-        <p className="text-center text-sm text-slate-600">
-          <Link href="/login" className="underline underline-offset-4">
-            Back to login
-          </Link>
-        </p>
       </CardContent>
     </Card>
   );

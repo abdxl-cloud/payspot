@@ -1,21 +1,23 @@
 import type { Metadata } from "next";
-import { Inter, Outfit } from "next/font/google";
+import { Poppins, DM_Sans } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const poppins = Poppins({
   variable: "--font-body",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const outfit = Outfit({
+const dmSans = DM_Sans({
   variable: "--font-heading",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "Vince Stack | Wi-Fi Vouchers",
+  title: "PaySpot | Sell Wi-Fi Vouchers",
   description:
-    "Sell Wi-Fi vouchers with Paystack and deliver access codes by SMS.",
+    "Accept secure payments and automatically deliver Wi-Fi access codes to your customers.",
 };
 
 export default function RootLayout({
@@ -25,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${outfit.variable} antialiased`}>
+      <body className={`${poppins.variable} ${dmSans.variable} antialiased`}>
         {children}
       </body>
     </html>
