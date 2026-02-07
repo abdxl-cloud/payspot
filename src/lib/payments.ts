@@ -2,6 +2,7 @@ import { getAppEnv, getEnv } from "@/lib/env";
 import {
   getPackageById,
   getTransaction,
+  markTransactionFailed,
   transactionAssignVoucher,
 } from "@/lib/store";
 import { sendVoucherSms } from "@/lib/termii";
@@ -66,15 +67,30 @@ export async function verifyAndProcess(params: {
     reference: params.reference,
   });
   if (verification.status !== "success") {
+    markTransactionFailed({
+      tenantId: params.tenantId,
+      reference: params.reference,
+      status: "paystack_failed",
+    });
     return { status: "not_success" as const };
   }
 
   const amountNgn = Math.round(verification.amount / 100);
   if (amountNgn !== params.expectedAmountNgn) {
+    markTransactionFailed({
+      tenantId: params.tenantId,
+      reference: params.reference,
+      status: "amount_mismatch",
+    });
     return { status: "amount_mismatch" as const };
   }
 
   if (verification.currency !== "NGN") {
+    markTransactionFailed({
+      tenantId: params.tenantId,
+      reference: params.reference,
+      status: "currency_mismatch",
+    });
     return { status: "currency_mismatch" as const };
   }
 

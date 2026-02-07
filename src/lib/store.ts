@@ -876,6 +876,7 @@ export function createTransaction(params: {
   const db = getDb();
   const now = nowIso();
   const id = randomUUID();
+  const email = normalizeEmail(params.email);
   db.prepare(
     `
       INSERT INTO transactions (
@@ -887,7 +888,7 @@ export function createTransaction(params: {
     id,
     params.tenantId,
     params.reference,
-    params.email,
+    email,
     params.phone,
     params.amountNgn,
     params.packageId,
@@ -912,11 +913,12 @@ export function getTransactionByReferenceEmail(
   email: string,
 ) {
   const db = getDb();
+  const normalizedEmail = normalizeEmail(email);
   return db
     .prepare(
-      "SELECT * FROM transactions WHERE tenant_id = ? AND reference = ? AND email = ?",
+      "SELECT * FROM transactions WHERE tenant_id = ? AND reference = ? AND lower(email) = ?",
     )
-    .get(tenantId, reference, email) as TransactionRow | undefined;
+    .get(tenantId, reference, normalizedEmail) as TransactionRow | undefined;
 }
 
 export function updateTransactionAuthUrl(params: {

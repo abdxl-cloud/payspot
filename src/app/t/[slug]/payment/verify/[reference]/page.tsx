@@ -99,6 +99,35 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
     );
   }
 
+  if (updated && updated.payment_status !== "pending" && updated.payment_status !== "processing") {
+    const failureMessages: Record<string, string> = {
+      paystack_failed:
+        "We could not confirm this payment with Paystack. If you were charged, please contact support.",
+      amount_mismatch:
+        "We received a payment but the amount did not match the selected package. Please contact support.",
+      currency_mismatch:
+        "We received a payment in an unsupported currency. Please contact support.",
+      init_failed:
+        "We could not start this payment. Please try again.",
+      voucher_unavailable:
+        "Payment succeeded but no voucher was available. Please contact support.",
+    };
+
+    const message =
+      failureMessages[updated.payment_status] ??
+      "This payment could not be completed. Please contact support.";
+
+    return (
+      <div className="min-h-screen bg-slate-950 text-white">
+        <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">
+          <h1 className="text-3xl font-semibold">Payment not completed</h1>
+          <p className="mt-4 text-slate-300">{message}</p>
+          <p className="mt-2 text-sm text-slate-400">Reference: {reference}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">

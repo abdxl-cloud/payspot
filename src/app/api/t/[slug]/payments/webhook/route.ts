@@ -66,12 +66,24 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   try {
-    await verifyAndProcess({
+    const result = await verifyAndProcess({
       tenantId: tenant.id,
       reference,
       expectedAmountNgn: transaction.amount_ngn,
       paystackSecretKey,
     });
+
+    if (
+      result.status === "not_success" ||
+      result.status === "amount_mismatch" ||
+      result.status === "currency_mismatch"
+    ) {
+      console.warn("Webhook verification mismatch", {
+        reference,
+        status: result.status,
+      });
+      return Response.json({ status: "failed", reason: result.status });
+    }
   } catch (error) {
     console.error("Webhook processing failed", error);
     return Response.json({ error: "Processing failed" }, { status: 500 });

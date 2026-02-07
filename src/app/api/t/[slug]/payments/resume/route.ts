@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
-import { getTenantBySlug, getTransactionByReferenceEmail } from "@/lib/store";
+import { verifyAndProcess } from "@/lib/payments";
+import {
+  getTenantBySlug,
+  getTransaction,
+  getTransactionByReferenceEmail,
+  requireTenantPaystackSecretKey,
+} from "@/lib/store";
 import { getResumeTtlMs } from "@/lib/payments";
 
 type Props = {
@@ -50,23 +56,64 @@ export async function POST(request: Request, { params }: Props) {
     });
   }
 
-  if (transaction.payment_status !== "pending") {
-    return Response.json(
-      { error: "Transaction cannot be resumed" },
-      { status: 409 },
-    );
+  if (transaction.payment_status === "pending") {
+    let paystackSecretKey: string;
+    try {
+      paystackSecretKey = requireTenantPaystackSecretKey(tenant.id);
+    } catch {
+      return Response.json(
+        { error: "Tenant payments are not configured" },
+        { status: 409 },
+      );
+    }
+    try {
+      await verifyAndProcess({
+        tenantId: tenant.id,
+        reference,
+        expectedAmountNgn: transaction.amount_ngn,
+        paystackSecretKey,
+      });
+    } catch (error) {
+      console.error("Resume verification failed", error);
+    }
+  }
+
+  const refreshed = getTransaction(tenant.id, reference) ?? transaction;
+
+  if (refreshed.payment_status === "success" && refreshed.voucher_code) {
+    return Response.json({
+      status: "success",
+      reference,
+    });
+  }
+
+  if (refreshed.payment_status !== "pending") {
+    const failureMessages: Record<string, string> = {
+      paystack_failed: "Payment could not be confirmed. Please contact support.",
+      amount_mismatch: "Payment amount did not match the selected package.",
+      currency_mismatch: "Payment currency was not supported.",
+      init_failed: "Payment could not be initialized. Please try again.",
+      voucher_unavailable:
+        "Payment succeeded but no voucher was available. Please contact support.",
+    };
+
+    const message =
+      failureMessages[refreshed.payment_status] ??
+      "Transaction cannot be resumed";
+
+    return Response.json({ error: message }, { status: 409 });
   }
 
   const ttlMs = getResumeTtlMs();
   const derivedExpiresAt =
-    transaction.expires_at ??
-    new Date(new Date(transaction.created_at).getTime() + ttlMs).toISOString();
+    refreshed.expires_at ??
+    new Date(new Date(refreshed.created_at).getTime() + ttlMs).toISOString();
 
   if (isExpired(derivedExpiresAt)) {
     return Response.json({ error: "Transaction expired" }, { status: 410 });
   }
 
-  if (!transaction.authorization_url) {
+  if (!refreshed.authorization_url) {
     return Response.json(
       { error: "Missing payment authorization" },
       { status: 409 },
@@ -75,7 +122,7 @@ export async function POST(request: Request, { params }: Props) {
 
   return Response.json({
     status: "pending",
-    authorizationUrl: transaction.authorization_url,
+    authorizationUrl: refreshed.authorization_url,
     ttlMs,
   });
 }
