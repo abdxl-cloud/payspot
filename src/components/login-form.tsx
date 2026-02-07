@@ -45,56 +45,50 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="border border-border bg-card shadow-lg">
-      <CardHeader className="space-y-4">
-        <CardTitle className="font-display text-3xl font-bold">Sign in</CardTitle>
-        <p className="text-base text-muted-foreground">Access your PaySpot dashboard</p>
-      </CardHeader>
-      <CardContent className="grid gap-6">
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Login failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
+    <div className="w-full space-y-6">
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Login failed</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        <form className="grid gap-5" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              className="h-11"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            className="h-12 border-border text-base rounded-lg"
+            placeholder="you@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+            <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+              Forgot?
+            </Link>
           </div>
+          <Input
+            id="password"
+            type="password"
+            className="h-12 border-border text-base rounded-lg"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
 
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-              <Link href="/forgot-password" className="text-xs text-primary hover:underline">
-                Forgot password?
-              </Link>
-            </div>
-            <Input
-              id="password"
-              type="password"
-              className="h-11"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={!canSubmit}>
-            {loading ? "Signing in..." : "Sign in"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+        <Button type="submit" className="w-full h-12 text-base font-semibold rounded-lg mt-8" disabled={!canSubmit}>
+          {loading ? "Signing in..." : "Sign in"}
+        </Button>
+      </form>
+    </div>
   );
 }

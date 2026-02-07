@@ -22,13 +22,9 @@ export default async function ForgotPasswordPage() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="mx-auto w-full max-w-md px-4">
-        <div className="mb-8 space-y-4">
-          <div className="space-y-3">
-            <h1 className="font-display text-5xl font-bold tracking-tight">
-              Reset password
-            </h1>
-            <p className="text-lg text-muted-foreground">Enter your email and we'll send a reset link</p>
-          </div>
+        <div className="mb-10 space-y-3">
+          <h1 className="font-display text-5xl font-bold">Reset password</h1>
+          <p className="text-muted-foreground">Enter your email to receive a reset link</p>
         </div>
 
         <ForgotPasswordForm />

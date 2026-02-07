@@ -67,73 +67,67 @@ export function ResetPasswordForm({ token }: Props) {
       : null;
 
   return (
-    <Card className="border border-border bg-card shadow-lg">
-      <CardHeader className="space-y-4">
-        <CardTitle className="font-display text-3xl font-bold">New password</CardTitle>
-        <p className="text-base text-muted-foreground">Create a strong password to secure your account</p>
-      </CardHeader>
-      <CardContent className="grid gap-6">
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Reset failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+    <div className="w-full space-y-6">
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Reset failed</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {success ? (
+        <Alert>
+          <AlertTitle>Success</AlertTitle>
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <div className="space-y-2">
+          <Label htmlFor="newPassword" className="text-sm font-medium">Password</Label>
+          <Input
+            id="newPassword"
+            type="password"
+            className="h-12 border-border text-base rounded-lg"
+            placeholder="••••••••"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+          />
+          <p className="text-xs text-muted-foreground">
+            8+ characters, uppercase, lowercase, and a number
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="confirmPassword" className="text-sm font-medium">Confirm</Label>
+          <Input
+            id="confirmPassword"
+            type="password"
+            className="h-12 border-border text-base rounded-lg"
+            placeholder="••••••••"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+          />
+        </div>
+
+        {passwordError ? (
+          <p className="text-sm text-destructive">{passwordError}</p>
         ) : null}
+        {mismatch ? <p className="text-sm text-destructive">{mismatch}</p> : null}
 
-        {success ? (
-          <Alert>
-            <AlertTitle>Success</AlertTitle>
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        ) : null}
+        <Button type="submit" className="w-full h-12 text-base font-semibold rounded-lg mt-8" disabled={!canSubmit}>
+          {loading ? "Updating..." : "Update password"}
+        </Button>
+      </form>
 
-        <form className="grid gap-5" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="newPassword" className="text-sm font-medium">New password</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              className="h-11"
-              placeholder="••••••••"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              Minimum 8 characters with uppercase, lowercase, and a number
-            </p>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="confirmPassword" className="text-sm font-medium">Confirm password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              className="h-11"
-              placeholder="••••••••"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          {passwordError ? (
-            <p className="text-sm text-destructive">{passwordError}</p>
-          ) : null}
-          {mismatch ? <p className="text-sm text-destructive">{mismatch}</p> : null}
-
-          <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={!canSubmit}>
-            {loading ? "Saving..." : "Update password"}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-muted-foreground">
-          <Link href="/login" className="text-primary hover:underline">
-            Back to login
-          </Link>
-        </p>
-      </CardContent>
-    </Card>
+      <p className="text-center text-sm text-muted-foreground">
+        <Link href="/login" className="font-medium text-primary hover:underline">
+          Back to login
+        </Link>
+      </p>
+    </div>
   );
 }
 

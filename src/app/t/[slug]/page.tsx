@@ -37,36 +37,21 @@ export default async function TenantPurchasePage({ params }: Props) {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-20 lg:py-28">
-        <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr] lg:items-center">
-          <div className="space-y-8">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-24">
+        <div className="grid gap-16 lg:grid-cols-2 lg:items-start">
+          <div className="space-y-8 pt-4">
             <div className="space-y-4">
-              <h2 className="text-sm font-semibold uppercase tracking-widest text-primary">{tenant.name}</h2>
-              <h1 className="font-display text-6xl font-bold leading-tight tracking-tight sm:text-7xl text-balance">
-                Buy instant WiFi
+              <p className="text-sm font-semibold text-muted-foreground">{tenant.name}</p>
+              <h1 className="font-display text-6xl sm:text-7xl font-bold leading-tight text-balance">
+                Buy WiFi
               </h1>
             </div>
-            <p className="text-lg leading-relaxed text-muted-foreground max-w-lg">
-              Select a WiFi package, pay securely with Paystack, and get instant access via SMS. Get online in seconds.
+            <p className="text-xl text-muted-foreground leading-relaxed max-w-lg font-light">
+              Select a package, pay securely, and get instant access via SMS.
             </p>
-            
-            <div className="flex flex-col gap-3">
-              <div className="flex items-start gap-3">
-                <div className="mt-1 h-5 w-5 rounded-full bg-accent flex-shrink-0" />
-                <span className="text-foreground">Multiple duration packages available</span>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="mt-1 h-5 w-5 rounded-full bg-accent flex-shrink-0" />
-                <span className="text-foreground">Secure Paystack payment processing</span>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="mt-1 h-5 w-5 rounded-full bg-accent flex-shrink-0" />
-                <span className="text-foreground">Instant SMS delivery of access codes</span>
-              </div>
-            </div>
           </div>
 
-          <div className="lg:pl-8">
+          <div>
             <Checkout tenantSlug={tenant.slug} packages={packages} />
           </div>
         </div>

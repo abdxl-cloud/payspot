@@ -69,10 +69,9 @@ export function TenantRequestForm() {
   }
 
   return (
-    <Card className="border-0 bg-card shadow-2xl">
+    <Card className="border border-border bg-white shadow-lg">
       <CardHeader className="space-y-4 pb-6">
-        <CardTitle className="font-display text-4xl font-bold leading-tight">Get started with PaySpot</CardTitle>
-        <p className="text-base text-muted-foreground">Create your venue page and start accepting WiFi payments in minutes.</p>
+        <CardTitle className="font-display text-3xl font-bold">Get started</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-5">
         {error ? (
@@ -90,11 +89,11 @@ export function TenantRequestForm() {
         ) : null}
 
         <form className="grid gap-6" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
+          <div className="grid gap-3">
             <Label htmlFor="businessName" className="text-sm font-semibold">Business name</Label>
             <Input
               id="businessName"
-              className="h-12"
+              className="h-12 border-border text-base"
               placeholder="Acme Cafe"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
@@ -102,31 +101,31 @@ export function TenantRequestForm() {
             />
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="slug">Link name</Label>
-            <Input
-              id="slug"
-              className="h-11"
-              placeholder="acme-cafe"
-              value={slug}
-              onChange={(e) => {
-                setSlugTouched(true);
-                setSlug(e.target.value);
-              }}
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              Your purchase link will look like{" "}
-              <span className="font-mono">/t/{slug || "your-link"}</span>
-            </p>
+          <div className="grid gap-3">
+            <Label htmlFor="slug" className="text-sm font-semibold">Link URL</Label>
+            <div className="flex items-center h-12 px-4 bg-muted border border-border rounded-md">
+              <span className="text-sm text-muted-foreground">/t/</span>
+              <input
+                id="slug"
+                type="text"
+                className="flex-1 ml-2 bg-transparent text-foreground placeholder-muted-foreground outline-none text-base"
+                placeholder="acme-cafe"
+                value={slug}
+                onChange={(e) => {
+                  setSlugTouched(true);
+                  setSlug(e.target.value);
+                }}
+                required
+              />
+            </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="email">Admin email</Label>
+          <div className="grid gap-3">
+            <Label htmlFor="email" className="text-sm font-semibold">Email</Label>
             <Input
               id="email"
               type="email"
-              className="h-11"
+              className="h-12 border-border text-base"
               placeholder="you@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -134,8 +133,8 @@ export function TenantRequestForm() {
             />
           </div>
 
-          <Button type="submit" className="h-12 w-full text-base font-bold mt-2" disabled={!canSubmit || loading}>
-            {loading ? "Setting up..." : "Create my page"}
+          <Button type="submit" className="h-12 w-full text-base font-semibold mt-6 rounded-lg" disabled={!canSubmit || loading}>
+            {loading ? "Creating..." : "Create page"}
           </Button>
         </form>
       </CardContent>

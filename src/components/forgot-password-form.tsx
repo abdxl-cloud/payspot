@@ -45,52 +45,46 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <Card className="border border-border bg-card shadow-lg">
-      <CardHeader className="space-y-4">
-        <CardTitle className="font-display text-3xl font-bold">Reset password</CardTitle>
-        <p className="text-base text-muted-foreground">Enter your email to receive a reset link</p>
-      </CardHeader>
-      <CardContent className="grid gap-6">
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Request failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
+    <div className="w-full space-y-6">
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Request failed</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        {success ? (
-          <Alert>
-            <AlertTitle>Check your inbox</AlertTitle>
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        ) : null}
+      {success ? (
+        <Alert>
+          <AlertTitle>Check your inbox</AlertTitle>
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        <form className="grid gap-5" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              className="h-11"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            className="h-12 border-border text-base rounded-lg"
+            placeholder="you@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
 
-          <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={!canSubmit}>
-            {loading ? "Sending..." : "Send reset link"}
-          </Button>
-        </form>
+        <Button type="submit" className="w-full h-12 text-base font-semibold rounded-lg mt-8" disabled={!canSubmit}>
+          {loading ? "Sending..." : "Send link"}
+        </Button>
+      </form>
 
-        <p className="text-center text-sm text-muted-foreground">
-          <Link href="/login" className="text-primary hover:underline">
-            Back to login
-          </Link>
-        </p>
-      </CardContent>
-    </Card>
+      <p className="text-center text-sm text-muted-foreground">
+        <Link href="/login" className="font-medium text-primary hover:underline">
+          Back to login
+        </Link>
+      </p>
+    </div>
   );
 }
 
