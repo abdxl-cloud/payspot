@@ -1,0 +1,242 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaySpot WiFi Access</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --brand: #10b981;
+            --brand-dark: #047857;
+            --ink: #0f172a;
+            --muted: #475569;
+            --card: rgba(255, 255, 255, 0.75);
+            --border: rgba(255, 255, 255, 0.7);
+            --shadow: 0 30px 80px rgba(15, 23, 42, 0.15);
+        }
+        body {
+            font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+            background:
+                radial-gradient(circle at top, rgba(16, 185, 129, 0.22), transparent 55%),
+                linear-gradient(135deg, #f0fdf4, #ecfeff 45%, #ffffff);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: var(--ink);
+        }
+        .container {
+            background: var(--card);
+            border-radius: 28px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(16px);
+            max-width: 450px;
+            width: 100%;
+            overflow: hidden;
+        }
+        .header {
+            padding: 36px 30px 0;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            background: rgba(16, 185, 129, 0.12);
+            color: #065f46;
+            padding: 6px 14px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.25em;
+            text-transform: uppercase;
+        }
+        .header h1 {
+            margin-top: 18px;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        .header p {
+            margin-top: 10px;
+            font-size: 15px;
+            color: var(--muted);
+        }
+        .content { padding: 30px; }
+        .steps {
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .steps h3 {
+            color: var(--ink);
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: var(--muted);
+        }
+        .step-num {
+            background: var(--brand);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        .buy-btn {
+            display: block;
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #10b981 0%, #0ea5a4 100%);
+            color: white;
+            text-decoration: none;
+            text-align: center;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 18px;
+            transition: transform 0.2s;
+        }
+        .buy-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(16, 185, 129, 0.35);
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 25px 0;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+        }
+        .divider::before { margin-right: 10px; }
+        .divider::after { margin-left: 10px; }
+        .voucher-form {
+            background: rgba(255, 255, 255, 0.85);
+            padding: 25px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+        .voucher-form h3 {
+            color: var(--ink);
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: monospace;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--brand);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background: var(--brand);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .submit-btn:hover {
+            background: var(--brand-dark);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="pill">PaySpot WiFi</div>
+            <h1>Free WiFi Access</h1>
+            <p>Purchase a voucher and connect in seconds.</p>
+        </div>
+        
+        <div class="content">
+            <div class="steps">
+                <h3>How to Connect:</h3>
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div>Click "Buy Voucher" below to purchase internet access</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div>Complete payment and receive your code via SMS</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div>Return here and enter your voucher code to connect</div>
+                </div>
+            </div>
+            
+            <a href="https://payspot.abdxl.cloud" class="buy-btn" target="_blank" rel="noreferrer">
+                Buy Voucher
+            </a>
+            
+            <div class="divider">Already have a voucher?</div>
+            
+            <div class="voucher-form">
+                <h3>Enter Your Voucher Code:</h3>
+                <form method="post" action="%%SERVERIP%%:%%SERVERPORT%%/login">
+                    <input type="hidden" name="auth_user" value="%%USERNAME%%">
+                    <input type="hidden" name="auth_pass" value="%%PASSWORD%%">
+                    <input type="hidden" name="redirurl" value="%%REDIRURL%%">
+                    <input type="hidden" name="auth_voucher" value="%%VOUCHER%%">
+                    
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            name="auth_voucher" 
+                            id="voucher" 
+                            placeholder="Enter Code"
+                            maxlength="12"
+                            required
+                            autocomplete="off"
+                        >
+                    </div>
+                    
+                    <button type="submit" class="submit-btn">
+                        Connect to WiFi
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

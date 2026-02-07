@@ -10,7 +10,27 @@ type Props = {
 
 type PackageLite = { id: string; code: string; duration_minutes: number };
 
-function normalizeRow(row: Record<string, unknown>) {
+type NormalizedRow = {
+  code: string | null;
+  durationMinutes: number | null;
+  trafficLimitLabel: string | null;
+  trafficLimitCode: string | null;
+  usedDataMb: number | null;
+  remainingDataMb: number | null;
+  statusLabel: string | null;
+  expirationTime: string | null;
+  priceNgn: number | null;
+};
+
+type PlanInfo = {
+  code: string;
+  name: string;
+  durationMinutes: number;
+  description: string;
+  priceNgn: number | null;
+};
+
+function normalizeRow(row: Record<string, unknown>): NormalizedRow {
   const entries = Object.entries(row).reduce<Record<string, unknown>>(
     (acc, [key, value]) => {
       const normalizedKey = key.toLowerCase().replace(/\s+/g, "");
@@ -20,27 +40,194 @@ function normalizeRow(row: Record<string, unknown>) {
     {},
   );
 
+  const durationRaw = (entries.duration as string | undefined) ?? null;
+  const trafficLimitRaw = (entries.trafficlimit as string | undefined) ?? null;
+  const usedDataRaw = (entries.useddata as string | undefined) ?? null;
+  const remainingDataRaw = (entries.remainingdata as string | undefined) ?? null;
+  const statusRaw =
+    (entries.type as string | undefined) ||
+    (entries.status as string | undefined) ||
+    null;
+  const expirationRaw = (entries.expirationtime as string | undefined) ?? null;
+  const priceRaw = (entries.price as string | undefined) ?? null;
+
   return {
     code:
       (entries.code as string | undefined) ||
       (entries.vouchercode as string | undefined) ||
       (entries.csvcode as string | undefined) ||
       null,
-    duration: parseInt((entries.duration as string | undefined) ?? "", 10) || null,
-    status: entries.status ? String(entries.status).toLowerCase() : null,
+    durationMinutes: parseDurationMinutes(durationRaw),
+    trafficLimitLabel: formatLimitLabel(trafficLimitRaw),
+    trafficLimitCode: formatLimitCode(trafficLimitRaw),
+    usedDataMb: parseDataLimitMb(usedDataRaw),
+    remainingDataMb: parseDataLimitMb(remainingDataRaw),
+    statusLabel: statusRaw ? String(statusRaw).toLowerCase() : null,
+    expirationTime: expirationRaw,
+    priceNgn: parseMoney(priceRaw),
   };
 }
 
-function resolvePackage(
-  packages: PackageLite[],
-  duration: number | null,
-  forcedCode: string | null,
-) {
-  if (forcedCode) {
-    return packages.find((pkg) => pkg.code === forcedCode) ?? null;
+function parseNumberUnit(value: string | null) {
+  if (!value) return null;
+  const cleaned = value.replace(/\s+/g, "");
+  const match = cleaned.match(/^([0-9]+(?:\.[0-9]+)?)([a-zA-Z]+)$/);
+  if (!match) return null;
+  return { amount: Number.parseFloat(match[1]), unit: match[2].toLowerCase() };
+}
+
+function parseDurationMinutes(value: string | null) {
+  const parsed = parseNumberUnit(value);
+  if (!parsed) return null;
+  const amount = parsed.amount;
+  if (!Number.isFinite(amount)) return null;
+  if (parsed.unit.startsWith("min")) return Math.round(amount);
+  if (parsed.unit.startsWith("hour")) return Math.round(amount * 60);
+  if (parsed.unit.startsWith("day")) return Math.round(amount * 60 * 24);
+  if (parsed.unit.startsWith("week")) return Math.round(amount * 60 * 24 * 7);
+  if (parsed.unit === "h") return Math.round(amount * 60);
+  if (parsed.unit === "d") return Math.round(amount * 60 * 24);
+  if (parsed.unit === "w") return Math.round(amount * 60 * 24 * 7);
+  return null;
+}
+
+function parseDataLimitMb(value: string | null) {
+  const parsed = parseNumberUnit(value);
+  if (!parsed) return null;
+  const amount = parsed.amount;
+  if (!Number.isFinite(amount)) return null;
+  if (parsed.unit.startsWith("mb")) return amount;
+  if (parsed.unit.startsWith("gb")) return amount * 1024;
+  if (parsed.unit.startsWith("tb")) return amount * 1024 * 1024;
+  return null;
+}
+
+function parseMoney(value: string | null) {
+  if (!value) return null;
+  const cleaned = value.replace(/[^0-9.]/g, "");
+  if (!cleaned) return null;
+  const amount = Number.parseFloat(cleaned);
+  if (!Number.isFinite(amount)) return null;
+  return Math.round(amount);
+}
+
+function formatLimitLabel(value: string | null) {
+  const parsed = parseNumberUnit(value);
+  if (!parsed) return null;
+  const amount =
+    parsed.amount % 1 === 0 ? parsed.amount.toFixed(0) : parsed.amount.toString();
+  if (parsed.unit.startsWith("gb")) return `${amount} GB`;
+  if (parsed.unit.startsWith("mb")) return `${amount} MB`;
+  if (parsed.unit.startsWith("tb")) return `${amount} TB`;
+  return `${amount} ${parsed.unit.toUpperCase()}`;
+}
+
+function formatLimitCode(value: string | null) {
+  const parsed = parseNumberUnit(value);
+  if (!parsed) return null;
+  const raw =
+    parsed.amount % 1 === 0 ? parsed.amount.toFixed(0) : parsed.amount.toString();
+  const amount = raw.replace(".", "p");
+  if (parsed.unit.startsWith("gb")) return `${amount}gb`;
+  if (parsed.unit.startsWith("mb")) return `${amount}mb`;
+  if (parsed.unit.startsWith("tb")) return `${amount}tb`;
+  return `${amount}${parsed.unit}`;
+}
+
+function formatDurationCode(minutes: number) {
+  if (minutes % (60 * 24 * 7) === 0) {
+    return `${minutes / (60 * 24 * 7)}w`;
   }
-  if (!duration) return null;
-  return packages.find((pkg) => pkg.duration_minutes === duration) ?? null;
+  if (minutes % (60 * 24) === 0) {
+    return `${minutes / (60 * 24)}d`;
+  }
+  if (minutes % 60 === 0) {
+    return `${minutes / 60}h`;
+  }
+  return `${minutes}m`;
+}
+
+function formatDurationLabel(minutes: number) {
+  if (minutes % (60 * 24 * 7) === 0) {
+    const weeks = minutes / (60 * 24 * 7);
+    return `${weeks} week${weeks === 1 ? "" : "s"}`;
+  }
+  if (minutes % (60 * 24) === 0) {
+    const days = minutes / (60 * 24);
+    return `${days} day${days === 1 ? "" : "s"}`;
+  }
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  return `${minutes} minutes`;
+}
+
+function buildPlan(normalized: NormalizedRow): PlanInfo | null {
+  if (!normalized.durationMinutes || !normalized.trafficLimitCode) return null;
+  const durationCode = formatDurationCode(normalized.durationMinutes);
+  const code = `${normalized.trafficLimitCode}-${durationCode}`;
+  const durationLabel = formatDurationLabel(normalized.durationMinutes);
+  const limitLabel = normalized.trafficLimitLabel ?? normalized.trafficLimitCode;
+  return {
+    code,
+    name: `${limitLabel} / ${durationLabel}`,
+    durationMinutes: normalized.durationMinutes,
+    description: `Data cap ${limitLabel} for ${durationLabel} of access.`,
+    priceNgn: normalized.priceNgn,
+  };
+}
+
+function isExpiredRow(normalized: NormalizedRow) {
+  if (normalized.statusLabel?.includes("expired")) return true;
+  if (!normalized.expirationTime) return false;
+  const parsed = new Date(normalized.expirationTime);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getTime() < Date.now();
+}
+
+function isInUseRow(normalized: NormalizedRow) {
+  if (normalized.usedDataMb && normalized.usedDataMb > 0) return true;
+  if (normalized.remainingDataMb === 0) return true;
+  return false;
+}
+
+function ensurePackage(params: {
+  db: ReturnType<typeof getDb>;
+  tenantId: string;
+  packagesByCode: Map<string, PackageLite>;
+  plan: PlanInfo;
+}) {
+  const { db, tenantId, packagesByCode, plan } = params;
+  const existing = packagesByCode.get(plan.code);
+  if (existing) return { pkg: existing, created: false };
+  const now = new Date().toISOString();
+  const id = randomUUID();
+  db.prepare(
+    `
+    INSERT INTO voucher_packages (
+      id, tenant_id, code, name, duration_minutes, price_ngn, active, description, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+  ).run(
+    id,
+    tenantId,
+    plan.code,
+    plan.name,
+    plan.durationMinutes,
+    plan.priceNgn ?? 0,
+    1,
+    plan.description,
+    now,
+    now,
+  );
+  const pkg = {
+    id,
+    code: plan.code,
+    duration_minutes: plan.durationMinutes,
+  };
+  packagesByCode.set(plan.code, pkg);
+  return { pkg, created: true };
 }
 
 export async function POST(request: Request, { params }: Props) {
@@ -92,13 +279,7 @@ export async function POST(request: Request, { params }: Props) {
       "SELECT id, code, duration_minutes FROM voucher_packages WHERE tenant_id = ?",
     )
     .all(tenant.id) as PackageLite[];
-
-  if (packages.length === 0) {
-    return Response.json(
-      { error: "No voucher packages found for this tenant" },
-      { status: 409 },
-    );
-  }
+  const packagesByCode = new Map(packages.map((pkg) => [pkg.code, pkg]));
 
   const insert = db.prepare(`
     INSERT INTO voucher_pool (
@@ -110,6 +291,10 @@ export async function POST(request: Request, { params }: Props) {
   let imported = 0;
   let skipped = 0;
   let duplicates = 0;
+  let expired = 0;
+  let inUse = 0;
+  let missingPlan = 0;
+  let packagesCreated = 0;
 
   const run = db.transaction(() => {
     for (const row of rows) {
@@ -119,15 +304,47 @@ export async function POST(request: Request, { params }: Props) {
         continue;
       }
 
-      if (normalized.status && normalized.status !== "unused") {
-        skipped += 1;
+      if (isExpiredRow(normalized)) {
+        expired += 1;
+        continue;
+      }
+      if (isInUseRow(normalized)) {
+        inUse += 1;
         continue;
       }
 
-      const pkg = resolvePackage(packages, normalized.duration, forcedPackageCode);
-      if (!pkg) {
-        skipped += 1;
-        continue;
+      let pkg: PackageLite | null = null;
+      if (forcedPackageCode) {
+        pkg = packagesByCode.get(forcedPackageCode) ?? null;
+        if (!pkg) {
+          const plan = buildPlan(normalized);
+          if (!plan) {
+            missingPlan += 1;
+            continue;
+          }
+          const created = ensurePackage({
+            db,
+            tenantId: tenant.id,
+            packagesByCode,
+            plan: { ...plan, code: forcedPackageCode },
+          });
+          pkg = created.pkg;
+          if (created.created) packagesCreated += 1;
+        }
+      } else {
+        const plan = buildPlan(normalized);
+        if (!plan) {
+          missingPlan += 1;
+          continue;
+        }
+        const created = ensurePackage({
+          db,
+          tenantId: tenant.id,
+          packagesByCode,
+          plan,
+        });
+        pkg = created.pkg;
+        if (created.created) packagesCreated += 1;
       }
 
       const exists = db
@@ -155,5 +372,13 @@ export async function POST(request: Request, { params }: Props) {
 
   run();
 
-  return Response.json({ imported, duplicates, skipped });
+  return Response.json({
+    imported,
+    duplicates,
+    skipped,
+    expired,
+    inUse,
+    missingPlan,
+    packagesCreated,
+  });
 }

@@ -849,6 +849,40 @@ export function getPackageById(tenantId: string, id: string) {
     .get(tenantId, id) as PackageRow | undefined;
 }
 
+export function getTenantPackages(tenantId: string) {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `
+      SELECT *
+      FROM voucher_packages
+      WHERE tenant_id = ?
+      ORDER BY duration_minutes ASC
+    `,
+    )
+    .all(tenantId);
+  return rows as PackageRow[];
+}
+
+export function updatePackagePrice(params: {
+  tenantId: string;
+  packageId: string;
+  priceNgn: number;
+}) {
+  const db = getDb();
+  const now = nowIso();
+  const result = db
+    .prepare(
+      `
+      UPDATE voucher_packages
+      SET price_ngn = ?, updated_at = ?
+      WHERE tenant_id = ? AND id = ?
+    `,
+    )
+    .run(params.priceNgn, now, params.tenantId, params.packageId);
+  return result.changes > 0;
+}
+
 export function getAvailableCount(tenantId: string, packageId: string) {
   const db = getDb();
   const row = db
@@ -1142,6 +1176,14 @@ export function getStats(tenantId: string) {
 export function getTenantAdminStats(tenantId: string) {
   const db = getDb();
   const voucherPool = getStats(tenantId);
+  const packages = getTenantPackages(tenantId).map((pkg) => ({
+    id: pkg.id,
+    code: pkg.code,
+    name: pkg.name,
+    durationMinutes: pkg.duration_minutes,
+    priceNgn: pkg.price_ngn,
+    active: pkg.active,
+  }));
   const tx = db
     .prepare(
       `
@@ -1167,6 +1209,7 @@ export function getTenantAdminStats(tenantId: string) {
 
   return {
     voucherPool,
+    packages,
     transactions: {
       total: tx.total ?? 0,
       success: tx.success ?? 0,

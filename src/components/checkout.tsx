@@ -301,7 +301,8 @@ export function Checkout({ tenantSlug, packages }: Props) {
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="whitespace-nowrap text-sm font-semibold text-slate-900">
+                    <p className="text-sm font-semibold text-slate-900">{pkg.name}</p>
+                    <p className="text-xs text-slate-500">
                       {formatDuration(pkg.durationMinutes)}
                     </p>
                   </div>
@@ -367,8 +368,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
                   variant="outline"
                   className="self-start whitespace-nowrap sm:self-auto"
                 >
-                  {formatDuration(selected.durationMinutes)} - NGN{" "}
-                  {selected.priceNgn.toLocaleString()}
+                  {selected.name} - NGN {selected.priceNgn.toLocaleString()}
                 </Badge>
               ) : null}
             </div>
