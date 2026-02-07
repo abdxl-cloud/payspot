@@ -7,7 +7,6 @@ import {
   createUser,
   isTenantSlugAvailable,
   listTenants,
-  seedDefaultPackagesForTenantId,
 } from "@/lib/store";
 import { generateToken } from "@/lib/tokens";
 
@@ -76,8 +75,6 @@ export async function POST(request: Request) {
   if (tenantResult.status !== "created") {
     return Response.json({ error: "Tenant already exists" }, { status: 409 });
   }
-
-  seedDefaultPackagesForTenantId(tenantResult.tenant.id);
 
   const tempPassword = password ?? `Temp-${generateToken(9)}`;
   const userResult = createUser({

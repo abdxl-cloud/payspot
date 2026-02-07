@@ -26,14 +26,30 @@ export default async function TenantPurchasePage({ params }: Props) {
     );
   }
 
-  const packages = getPackagesWithAvailability(tenant.id).map((pkg) => ({
-    code: pkg.code,
-    name: pkg.name,
-    durationMinutes: pkg.duration_minutes,
-    priceNgn: pkg.price_ngn,
-    description: pkg.description,
-    availableCount: pkg.available_count,
-  }));
+  const packages = getPackagesWithAvailability(tenant.id)
+    .filter((pkg) => pkg.price_ngn > 0 && pkg.total_count > 0)
+    .map((pkg) => ({
+      code: pkg.code,
+      name: pkg.name,
+      durationMinutes: pkg.duration_minutes,
+      priceNgn: pkg.price_ngn,
+      description: pkg.description,
+      availableCount: pkg.available_count,
+    }));
+
+  if (packages.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white">
+        <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">
+          <h1 className="text-3xl font-semibold">Coming soon</h1>
+          <p className="mt-4 text-slate-300">
+            This tenant portal will go live after voucher plans are imported.
+            Please check back soon.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.25),_transparent_55%),_linear-gradient(135deg,_#f0fdf4,_#ecfeff_45%,_#ffffff)] text-slate-900">

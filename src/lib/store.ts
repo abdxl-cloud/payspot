@@ -679,8 +679,6 @@ export function approveTenantRequest(reviewToken: string) {
       now,
     );
 
-    seedDefaultPackagesForTenant(db, tenantId);
-
     const temporaryPassword = `Temp-${generateToken(9)}`;
     const created = createUser({
       email: normalizedEmail,
@@ -822,6 +820,10 @@ export function getPackagesWithAvailability(tenantId: string) {
         SELECT COUNT(1) FROM voucher_pool v
         WHERE v.tenant_id = p.tenant_id
           AND v.package_id = p.id
+      ) as total_count, (
+        SELECT COUNT(1) FROM voucher_pool v
+        WHERE v.tenant_id = p.tenant_id
+          AND v.package_id = p.id
           AND v.status = 'UNUSED'
       ) as available_count
       FROM voucher_packages p
@@ -830,7 +832,7 @@ export function getPackagesWithAvailability(tenantId: string) {
     `,
     )
     .all(tenantId);
-  return rows as Array<PackageRow & { available_count: number }>;
+  return rows as Array<PackageRow & { available_count: number; total_count: number }>;
 }
 
 export function getPackageByCode(tenantId: string, code: string) {

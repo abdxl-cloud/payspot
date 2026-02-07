@@ -11,14 +11,16 @@ export async function GET(_request: Request, { params }: Props) {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
 
-  const packages = getPackagesWithAvailability(tenant.id).map((pkg) => ({
-    code: pkg.code,
-    name: pkg.name,
-    durationMinutes: pkg.duration_minutes,
-    priceNgn: pkg.price_ngn,
-    description: pkg.description,
-    availableCount: pkg.available_count,
-  }));
+  const packages = getPackagesWithAvailability(tenant.id)
+    .filter((pkg) => pkg.price_ngn > 0 && pkg.total_count > 0)
+    .map((pkg) => ({
+      code: pkg.code,
+      name: pkg.name,
+      durationMinutes: pkg.duration_minutes,
+      priceNgn: pkg.price_ngn,
+      description: pkg.description,
+      availableCount: pkg.available_count,
+    }));
 
   return Response.json({ packages });
 }

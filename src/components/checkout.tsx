@@ -243,9 +243,9 @@ export function Checkout({ tenantSlug, packages }: Props) {
 
       {packages.length === 0 ? (
         <Alert>
-          <AlertTitle>No packages found</AlertTitle>
+          <AlertTitle>No plans imported yet</AlertTitle>
           <AlertDescription>
-            Seed packages or enable them in the database.
+            Import voucher plans to make purchases available.
           </AlertDescription>
         </Alert>
       ) : null}

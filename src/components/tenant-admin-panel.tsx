@@ -93,6 +93,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   }, [loadStats]);
 
   const packages = stats?.packages ?? [];
+  const hasImportedPlans = (stats?.voucherPool ?? []).some((pkg) => pkg.total > 0);
 
   useEffect(() => {
     if (!deletePackageId && packages.length > 0) {
@@ -252,9 +253,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       <Card className="border-slate-200/70 bg-white/60 shadow-sm">
         <CardHeader className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-            Plans
+            Add vouchers
           </p>
-          <CardTitle className="text-base">Edit plan prices</CardTitle>
+          <CardTitle className="text-base">Upload voucher codes (CSV)</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -276,71 +277,14 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             </Alert>
           ) : null}
 
-          {packageError ? (
-            <Alert variant="destructive">
-              <AlertTitle>Update failed</AlertTitle>
-              <AlertDescription>{packageError}</AlertDescription>
+          {!hasImportedPlans ? (
+            <Alert>
+              <AlertTitle>Plan management is locked</AlertTitle>
+              <AlertDescription>
+                Import voucher plans to unlock pricing and inventory controls.
+              </AlertDescription>
             </Alert>
           ) : null}
-
-          {packages.length === 0 ? (
-            <p className="text-sm text-slate-600">No plans found.</p>
-          ) : (
-            <div className="grid gap-3">
-              {packages.map((pkg) => {
-                const value =
-                  packageEdits[pkg.id] ?? (Number.isFinite(pkg.priceNgn) ? String(pkg.priceNgn) : "0");
-                return (
-                  <div
-                    key={pkg.id}
-                    className="rounded-xl border border-slate-200 bg-white/70 p-4 text-sm"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-900">{pkg.name}</p>
-                        <p className="text-xs text-slate-500">
-                          {pkg.code} · {pkg.durationMinutes} mins
-                        </p>
-                      </div>
-                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                        <div className="grid gap-1">
-                          <Label htmlFor={`price-${pkg.id}`} className="text-xs">
-                            Price (NGN)
-                          </Label>
-                          <Input
-                            id={`price-${pkg.id}`}
-                            className="h-10 w-full sm:w-32"
-                            inputMode="numeric"
-                            value={value}
-                            onChange={(event) =>
-                              handlePackagePriceChange(pkg.id, event.target.value)
-                            }
-                          />
-                        </div>
-                        <Button
-                          className="h-10"
-                          type="button"
-                          disabled={packageSaving[pkg.id]}
-                          onClick={() => handlePackageSave(pkg.id)}
-                        >
-                          {packageSaving[pkg.id] ? "Saving..." : "Save"}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <Separator />
-
-          <div className="grid gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-              Add vouchers
-            </p>
-            <p className="text-sm font-semibold text-slate-900">Upload voucher codes (CSV)</p>
-          </div>
 
           <form className="grid gap-4" onSubmit={handleImport}>
             <div className="grid gap-2">
@@ -388,165 +332,239 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </CardContent>
       </Card>
 
-      <Separator />
-
-      <Card className="border-slate-200/70 bg-white/60 shadow-sm">
-        <CardHeader className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-            Remove vouchers
-          </p>
-          <CardTitle className="text-base">Delete vouchers</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <form className="grid gap-4" onSubmit={handleDelete}>
-            <div className="grid gap-2">
-              <Label htmlFor="delete-mode">Delete mode</Label>
-              <select
-                id="delete-mode"
-                className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                value={deleteMode}
-                onChange={(event) =>
-                  setDeleteMode(event.target.value as "plan" | "codes" | "status")
-                }
-              >
-                <option value="plan">Delete by plan</option>
-                <option value="codes">Delete by codes (paste or CSV)</option>
-                <option value="status">Delete by status</option>
-              </select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="delete-status">Status filter</Label>
-              <select
-                id="delete-status"
-                className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                value={deleteStatus}
-                onChange={(event) => setDeleteStatus(event.target.value)}
-              >
-                <option value="UNUSED">Unused only</option>
-                <option value="ASSIGNED">Assigned only</option>
-                <option value="ALL">All statuses</option>
-              </select>
-            </div>
-
-            {deleteMode === "plan" ? (
-              <div className="grid gap-2">
-                <Label htmlFor="delete-plan">Plan</Label>
-                <select
-                  id="delete-plan"
-                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                  value={deletePackageId}
-                  onChange={(event) => setDeletePackageId(event.target.value)}
-                >
-                  {packages.map((pkg) => (
-                    <option key={pkg.id} value={pkg.id}>
-                      {pkg.name} ({pkg.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
-
-            {deleteMode === "codes" ? (
-              <>
-                <div className="grid gap-2">
-                  <Label htmlFor="delete-codes">Voucher codes</Label>
-                  <textarea
-                    id="delete-codes"
-                    className="min-h-[96px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                    placeholder="Paste codes separated by commas or new lines"
-                    value={deleteCodes}
-                    onChange={(event) => setDeleteCodes(event.target.value)}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="delete-csv">CSV file (optional)</Label>
-                  <Input
-                    id="delete-csv"
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={(event) => setDeleteFile(event.target.files?.[0] ?? null)}
-                  />
-                </div>
-              </>
-            ) : null}
-
-            <Button type="submit" disabled={deleteLoading} className="h-11">
-              {deleteLoading ? "Deleting..." : "Delete vouchers"}
-            </Button>
-          </form>
-
-          {deleteError ? (
-            <Alert variant="destructive">
-              <AlertTitle>Delete failed</AlertTitle>
-              <AlertDescription>{deleteError}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          {deleteResult ? (
-            <Alert>
-              <AlertTitle>Delete complete</AlertTitle>
-              <AlertDescription>{deleteResult}</AlertDescription>
-            </Alert>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      {stats ? (
+      {hasImportedPlans ? (
         <>
           <Separator />
 
           <Card className="border-slate-200/70 bg-white/60 shadow-sm">
             <CardHeader className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-                Inventory
+                Plans
               </p>
-              <CardTitle className="text-base">Voucher pool</CardTitle>
+              <CardTitle className="text-base">Edit plan prices</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-3">
-              {stats.voucherPool.length === 0 ? (
-                <p className="text-sm text-slate-600">No packages found.</p>
+            <CardContent className="grid gap-4">
+              {packageError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Update failed</AlertTitle>
+                  <AlertDescription>{packageError}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              {packages.length === 0 ? (
+                <p className="text-sm text-slate-600">No plans found.</p>
               ) : (
                 <div className="grid gap-3">
-                  {stats.voucherPool.map((pkg) => (
-                    <div
-                      key={pkg.code}
-                      className="rounded-xl border border-slate-200 bg-white/70 p-4 text-sm"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-900">{pkg.name}</p>
-                          <p className="text-xs text-slate-500">{pkg.code}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-slate-900">
-                            {pkg.percentageRemaining}%
-                          </p>
-                          <p className="text-xs text-slate-500">remaining</p>
+                  {packages.map((pkg) => {
+                    const value =
+                      packageEdits[pkg.id] ??
+                      (Number.isFinite(pkg.priceNgn) ? String(pkg.priceNgn) : "0");
+                    return (
+                      <div
+                        key={pkg.id}
+                        className="rounded-xl border border-slate-200 bg-white/70 p-4 text-sm"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-900">{pkg.name}</p>
+                            <p className="text-xs text-slate-500">
+                              {pkg.code} - {pkg.durationMinutes} mins
+                            </p>
+                          </div>
+                          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                            <div className="grid gap-1">
+                              <Label htmlFor={`price-${pkg.id}`} className="text-xs">
+                                Price (NGN)
+                              </Label>
+                              <Input
+                                id={`price-${pkg.id}`}
+                                className="h-10 w-full sm:w-32"
+                                inputMode="numeric"
+                                value={value}
+                                onChange={(event) =>
+                                  handlePackagePriceChange(pkg.id, event.target.value)
+                                }
+                              />
+                            </div>
+                            <Button
+                              className="h-10"
+                              type="button"
+                              disabled={packageSaving[pkg.id]}
+                              onClick={() => handlePackageSave(pkg.id)}
+                            >
+                              {packageSaving[pkg.id] ? "Saving..." : "Save"}
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-600">
-                        <div className="rounded-lg border border-slate-200 bg-white/60 p-2">
-                          <p className="font-semibold text-slate-900">{pkg.total}</p>
-                          <p>Total</p>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-white/60 p-2">
-                          <p className="font-semibold text-slate-900">{pkg.unused}</p>
-                          <p>Unused</p>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-white/60 p-2">
-                          <p className="font-semibold text-slate-900">{pkg.assigned}</p>
-                          <p>Assigned</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
           </Card>
+
+          <Separator />
+
+          <Card className="border-slate-200/70 bg-white/60 shadow-sm">
+            <CardHeader className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                Remove vouchers
+              </p>
+              <CardTitle className="text-base">Delete vouchers</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <form className="grid gap-4" onSubmit={handleDelete}>
+                <div className="grid gap-2">
+                  <Label htmlFor="delete-mode">Delete mode</Label>
+                  <select
+                    id="delete-mode"
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    value={deleteMode}
+                    onChange={(event) =>
+                      setDeleteMode(event.target.value as "plan" | "codes" | "status")
+                    }
+                  >
+                    <option value="plan">Delete by plan</option>
+                    <option value="codes">Delete by codes (paste or CSV)</option>
+                    <option value="status">Delete by status</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="delete-status">Status filter</Label>
+                  <select
+                    id="delete-status"
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    value={deleteStatus}
+                    onChange={(event) => setDeleteStatus(event.target.value)}
+                  >
+                    <option value="UNUSED">Unused only</option>
+                    <option value="ASSIGNED">Assigned only</option>
+                    <option value="ALL">All statuses</option>
+                  </select>
+                </div>
+
+                {deleteMode === "plan" ? (
+                  <div className="grid gap-2">
+                    <Label htmlFor="delete-plan">Plan</Label>
+                    <select
+                      id="delete-plan"
+                      className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                      value={deletePackageId}
+                      onChange={(event) => setDeletePackageId(event.target.value)}
+                    >
+                      {packages.map((pkg) => (
+                        <option key={pkg.id} value={pkg.id}>
+                          {pkg.name} ({pkg.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+
+                {deleteMode === "codes" ? (
+                  <>
+                    <div className="grid gap-2">
+                      <Label htmlFor="delete-codes">Voucher codes</Label>
+                      <textarea
+                        id="delete-codes"
+                        className="min-h-[96px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                        placeholder="Paste codes separated by commas or new lines"
+                        value={deleteCodes}
+                        onChange={(event) => setDeleteCodes(event.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="delete-csv">CSV file (optional)</Label>
+                      <Input
+                        id="delete-csv"
+                        type="file"
+                        accept=".csv,text/csv"
+                        onChange={(event) => setDeleteFile(event.target.files?.[0] ?? null)}
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                <Button type="submit" disabled={deleteLoading} className="h-11">
+                  {deleteLoading ? "Deleting..." : "Delete vouchers"}
+                </Button>
+              </form>
+
+              {deleteError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Delete failed</AlertTitle>
+                  <AlertDescription>{deleteError}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              {deleteResult ? (
+                <Alert>
+                  <AlertTitle>Delete complete</AlertTitle>
+                  <AlertDescription>{deleteResult}</AlertDescription>
+                </Alert>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          {stats ? (
+            <>
+              <Separator />
+
+              <Card className="border-slate-200/70 bg-white/60 shadow-sm">
+                <CardHeader className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                    Inventory
+                  </p>
+                  <CardTitle className="text-base">Voucher pool</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3">
+                  {stats.voucherPool.length === 0 ? (
+                    <p className="text-sm text-slate-600">No packages found.</p>
+                  ) : (
+                    <div className="grid gap-3">
+                      {stats.voucherPool.map((pkg) => (
+                        <div
+                          key={pkg.code}
+                          className="rounded-xl border border-slate-200 bg-white/70 p-4 text-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-slate-900">{pkg.name}</p>
+                              <p className="text-xs text-slate-500">{pkg.code}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-slate-900">
+                                {pkg.percentageRemaining}%
+                              </p>
+                              <p className="text-xs text-slate-500">remaining</p>
+                            </div>
+                          </div>
+                          <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-600">
+                            <div className="rounded-lg border border-slate-200 bg-white/60 p-2">
+                              <p className="font-semibold text-slate-900">{pkg.total}</p>
+                              <p>Total</p>
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-white/60 p-2">
+                              <p className="font-semibold text-slate-900">{pkg.unused}</p>
+                              <p>Unused</p>
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-white/60 p-2">
+                              <p className="font-semibold text-slate-900">{pkg.assigned}</p>
+                              <p>Assigned</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
         </>
       ) : null}
     </div>
   );
-}
+
