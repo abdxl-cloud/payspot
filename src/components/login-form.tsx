@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { readJsonResponse } from "@/lib/http";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -33,11 +34,11 @@ export function LoginForm() {
           password,
         }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse<{ error?: string; redirectTo?: string }>(response);
       if (!response.ok) {
         throw new Error(data?.error || "Login failed.");
       }
-      window.location.href = data.redirectTo || "/admin";
+      window.location.href = data?.redirectTo || "/admin";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setLoading(false);

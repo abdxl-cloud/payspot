@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { readJsonResponse } from "@/lib/http";
 
 type Props = {
   token: string;
@@ -48,7 +49,7 @@ export function ResetPasswordForm({ token }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newPassword }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse<{ error?: string }>(response);
       if (!response.ok) {
         throw new Error(data?.error || "Reset failed.");
       }

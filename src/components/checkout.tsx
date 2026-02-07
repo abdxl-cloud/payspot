@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { readJsonResponse } from "@/lib/http";
 
 type Package = {
   code: string;
@@ -154,9 +155,15 @@ export function Checkout({ tenantSlug, packages }: Props) {
           packageCode: selected.code,
         }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse<{
+        error?: string;
+        authorizationUrl?: string;
+      }>(response);
       if (!response.ok) {
         throw new Error(data?.error || "Payment initialization failed.");
+      }
+      if (!data?.authorizationUrl) {
+        throw new Error("Payment initialization failed.");
       }
       window.location.href = data.authorizationUrl;
     } catch (err) {
@@ -180,15 +187,19 @@ export function Checkout({ tenantSlug, packages }: Props) {
           email: resumeEmail.trim(),
         }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse<{
+        error?: string;
+        status?: string;
+        authorizationUrl?: string;
+      }>(response);
       if (!response.ok) {
         throw new Error(data?.error || "Unable to resume payment.");
       }
-      if (data.status === "success") {
+      if (data?.status === "success") {
         window.location.href = `/t/${tenantSlug}/payment/verify/${resumeReference.trim()}`;
         return;
       }
-      if (data.authorizationUrl) {
+      if (data?.authorizationUrl) {
         window.location.href = data.authorizationUrl;
         return;
       }

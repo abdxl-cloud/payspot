@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { readJsonResponse } from "@/lib/http";
 
 type VoucherStat = {
   code: string;
@@ -42,16 +43,6 @@ type AdminStats = {
 type Props = {
   tenantSlug: string;
 };
-
-async function readJsonResponse<T>(response: Response): Promise<T | null> {
-  const text = await response.text();
-  if (!text) return null;
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return null;
-  }
-}
 
 export function TenantAdminPanel({ tenantSlug }: Props) {
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -242,11 +233,11 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         method: "POST",
         body: form,
       });
-      const data = await response.json();
+      const data = await readJsonResponse<{ error?: string; deleted?: number }>(response);
       if (!response.ok) {
-        throw new Error(data?.error || "Delete failed.");
+        throw new Error(data?.error || response.statusText || "Delete failed.");
       }
-      setDeleteResult(`Deleted: ${data.deleted}`);
+      setDeleteResult(`Deleted: ${data?.deleted ?? 0}`);
       setDeleteCodes("");
       setDeleteFile(null);
       await loadStats();

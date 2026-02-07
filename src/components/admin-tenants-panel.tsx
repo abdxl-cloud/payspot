@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { readJsonResponse } from "@/lib/http";
 
 type TenantDto = {
   id: string;
@@ -44,9 +45,10 @@ export function AdminTenantsPanel() {
     setLoading(true);
     try {
       const response = await fetch("/api/admin/tenants");
-      const data = await response.json();
+      const data = await readJsonResponse<{ error?: string; tenants?: TenantDto[] }>(response);
       if (!response.ok) throw new Error(data?.error || "Unable to load tenants.");
-      setTenants(data.tenants as TenantDto[]);
+      if (!data?.tenants) throw new Error("Unable to load tenants.");
+      setTenants(data.tenants);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -76,8 +78,19 @@ export function AdminTenantsPanel() {
           password: newPassword.trim() ? newPassword.trim() : undefined,
         }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse<{
+        error?: string;
+        tenant?: TenantDto;
+        credentials?: {
+          email: string;
+          temporaryPassword: string;
+          mailSent: boolean;
+        };
+      }>(response);
       if (!response.ok) throw new Error(data?.error || "Unable to create tenant.");
+      if (!data?.tenant || !data.credentials) {
+        throw new Error("Unable to create tenant.");
+      }
 
       const creds = data.credentials;
       setCreateResult(
@@ -110,7 +123,7 @@ export function AdminTenantsPanel() {
           status: patch.status,
         }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse<{ error?: string }>(response);
       if (!response.ok) throw new Error(data?.error || "Unable to update tenant.");
       await loadTenants();
     } catch (err) {
@@ -130,7 +143,7 @@ export function AdminTenantsPanel() {
       const response = await fetch(`/api/admin/tenants/${tenantId}`, {
         method: "DELETE",
       });
-      const data = await response.json();
+      const data = await readJsonResponse<{ error?: string }>(response);
       if (!response.ok) throw new Error(data?.error || "Unable to delete tenant.");
       await loadTenants();
     } catch (err) {
@@ -150,8 +163,15 @@ export function AdminTenantsPanel() {
       const response = await fetch(`/api/admin/tenants/${tenantId}/reset-password`, {
         method: "POST",
       });
-      const data = await response.json();
+      const data = await readJsonResponse<{
+        error?: string;
+        temporaryPassword?: string;
+        mailSent?: boolean;
+      }>(response);
       if (!response.ok) throw new Error(data?.error || "Unable to reset password.");
+      if (!data?.temporaryPassword) {
+        throw new Error("Unable to reset password.");
+      }
       setCreateResult(
         `Password reset. Temp password: ${data.temporaryPassword} | mailSent: ${data.mailSent}`,
       );
