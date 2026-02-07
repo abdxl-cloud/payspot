@@ -165,7 +165,6 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     }
   }
 
-  const canLoadStats = !statsLoading;
   const canImport = !!csvFile && !importLoading;
 
   function handlePackagePriceChange(packageId: string, value: string) {
@@ -253,14 +252,22 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       <Card className="border-slate-200/70 bg-white/60 shadow-sm">
         <CardHeader className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-            Overview
+            Plans
           </p>
-          <CardTitle className="text-base">Stats</CardTitle>
+          <CardTitle className="text-base">Edit plan prices</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <Button onClick={loadStats} disabled={!canLoadStats} className="h-11">
-            {statsLoading ? "Refreshing..." : "Refresh stats"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={loadStats}
+              disabled={statsLoading}
+              variant="outline"
+              className="h-9"
+              type="button"
+            >
+              {statsLoading ? "Refreshing..." : "Refresh data"}
+            </Button>
+          </div>
 
           {statsError ? (
             <Alert variant="destructive">
@@ -268,19 +275,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               <AlertDescription>{statsError}</AlertDescription>
             </Alert>
           ) : null}
-        </CardContent>
-      </Card>
 
-      <Separator />
-
-      <Card className="border-slate-200/70 bg-white/60 shadow-sm">
-        <CardHeader className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-            Plans
-          </p>
-          <CardTitle className="text-base">Edit plan prices</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4">
           {packageError ? (
             <Alert variant="destructive">
               <AlertTitle>Update failed</AlertTitle>
@@ -337,6 +332,59 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               })}
             </div>
           )}
+
+          <Separator />
+
+          <div className="grid gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+              Add vouchers
+            </p>
+            <p className="text-sm font-semibold text-slate-900">Upload voucher codes (CSV)</p>
+          </div>
+
+          <form className="grid gap-4" onSubmit={handleImport}>
+            <div className="grid gap-2">
+              <Label htmlFor="csv">CSV file</Label>
+              <Input
+                id="csv"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="packageCode">Plan code (optional)</Label>
+              <Input
+                id="packageCode"
+                className="h-11"
+                placeholder="3h"
+                value={packageCode}
+                onChange={(e) => setPackageCode(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave blank to use the duration in your CSV.
+              </p>
+            </div>
+
+            <Button type="submit" disabled={!canImport} className="h-11">
+              {importLoading ? "Importing..." : "Import vouchers"}
+            </Button>
+          </form>
+
+          {importError ? (
+            <Alert variant="destructive">
+              <AlertTitle>Import failed</AlertTitle>
+              <AlertDescription>{importError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {importResult ? (
+            <Alert>
+              <AlertTitle>Import complete</AlertTitle>
+              <AlertDescription>{importResult}</AlertDescription>
+            </Alert>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -444,102 +492,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </CardContent>
       </Card>
 
-      <Separator />
-
-      <Card className="border-slate-200/70 bg-white/60 shadow-sm">
-        <CardHeader className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-            Add vouchers
-          </p>
-          <CardTitle className="text-base">Upload voucher codes (CSV)</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <form className="grid gap-4" onSubmit={handleImport}>
-            <div className="grid gap-2">
-              <Label htmlFor="csv">CSV file</Label>
-              <Input
-                id="csv"
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="packageCode">Plan code (optional)</Label>
-              <Input
-                id="packageCode"
-                className="h-11"
-                placeholder="3h"
-                value={packageCode}
-                onChange={(e) => setPackageCode(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Leave blank to use the duration in your CSV.
-              </p>
-            </div>
-
-            <Button type="submit" disabled={!canImport} className="h-11">
-              {importLoading ? "Importing..." : "Import vouchers"}
-            </Button>
-          </form>
-
-          {importError ? (
-            <Alert variant="destructive">
-              <AlertTitle>Import failed</AlertTitle>
-              <AlertDescription>{importError}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          {importResult ? (
-            <Alert>
-              <AlertTitle>Import complete</AlertTitle>
-              <AlertDescription>{importResult}</AlertDescription>
-            </Alert>
-          ) : null}
-        </CardContent>
-      </Card>
-
       {stats ? (
         <>
           <Separator />
-
-          <Card className="border-slate-200/70 bg-white/60 shadow-sm">
-            <CardHeader className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-                Sales
-              </p>
-              <CardTitle className="text-base">Transactions</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 text-sm text-slate-700">
-              <div className="flex justify-between">
-                <span>Total</span>
-                <span className="font-semibold">{stats.transactions.total}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Success</span>
-                <span className="font-semibold">{stats.transactions.success}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Pending</span>
-                <span className="font-semibold">{stats.transactions.pending}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Processing</span>
-                <span className="font-semibold">{stats.transactions.processing}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Failed</span>
-                <span className="font-semibold">{stats.transactions.failed}</span>
-              </div>
-              <div className="flex justify-between border-t border-slate-200 pt-2">
-                <span>Revenue (NGN)</span>
-                <span className="font-semibold">
-                  {stats.transactions.revenueNgn.toLocaleString()}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
 
           <Card className="border-slate-200/70 bg-white/60 shadow-sm">
             <CardHeader className="space-y-1">

@@ -1176,14 +1176,17 @@ export function getStats(tenantId: string) {
 export function getTenantAdminStats(tenantId: string) {
   const db = getDb();
   const voucherPool = getStats(tenantId);
-  const packages = getTenantPackages(tenantId).map((pkg) => ({
-    id: pkg.id,
-    code: pkg.code,
-    name: pkg.name,
-    durationMinutes: pkg.duration_minutes,
-    priceNgn: pkg.price_ngn,
-    active: pkg.active,
-  }));
+  const voucherCodes = new Set(voucherPool.map((pkg) => pkg.code));
+  const packages = getTenantPackages(tenantId)
+    .filter((pkg) => voucherCodes.has(pkg.code))
+    .map((pkg) => ({
+      id: pkg.id,
+      code: pkg.code,
+      name: pkg.name,
+      durationMinutes: pkg.duration_minutes,
+      priceNgn: pkg.price_ngn,
+      active: pkg.active,
+    }));
   const tx = db
     .prepare(
       `

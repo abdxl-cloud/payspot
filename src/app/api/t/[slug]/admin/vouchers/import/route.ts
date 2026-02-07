@@ -270,8 +270,13 @@ export async function POST(request: Request, { params }: Props) {
 
     const csvText = await file.text();
     const rows = parse(csvText, {
-      columns: true,
+      columns: (header) => header.map((value) => value.trim()).filter(Boolean),
       skip_empty_lines: true,
+      relax_column_count: true,
+      relax_column_count_less: true,
+      relax_column_count_more: true,
+      relax_quotes: true,
+      trim: true,
     }) as Array<Record<string, unknown>>;
 
     const db = getDb();
