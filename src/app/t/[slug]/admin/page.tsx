@@ -38,23 +38,25 @@ export default async function TenantAdminPage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.25),_transparent_55%),_linear-gradient(135deg,_#f0fdf4,_#ecfeff_45%,_#ffffff)] text-slate-900">
-      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16 lg:py-24">
-        <div className="space-y-6">
-          <div className="flex flex-col gap-3 text-center sm:flex-row sm:items-start sm:justify-between sm:text-left">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/70 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-800">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16 lg:py-24">
+        <div className="space-y-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-3">
+              <span className="inline-flex items-center rounded-lg bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
                 {tenant.name}
+              </span>
+              <div className="space-y-2">
+                <h1 className="font-display text-4xl font-semibold tracking-tight">
+                  Sales dashboard
+                </h1>
+                <p className="text-muted-foreground text-base">
+                  Manage inventory, track sales, and monitor revenue for your link at{" "}
+                  <span className="font-mono bg-muted px-2 py-1 rounded">/t/{tenant.slug}</span>
+                </p>
               </div>
-              <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-                Tenant admin
-              </h1>
-              <p className="text-slate-600">
-                Manage vouchers and track sales for your purchase link:{" "}
-                <span className="font-mono">/t/{tenant.slug}</span>.
-              </p>
             </div>
-            <div className="flex justify-center sm:justify-end">
+            <div className="flex justify-start sm:justify-end">
               <LogoutButton />
             </div>
           </div>

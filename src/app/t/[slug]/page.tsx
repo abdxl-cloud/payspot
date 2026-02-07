@@ -15,11 +15,11 @@ export default async function TenantPurchasePage({ params }: Props) {
 
   if (tenant.status !== "active") {
     return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">
-          <h1 className="text-3xl font-semibold">Not ready yet</h1>
-          <p className="mt-4 text-slate-300">
-            This voucher portal is still being set up. Please check back soon.
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24 text-center">
+          <h1 className="text-3xl font-display font-semibold">Portal is being set up</h1>
+          <p className="mt-4 text-muted-foreground text-base">
+            This Wi-Fi voucher portal is currently being configured. Please check back soon.
           </p>
         </div>
       </div>
@@ -36,23 +36,39 @@ export default async function TenantPurchasePage({ params }: Props) {
   }));
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.25),_transparent_55%),_linear-gradient(135deg,_#f0fdf4,_#ecfeff_45%,_#ffffff)] text-slate-900">
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:py-24">
-        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-          <div className="space-y-6 text-center lg:text-left">
-            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/70 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-800 lg:mx-0">
-              {tenant.name}
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-20 lg:py-28">
+        <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr] lg:items-center">
+          <div className="space-y-8">
+            <div>
+              <span className="inline-flex items-center rounded-lg bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+                {tenant.name}
+              </span>
+              <h1 className="font-display mt-6 text-5xl font-semibold leading-tight tracking-tight sm:text-6xl text-balance">
+                Instant Wi-Fi access for your guests
+              </h1>
             </div>
-            <h1 className="font-display mx-auto max-w-xl text-4xl font-semibold tracking-tight sm:text-5xl lg:mx-0">
-              Fast, paid WiFi access for guests who need instant connectivity.
-            </h1>
-            <p className="mx-auto max-w-2xl text-lg text-slate-600 lg:mx-0">
-              Choose a plan, pay securely with Paystack, and receive your Wi-Fi access
-              code by SMS in seconds.
+            <p className="text-lg leading-relaxed text-muted-foreground max-w-lg">
+              Choose your Wi-Fi package, complete a secure payment with Paystack, and get your access code delivered to your phone by SMS instantly.
             </p>
+            
+            <div className="flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <div className="mt-1 h-5 w-5 rounded-full bg-accent flex-shrink-0" />
+                <span className="text-foreground">Multiple duration packages available</span>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-1 h-5 w-5 rounded-full bg-accent flex-shrink-0" />
+                <span className="text-foreground">Secure Paystack payment processing</span>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-1 h-5 w-5 rounded-full bg-accent flex-shrink-0" />
+                <span className="text-foreground">Instant SMS delivery of access codes</span>
+              </div>
+            </div>
           </div>
 
-          <div className="w-full rounded-[32px] border border-white/60 bg-white/70 p-5 shadow-[0_30px_80px_rgba(15,23,42,0.15)] backdrop-blur sm:p-6">
+          <div className="lg:pl-8">
             <Checkout tenantSlug={tenant.slug} packages={packages} />
           </div>
         </div>

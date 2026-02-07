@@ -4,43 +4,45 @@ import { Button } from "@/components/ui/button";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.25),_transparent_55%),_linear-gradient(135deg,_#f0fdf4,_#ecfeff_45%,_#ffffff)] text-slate-900">
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:py-24">
-        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-          <div className="space-y-6 text-center lg:text-left">
-            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/70 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-800 lg:mx-0">
-              Vince Stack
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-20 lg:py-28">
+        <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr] lg:items-center">
+          <div className="space-y-8">
+            <div>
+              <span className="inline-flex items-center rounded-lg bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+                Vince Stack
+              </span>
+              <h1 className="font-display mt-6 text-5xl font-semibold leading-tight tracking-tight sm:text-6xl text-balance">
+                Sell Wi-Fi vouchers effortlessly
+              </h1>
             </div>
-            <h1 className="font-display mx-auto max-w-xl text-4xl font-semibold tracking-tight sm:text-5xl lg:mx-0">
-              Sell Wi-Fi vouchers at your venue, effortlessly.
-            </h1>
-            <p className="mx-auto max-w-2xl text-lg text-slate-600 lg:mx-0">
-              Give guests a simple purchase link, take secure Paystack payments, and
-              automatically send Wi-Fi access codes by SMS.
+            <p className="text-lg leading-relaxed text-muted-foreground max-w-lg">
+              Give your guests a simple purchase link, secure Paystack payments, and automatic SMS delivery of Wi-Fi access codes. Grow your venue revenue today.
             </p>
-            <div className="flex flex-wrap justify-center gap-4 text-sm text-slate-500 lg:justify-start">
-              <div className="rounded-full border border-emerald-200/60 bg-white/70 px-4 py-2">
-                Dedicated purchase link
+            
+            <div className="flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <div className="mt-1 h-5 w-5 rounded-full bg-accent flex-shrink-0" />
+                <span className="text-foreground">Dedicated purchase links per venue</span>
               </div>
-              <div className="rounded-full border border-emerald-200/60 bg-white/70 px-4 py-2">
-                Secure Paystack checkout
+              <div className="flex items-start gap-3">
+                <div className="mt-1 h-5 w-5 rounded-full bg-accent flex-shrink-0" />
+                <span className="text-foreground">Secure Paystack payment processing</span>
               </div>
-              <div className="rounded-full border border-emerald-200/60 bg-white/70 px-4 py-2">
-                Simple sales dashboard
+              <div className="flex items-start gap-3">
+                <div className="mt-1 h-5 w-5 rounded-full bg-accent flex-shrink-0" />
+                <span className="text-foreground">Real-time sales dashboard</span>
               </div>
             </div>
-            <div className="flex justify-center lg:justify-start">
-              <Button
-                asChild
-                variant="outline"
-                className="h-11 border-emerald-200/70 bg-white/60 hover:bg-emerald-50"
-              >
-                <Link href="/login">Login</Link>
+
+            <div>
+              <Button asChild className="h-12 px-8 text-base font-semibold">
+                <Link href="/login">Sign in to your account</Link>
               </Button>
             </div>
           </div>
 
-          <div className="w-full rounded-[32px] p-5 sm:p-6">
+          <div className="lg:pl-8">
             <TenantRequestForm />
           </div>
         </div>

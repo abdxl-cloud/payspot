@@ -69,12 +69,13 @@ export function TenantRequestForm() {
   }
 
   return (
-    <Card className="border-white/60 bg-white/70 shadow-[0_30px_80px_rgba(15,23,42,0.15)] backdrop-blur">
-      <CardHeader className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+    <Card className="border border-border bg-card shadow-lg">
+      <CardHeader className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Get started
         </p>
-        <CardTitle className="text-base">Request your Wi-Fi voucher page</CardTitle>
+        <CardTitle className="text-2xl font-semibold">Request your Wi-Fi page</CardTitle>
+        <p className="text-sm text-muted-foreground">Set up your venue in minutes and start accepting payments</p>
       </CardHeader>
       <CardContent className="grid gap-4">
         {error ? (
@@ -136,8 +137,8 @@ export function TenantRequestForm() {
             />
           </div>
 
-          <Button type="submit" className="h-12" disabled={!canSubmit || loading}>
-            {loading ? "Submitting..." : "Request my page"}
+          <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={!canSubmit || loading}>
+            {loading ? "Submitting..." : "Create my page"}
           </Button>
         </form>
       </CardContent>

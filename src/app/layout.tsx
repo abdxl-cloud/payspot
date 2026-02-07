@@ -13,9 +13,16 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Vince Stack | Wi-Fi Vouchers",
+  title: "Vince Stack - Sell Wi-Fi Vouchers Effortlessly",
   description:
-    "Sell Wi-Fi vouchers with Paystack and deliver access codes by SMS.",
+    "Sell Wi-Fi vouchers at your venue with secure Paystack payments and instant SMS delivery. Simple, affordable, and fully customizable.",
+  keywords: ["WiFi vouchers", "Paystack", "wireless access", "SMS delivery"],
+  openGraph: {
+    title: "Vince Stack - Sell Wi-Fi Vouchers Effortlessly",
+    description:
+      "Sell Wi-Fi vouchers at your venue with secure Paystack payments and instant SMS delivery.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({

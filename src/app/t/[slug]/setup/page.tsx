@@ -38,20 +38,22 @@ export default async function TenantSetupPage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.25),_transparent_55%),_linear-gradient(135deg,_#f0fdf4,_#ecfeff_45%,_#ffffff)] text-slate-900">
+    <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16 lg:py-24">
-        <div className="mx-auto max-w-2xl space-y-6">
-          <div className="space-y-2 text-center">
-            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/70 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-800">
+        <div className="mx-auto max-w-2xl space-y-8">
+          <div className="space-y-3">
+            <span className="inline-flex items-center rounded-lg bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
               {tenant.name}
+            </span>
+            <div className="space-y-2">
+              <h1 className="font-display text-4xl font-semibold tracking-tight">
+                Complete your setup
+              </h1>
+              <p className="text-muted-foreground text-base">
+                Secure your account and connect Paystack to activate your purchase link at{" "}
+                <span className="font-mono bg-muted px-2 py-1 rounded">/t/{tenant.slug}</span>
+              </p>
             </div>
-            <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              Finish setup
-            </h1>
-            <p className="text-slate-600">
-              Set a password and connect Paystack to activate your purchase link{" "}
-              (<span className="font-mono">/t/{tenant.slug}</span>).
-            </p>
           </div>
 
           <TenantSetupPanel

@@ -60,7 +60,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
   ] as const;
 
   return (
-    <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+    <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
       {steps.map((s, idx) => {
         const state =
           s.id < step ? "complete" : s.id === step ? "active" : "upcoming";
@@ -69,21 +69,21 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
           <div key={s.id} className="flex items-center gap-2">
             <div
               className={[
-                "flex size-7 items-center justify-center rounded-full border text-[11px]",
+                "flex size-7 items-center justify-center rounded-full border text-[11px] font-semibold",
                 state === "active"
-                  ? "border-slate-900 bg-slate-900 text-white"
+                  ? "border-primary bg-primary text-primary-foreground"
                   : state === "complete"
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-200 bg-white/70 text-slate-500",
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-muted text-muted-foreground",
               ].join(" ")}
             >
               {state === "complete" ? <Check className="size-4" /> : s.id}
             </div>
-            <span className={state === "active" ? "text-slate-900" : ""}>
+            <span className={state === "active" ? "text-foreground" : ""}>
               {s.label}
             </span>
             {idx < steps.length - 1 ? (
-              <div className="mx-1 hidden h-px w-10 bg-slate-200 sm:block" />
+              <div className="mx-1 hidden h-px w-10 bg-border sm:block" />
             ) : null}
           </div>
         );
@@ -204,15 +204,15 @@ export function Checkout({ tenantSlug, packages }: Props) {
 
   return (
     <div className="grid gap-6">
-      <div className="space-y-2">
+      <div className="space-y-4">
         <Stepper step={step} />
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Choose a plan
             </p>
-            <h2 className="text-lg font-semibold tracking-tight text-slate-900">
-              Buy WiFi access
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+              Buy Wi-Fi access
             </h2>
           </div>
           {selected ? (
@@ -291,34 +291,28 @@ export function Checkout({ tenantSlug, packages }: Props) {
                 }
               }}
               className={[
-                "min-w-[240px] select-none gap-0 border-slate-200/70 bg-white/60 py-0 shadow-sm transition sm:min-w-0",
-                !isSoldOut ? "hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-md" : "",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20",
-                isSelected ? "ring-2 ring-slate-900/15 bg-white/90" : "",
-                isSoldOut ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+                "min-w-[240px] select-none gap-0 border py-0 shadow-sm transition sm:min-w-0",
+                !isSoldOut ? "hover:-translate-y-1 hover:shadow-md" : "",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+                isSelected ? "ring-2 ring-primary border-primary bg-card" : "border-border bg-card",
+                isSoldOut ? "cursor-not-allowed opacity-50" : "cursor-pointer",
               ].join(" ")}
             >
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="whitespace-nowrap text-sm font-semibold text-slate-900">
+                    <p className="whitespace-nowrap text-sm font-semibold text-foreground">
                       {formatDuration(pkg.durationMinutes)}
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     {isBestValue ? (
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-200 bg-emerald-50 text-emerald-700"
-                      >
+                      <Badge className="bg-accent text-accent-foreground">
                         Best value
                       </Badge>
                     ) : null}
                     {isSoldOut ? (
-                      <Badge
-                        variant="outline"
-                        className="border-rose-200 bg-rose-50 text-rose-700"
-                      >
+                      <Badge variant="outline" className="border-destructive text-destructive">
                         Sold out
                       </Badge>
                     ) : (
@@ -329,21 +323,21 @@ export function Checkout({ tenantSlug, packages }: Props) {
 
                 <div className="mt-6 flex items-end justify-between">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                       NGN
                     </p>
-                    <p className="font-display text-3xl font-semibold tracking-tight text-slate-900">
+                    <p className="font-display text-3xl font-semibold tracking-tight text-foreground">
                       {pkg.priceNgn.toLocaleString()}
                     </p>
                   </div>
                   {isSelected ? (
-                    <div className="flex size-9 items-center justify-center rounded-full bg-slate-900 text-white">
+                    <div className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
                       <Check className="size-4" />
                     </div>
                   ) : null}
                 </div>
 
-                <p className="mt-4 min-h-[2.25rem] text-xs leading-relaxed text-slate-600">
+                <p className="mt-4 min-h-[2.25rem] text-xs leading-relaxed text-muted-foreground">
                   {pkg.description || "Instant access voucher for your WiFi network."}
                 </p>
               </CardContent>
@@ -355,13 +349,13 @@ export function Checkout({ tenantSlug, packages }: Props) {
       <Separator />
 
       {!allSoldOut ? (
-        <Card className="border-slate-200/70 bg-white/60 shadow-sm">
-          <CardHeader className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+        <Card className="border-border bg-card shadow-sm">
+          <CardHeader className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Your details
             </p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base">Where should we send the voucher?</CardTitle>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-xl font-semibold">Where should we send the voucher?</CardTitle>
               {selected ? (
                 <Badge
                   variant="outline"
@@ -406,7 +400,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
               <Button
                 type="submit"
                 disabled={!canSubmit}
-                className="h-12 sm:col-span-2"
+                className="h-12 sm:col-span-2 text-base font-semibold"
               >
                 {loading
                   ? "Processing..."
@@ -415,14 +409,14 @@ export function Checkout({ tenantSlug, packages }: Props) {
                     : "Select a plan"}
               </Button>
 
-              <div className="grid gap-2 text-xs text-slate-600 sm:col-span-2 sm:grid-cols-2">
+              <div className="grid gap-3 text-xs text-muted-foreground sm:col-span-2 sm:grid-cols-2">
                 <div className="flex items-center gap-2">
-                  <Lock className="size-4 text-slate-500" />
-                  Secured by Paystack
+                  <Lock className="size-4 flex-shrink-0" />
+                  <span>Secured by Paystack</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <MessageSquareText className="size-4 text-slate-500" />
-                  Voucher delivered via SMS in seconds
+                  <MessageSquareText className="size-4 flex-shrink-0" />
+                  <span>Instant SMS delivery</span>
                 </div>
               </div>
             </form>
@@ -430,10 +424,10 @@ export function Checkout({ tenantSlug, packages }: Props) {
         </Card>
       ) : null}
 
-      <details className="group rounded-xl border border-slate-200/70 bg-white/60 shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-lg border border-border bg-card shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
           <span>Resume a payment</span>
-          <ChevronDown className="size-4 text-slate-500 transition group-open:rotate-180" />
+          <ChevronDown className="size-4 text-muted-foreground transition group-open:rotate-180" />
         </summary>
         <div className="px-6 pb-6">
           <form className="grid gap-4" onSubmit={handleResume}>

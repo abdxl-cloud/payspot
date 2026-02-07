@@ -45,14 +45,15 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <Card className="border-white/60 bg-white/70 shadow-[0_30px_80px_rgba(15,23,42,0.15)] backdrop-blur">
-      <CardHeader className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-          Reset link
+    <Card className="border border-border bg-card shadow-lg">
+      <CardHeader className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Send reset link
         </p>
-        <CardTitle className="text-base">Send email</CardTitle>
+        <CardTitle className="text-2xl font-semibold">Enter your email</CardTitle>
+        <p className="text-sm text-muted-foreground">We'll send you a password reset link</p>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="grid gap-6">
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>Request failed</AlertTitle>
@@ -67,27 +68,27 @@ export function ForgotPasswordForm() {
           </Alert>
         ) : null}
 
-        <form className="grid gap-4" onSubmit={handleSubmit}>
+        <form className="grid gap-5" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
             <Input
               id="email"
               type="email"
               className="h-11"
-              placeholder="you@company.com"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
 
-          <Button type="submit" className="h-12" disabled={!canSubmit}>
+          <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={!canSubmit}>
             {loading ? "Sending..." : "Send reset link"}
           </Button>
         </form>
 
-        <p className="text-center text-sm text-slate-600">
-          <Link href="/login" className="underline underline-offset-4">
+        <p className="text-center text-sm text-muted-foreground">
+          <Link href="/login" className="text-primary hover:underline">
             Back to login
           </Link>
         </p>

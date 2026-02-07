@@ -67,14 +67,15 @@ export function ResetPasswordForm({ token }: Props) {
       : null;
 
   return (
-    <Card className="border-white/60 bg-white/70 shadow-[0_30px_80px_rgba(15,23,42,0.15)] backdrop-blur">
-      <CardHeader className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-          New password
+    <Card className="border border-border bg-card shadow-lg">
+      <CardHeader className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Secure your account
         </p>
-        <CardTitle className="text-base">Update</CardTitle>
+        <CardTitle className="text-2xl font-semibold">Create new password</CardTitle>
+        <p className="text-sm text-muted-foreground">Choose a strong password to secure your account</p>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="grid gap-6">
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>Reset failed</AlertTitle>
@@ -89,28 +90,30 @@ export function ResetPasswordForm({ token }: Props) {
           </Alert>
         ) : null}
 
-        <form className="grid gap-4" onSubmit={handleSubmit}>
+        <form className="grid gap-5" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <Label htmlFor="newPassword">New password</Label>
+            <Label htmlFor="newPassword" className="text-sm font-medium">New password</Label>
             <Input
               id="newPassword"
               type="password"
               className="h-11"
+              placeholder="••••••••"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               required
             />
             <p className="text-xs text-muted-foreground">
-              At least 8 characters, with upper/lowercase and a number.
+              Minimum 8 characters with uppercase, lowercase, and a number
             </p>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="confirmPassword">Confirm password</Label>
+            <Label htmlFor="confirmPassword" className="text-sm font-medium">Confirm password</Label>
             <Input
               id="confirmPassword"
               type="password"
               className="h-11"
+              placeholder="••••••••"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
@@ -118,17 +121,17 @@ export function ResetPasswordForm({ token }: Props) {
           </div>
 
           {passwordError ? (
-            <p className="text-sm text-red-700">{passwordError}</p>
+            <p className="text-sm text-destructive">{passwordError}</p>
           ) : null}
-          {mismatch ? <p className="text-sm text-red-700">{mismatch}</p> : null}
+          {mismatch ? <p className="text-sm text-destructive">{mismatch}</p> : null}
 
-          <Button type="submit" className="h-12" disabled={!canSubmit}>
-            {loading ? "Saving..." : "Set new password"}
+          <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={!canSubmit}>
+            {loading ? "Saving..." : "Update password"}
           </Button>
         </form>
 
-        <p className="text-center text-sm text-slate-600">
-          <Link href="/login" className="underline underline-offset-4">
+        <p className="text-center text-sm text-muted-foreground">
+          <Link href="/login" className="text-primary hover:underline">
             Back to login
           </Link>
         </p>

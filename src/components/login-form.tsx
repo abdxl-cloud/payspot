@@ -45,14 +45,15 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="border-white/60 bg-white/70 shadow-[0_30px_80px_rgba(15,23,42,0.15)] backdrop-blur">
-      <CardHeader className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+    <Card className="border border-border bg-card shadow-lg">
+      <CardHeader className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Sign in
         </p>
-        <CardTitle className="text-base">Login</CardTitle>
+        <CardTitle className="text-2xl font-semibold">Welcome back</CardTitle>
+        <p className="text-sm text-muted-foreground">Enter your credentials to access your account</p>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="grid gap-6">
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>Login failed</AlertTitle>
@@ -60,14 +61,14 @@ export function LoginForm() {
           </Alert>
         ) : null}
 
-        <form className="grid gap-4" onSubmit={handleSubmit}>
+        <form className="grid gap-5" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
             <Input
               id="email"
               type="email"
               className="h-11"
-              placeholder="seeduser@example.com"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -75,28 +76,27 @@ export function LoginForm() {
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+              <Link href="/forgot-password" className="text-xs text-primary hover:underline">
+                Forgot password?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"
               className="h-11"
-              placeholder="********"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
 
-          <Button type="submit" className="h-12" disabled={!canSubmit}>
+          <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={!canSubmit}>
             {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
-
-        <p className="text-center text-sm text-slate-600">
-          <Link href="/forgot-password" className="underline underline-offset-4">
-            Forgot password?
-          </Link>
-        </p>
       </CardContent>
     </Card>
   );
