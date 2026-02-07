@@ -22,13 +22,14 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
 
   if (!transaction) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">
-          <h1 className="text-3xl font-semibold">Transaction not found</h1>
-          <p className="mt-4 text-slate-300">
-            We could not locate this payment reference. Please contact support
-            if you were charged.
-          </p>
+      <div className="app-shell">
+        <div className="app-container max-w-2xl py-20 sm:py-24">
+          <div className="surface-card p-8">
+            <h1 className="font-display text-3xl font-semibold text-slate-900">Transaction not found</h1>
+            <p className="mt-3 text-slate-600">
+              We could not locate this payment reference. Please contact support if you were charged.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -40,13 +41,12 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
       paystackSecretKey = requireTenantPaystackSecretKey(tenant.id);
     } catch {
       return (
-        <div className="min-h-screen bg-slate-950 text-white">
-          <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">
-            <h1 className="text-3xl font-semibold">Unable to verify payment</h1>
-            <p className="mt-4 text-slate-300">
-              Payments are not configured for this tenant. Please contact
-              support.
-            </p>
+        <div className="app-shell">
+          <div className="app-container max-w-2xl py-20 sm:py-24">
+            <div className="surface-card p-8">
+              <h1 className="font-display text-3xl font-semibold text-slate-900">Unable to verify payment</h1>
+              <p className="mt-3 text-slate-600">Payments are not configured for this tenant.</p>
+            </div>
           </div>
         </div>
       );
@@ -64,22 +64,18 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
 
   if (updated?.payment_status === "success" && updated.voucher_code) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.32),_transparent_55%),_linear-gradient(160deg,_#ecfdf5,_#f8fafc)]">
-        <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">
-          <div className="rounded-3xl border border-white/70 bg-white/80 p-6 shadow-[0_40px_120px_rgba(15,23,42,0.2)] sm:p-10">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-              Payment confirmed
-            </p>
-            <h1 className="mt-4 text-3xl font-semibold text-slate-900">
-              Your voucher is ready
-            </h1>
+      <div className="app-shell">
+        <div className="app-container max-w-2xl py-20 sm:py-24">
+          <div className="surface-card p-8 sm:p-10">
+            <p className="section-kicker">Payment confirmed</p>
+            <h1 className="mt-3 font-display text-3xl font-semibold text-slate-900">Your voucher is ready</h1>
             <p className="mt-2 text-slate-600">
-              {pkg?.name ?? "WiFi Access"} - reference {reference}
+              {pkg?.name ?? "WiFi Access"} | Reference: {reference}
             </p>
 
             <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-7 text-center sm:px-6 sm:py-8">
-              <p className="text-sm text-slate-500">Voucher Code</p>
-              <p className="mt-2 break-all text-3xl font-semibold tracking-[0.25em] text-slate-900">
+              <p className="text-sm text-slate-500">Voucher code</p>
+              <p className="mt-2 break-all text-3xl font-semibold tracking-[0.23em] text-slate-900">
                 {updated.voucher_code}
               </p>
             </div>
@@ -90,9 +86,7 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
               <p>3. Enter your voucher code to start browsing.</p>
             </div>
 
-            <p className="mt-6 text-xs text-slate-500">
-              We have also sent the code to your phone via SMS.
-            </p>
+            <p className="mt-6 text-xs text-slate-500">We also sent this code to your phone by SMS.</p>
           </div>
         </div>
       </div>
@@ -102,15 +96,13 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
   if (updated && updated.payment_status !== "pending" && updated.payment_status !== "processing") {
     const failureMessages: Record<string, string> = {
       paystack_failed:
-        "We could not confirm this payment with Paystack. If you were charged, please contact support.",
+        "We could not confirm this payment with Paystack. If you were charged, contact support.",
       amount_mismatch:
-        "We received a payment but the amount did not match the selected package. Please contact support.",
+        "We received a payment but the amount did not match the selected package.",
       currency_mismatch:
-        "We received a payment in an unsupported currency. Please contact support.",
-      init_failed:
-        "We could not start this payment. Please try again.",
-      voucher_unavailable:
-        "Payment succeeded but no voucher was available. Please contact support.",
+        "We received a payment in an unsupported currency.",
+      init_failed: "We could not start this payment. Please try again.",
+      voucher_unavailable: "Payment succeeded but no voucher was available. Contact support.",
     };
 
     const message =
@@ -118,24 +110,28 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
       "This payment could not be completed. Please contact support.";
 
     return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">
-          <h1 className="text-3xl font-semibold">Payment not completed</h1>
-          <p className="mt-4 text-slate-300">{message}</p>
-          <p className="mt-2 text-sm text-slate-400">Reference: {reference}</p>
+      <div className="app-shell">
+        <div className="app-container max-w-2xl py-20 sm:py-24">
+          <div className="surface-card p-8">
+            <h1 className="font-display text-3xl font-semibold text-slate-900">Payment not completed</h1>
+            <p className="mt-3 text-slate-600">{message}</p>
+            <p className="mt-2 text-sm text-slate-500">Reference: {reference}</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">
-        <h1 className="text-3xl font-semibold">Payment pending</h1>
-        <p className="mt-4 text-slate-300">
-          We are verifying your payment. Please refresh this page in a moment.
-        </p>
-        <p className="mt-2 text-sm text-slate-400">Reference: {reference}</p>
+    <div className="app-shell">
+      <div className="app-container max-w-2xl py-20 sm:py-24">
+        <div className="surface-card p-8">
+          <h1 className="font-display text-3xl font-semibold text-slate-900">Payment pending</h1>
+          <p className="mt-3 text-slate-600">
+            We are verifying your payment. Please refresh this page in a moment.
+          </p>
+          <p className="mt-2 text-sm text-slate-500">Reference: {reference}</p>
+        </div>
       </div>
     </div>
   );

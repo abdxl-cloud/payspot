@@ -76,12 +76,12 @@ export function TenantSetupPanel({
   }
 
   return (
-    <Card className="border-white/60 bg-white/70 shadow-[0_30px_80px_rgba(15,23,42,0.15)] backdrop-blur">
+    <Card className="border-white/90 bg-white/95">
       <CardHeader className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+        <p className="section-kicker">
           Required setup
         </p>
-        <CardTitle className="text-base">Finish setup</CardTitle>
+        <CardTitle className="section-title">Finish setup</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         {error ? (

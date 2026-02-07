@@ -1,4 +1,4 @@
-# Vince Stack (Multi-tenant Omada Voucher Portal)
+# PaySpot (Multi-tenant Omada Voucher Portal)
 
 This project is a multi-tenant paid WiFi voucher portal built with Next.js and shadcn/ui.
 Each tenant gets:
@@ -81,7 +81,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=postmaster@your-domain.com
 SMTP_PASS=change-this
-SMTP_FROM="Vince Stack <no-reply@your-domain.com>"
+SMTP_FROM="PaySpot <no-reply@your-domain.com>"
 ```
 
 Notes:

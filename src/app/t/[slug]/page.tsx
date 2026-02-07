@@ -15,12 +15,14 @@ export default async function TenantPurchasePage({ params }: Props) {
 
   if (tenant.status !== "active") {
     return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">
-          <h1 className="text-3xl font-semibold">Not ready yet</h1>
-          <p className="mt-4 text-slate-300">
-            This voucher portal is still being set up. Please check back soon.
-          </p>
+      <div className="app-shell">
+        <div className="app-container max-w-2xl py-20 sm:py-24">
+          <div className="surface-card p-8">
+            <h1 className="font-display text-3xl font-bold text-slate-900">Not ready yet</h1>
+            <p className="mt-3 text-slate-600">
+              This voucher portal is still being set up. Please check back soon.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -39,36 +41,46 @@ export default async function TenantPurchasePage({ params }: Props) {
 
   if (packages.length === 0) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white">
-        <div className="mx-auto max-w-2xl px-4 py-20 sm:px-6 sm:py-24">
-          <h1 className="text-3xl font-semibold">Coming soon</h1>
-          <p className="mt-4 text-slate-300">
-            This tenant portal will go live after voucher plans are imported.
-            Please check back soon.
-          </p>
+      <div className="app-shell">
+        <div className="app-container max-w-2xl py-20 sm:py-24">
+          <div className="surface-card p-8">
+            <h1 className="font-display text-3xl font-bold text-slate-900">Coming soon</h1>
+            <p className="mt-3 text-slate-600">
+              This tenant portal will go live after voucher plans are imported.
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.25),_transparent_55%),_linear-gradient(135deg,_#f0fdf4,_#ecfeff_45%,_#ffffff)] text-slate-900">
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:py-24">
-        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-          <div className="space-y-6 text-center lg:text-left">
-            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/70 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-800 lg:mx-0">
-              {tenant.name}
-            </div>
-            <h1 className="font-display mx-auto max-w-xl text-4xl font-semibold tracking-tight sm:text-5xl lg:mx-0">
-              Fast, paid WiFi access for guests who need instant connectivity.
-            </h1>
-            <p className="mx-auto max-w-2xl text-lg text-slate-600 lg:mx-0">
-              Choose a plan, pay securely with Paystack, and receive your Wi-Fi access
-              code by SMS in seconds.
+    <div className="app-shell">
+      <div className="app-container">
+        <div className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start xl:gap-16">
+          <div className="space-y-6 pt-2 text-center lg:space-y-8 lg:text-left">
+            <div className="hero-chip">{tenant.name}</div>
+            <h1 className="hero-title">Get fast guest Wi-Fi without lines, paper slips, or manual setup.</h1>
+            <p className="hero-copy mx-auto lg:mx-0">
+              Pick a plan, pay securely with Paystack, and receive your voucher code by SMS in seconds.
             </p>
+            <div className="hero-metric-grid max-w-3xl">
+              <div className="hero-metric">
+                <strong>Live</strong>
+                <span>plan availability</span>
+              </div>
+              <div className="hero-metric">
+                <strong>Secure</strong>
+                <span>paystack checkout</span>
+              </div>
+              <div className="hero-metric">
+                <strong>Instant</strong>
+                <span>code delivery</span>
+              </div>
+            </div>
           </div>
 
-          <div className="w-full rounded-[32px] border border-white/60 bg-white/70 p-5 shadow-[0_30px_80px_rgba(15,23,42,0.15)] backdrop-blur sm:p-6">
+          <div className="surface-card p-5 sm:p-6 md:p-7">
             <Checkout tenantSlug={tenant.slug} packages={packages} />
           </div>
         </div>

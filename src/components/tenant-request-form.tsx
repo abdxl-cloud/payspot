@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,7 +58,7 @@ export function TenantRequestForm() {
       if (!response.ok) {
         throw new Error(data?.error || "Unable to submit request.");
       }
-      setSuccess("Thanks! We’ll email you with next steps.");
+      setSuccess("Thanks! We'll email you with next steps.");
       setBusinessName("");
       setSlug("");
       setSlugTouched(false);
@@ -70,12 +71,10 @@ export function TenantRequestForm() {
   }
 
   return (
-    <Card className="border-white/60 bg-white/70 shadow-[0_30px_80px_rgba(15,23,42,0.15)] backdrop-blur">
+    <Card className="border-white/90 bg-white/95">
       <CardHeader className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-          Get started
-        </p>
-        <CardTitle className="text-base">Request your Wi-Fi voucher page</CardTitle>
+        <p className="section-kicker">Get started</p>
+        <CardTitle className="section-title">Request your Wi-Fi voucher page</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         {error ? (
@@ -119,8 +118,7 @@ export function TenantRequestForm() {
               required
             />
             <p className="text-xs text-muted-foreground">
-              Your purchase link will look like{" "}
-              <span className="font-mono">/t/{slug || "your-link"}</span>
+              Your purchase link will look like <span className="font-mono">/t/{slug || "your-link"}</span>
             </p>
           </div>
 
@@ -141,6 +139,13 @@ export function TenantRequestForm() {
             {loading ? "Submitting..." : "Request my page"}
           </Button>
         </form>
+
+        <p className="text-center text-sm text-slate-600">
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold underline underline-offset-4">
+            Login instead
+          </Link>
+        </p>
       </CardContent>
     </Card>
   );

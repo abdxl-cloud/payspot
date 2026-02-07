@@ -1,19 +1,19 @@
 import type { Metadata } from "next";
-import { Inter, Outfit } from "next/font/google";
+import { Bitter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const bodyFont = Bitter({
   variable: "--font-body",
   subsets: ["latin"],
 });
 
-const outfit = Outfit({
+const displayFont = Playfair_Display({
   variable: "--font-heading",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Vince Stack | Wi-Fi Vouchers",
+  title: "PaySpot | Wi-Fi Voucher Platform",
   description:
     "Sell Wi-Fi vouchers with Paystack and deliver access codes by SMS.",
 };
@@ -25,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${outfit.variable} antialiased`}>
+      <body className={`${bodyFont.variable} ${displayFont.variable} antialiased`}>
         {children}
       </body>
     </html>

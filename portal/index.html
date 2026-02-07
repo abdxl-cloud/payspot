@@ -1,75 +1,417 @@
-﻿<!DOCTYPE html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PaySpot WiFi Access</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PaySpot Voucher Portal</title>
+  <style>
+    :root {
+      --ink: #1f2a44;
+      --muted: #5d6980;
+      --line: #d8dde7;
+      --bg-a: #fff8ec;
+      --bg-b: #eef4fb;
+      --card: rgba(255, 255, 255, 0.96);
+      --btn: #1f2a44;
+      --btn-hover: #18213a;
+      --danger: #b42318;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 12%, rgba(241, 201, 137, 0.3), transparent 28%),
+        radial-gradient(circle at 90% 6%, rgba(120, 167, 255, 0.22), transparent 34%),
+        linear-gradient(140deg, var(--bg-a) 0%, #f8f3e8 42%, var(--bg-b) 100%);
+    }
+
+    .wrap {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .panel {
+      border: 1px solid rgba(255, 255, 255, 0.92);
+      border-radius: 20px;
+      background: var(--card);
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+      padding: 24px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #4e5b73;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 12px 0 6px;
+      font-size: clamp(1.55rem, 4.4vw, 2rem);
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.98rem;
+      line-height: 1.5;
+    }
+
+    .field {
+      margin-top: 14px;
+    }
+
+    label {
+      display: block;
+      margin: 0 0 7px;
+      font-size: 13px;
+      color: #4f5d76;
+      font-weight: 600;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 13px;
+      font-size: 16px;
+      text-transform: uppercase;
+      text-align: center;
+      letter-spacing: 0.12em;
+      outline: none;
+      color: #1e293b;
+      background: #fff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+    }
+
+    input[type="text"]:focus {
+      border-color: #7a88a5;
+      box-shadow: 0 0 0 3px rgba(122, 136, 165, 0.18);
+    }
+
+    .btn {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 13px 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #fff;
+      background: var(--btn);
+      transition: background 0.15s ease;
+    }
+
+    .btn:hover {
+      background: var(--btn-hover);
+    }
+
+    .hint {
+      margin: 10px 0 0;
+      min-height: 18px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .hint.error {
+      color: var(--danger);
+    }
+
+    .meta {
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: #72809a;
+    }
+
+    .buy-section {
+      margin-top: 16px;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      text-align: center;
+    }
+
+    .buy-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .buy-link {
+      display: inline-block;
+      margin-top: 8px;
+      color: var(--ink);
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+  </style>
 </head>
-<body style="margin:0; font-family: 'Inter','Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif; background: radial-gradient(circle at top, rgba(16,185,129,0.12), transparent 55%), linear-gradient(135deg, #f0fdf4, #ecfeff 45%, #ffffff); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; color:#0f172a;">
-    <div style="width:100%; max-width:980px; padding:16px;">
-        <div style="background: rgba(255,255,255,0.7); border-radius:32px; border:1px solid rgba(255,255,255,0.6); box-shadow:0 30px 80px rgba(15,23,42,0.15); backdrop-filter: blur(14px); overflow:hidden;">
-            <div style="padding:40px 32px 0; text-align:center;">
-                <div style="display:inline-flex; align-items:center; gap:8px; border-radius:999px; border:1px solid rgba(148,163,184,0.5); background: rgba(255,255,255,0.7); color:#0f172a; padding:6px 16px; font-size:11px; font-weight:700; letter-spacing:0.25em; text-transform:uppercase;">PaySpot WiFi</div>
-                <h1 style="font-family:'Outfit','Inter','Segoe UI',system-ui,sans-serif; margin:18px 0 0; font-size:30px; font-weight:600; letter-spacing:-0.02em;">Free WiFi Access</h1>
-                <p style="margin:10px 0 0; font-size:16px; color:#475569;">Purchase a voucher and connect in seconds.</p>
-                <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:18px; color:#64748b; font-size:12px;">
-                    <div style="border-radius:999px; border:1px solid rgba(148,163,184,0.4); background: rgba(255,255,255,0.8); padding:6px 12px;">Secure Paystack checkout</div>
-                    <div style="border-radius:999px; border:1px solid rgba(148,163,184,0.4); background: rgba(255,255,255,0.8); padding:6px 12px;">Instant SMS delivery</div>
-                    <div style="border-radius:999px; border:1px solid rgba(148,163,184,0.4); background: rgba(255,255,255,0.8); padding:6px 12px;">Simple voucher login</div>
-                </div>
-            </div>
+<body>
+  <main class="wrap">
+    <section class="panel">
+      <div class="chip">PaySpot Wi-Fi</div>
+      <h1>Enter your voucher code</h1>
+      <p class="sub">If you already have a code, use it below to connect.</p>
 
-            <div style="padding:28px 32px 36px;">
-                <div style="margin-top:24px; background: rgba(255,255,255,0.88); border-radius:18px; border:1px solid rgba(255,255,255,0.6); padding:20px;">
-                    <h3 style="color:#0f172a; font-size:15px; margin:0 0 12px;">How to Connect:</h3>
-                    <div style="display:flex; align-items:flex-start; gap:10px; margin-bottom:10px; font-size:14px; color:#475569;">
-                        <div style="background:#0f172a; color:white; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0;">1</div>
-                        <div>Click "Buy Voucher" below to purchase internet access</div>
-                    </div>
-                    <div style="display:flex; align-items:flex-start; gap:10px; margin-bottom:10px; font-size:14px; color:#475569;">
-                        <div style="background:#0f172a; color:white; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0;">2</div>
-                        <div>Complete payment and receive your code via SMS</div>
-                    </div>
-                    <div style="display:flex; align-items:flex-start; gap:10px; margin-bottom:0; font-size:14px; color:#475569;">
-                        <div style="background:#0f172a; color:white; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0;">3</div>
-                        <div>Return here and enter your voucher code to connect</div>
-                    </div>
-                </div>
-
-                <a href="https://payspot.abdxl.cloud/t/walstreet" style="display:block; width:100%; padding:16px; margin-top:20px; background:#0f172a; color:white; text-decoration:none; text-align:center; border-radius:12px; font-size:17px; font-weight:600;">Buy Voucher</a>
-
-                <div style="display:flex; align-items:center; gap:10px; margin:22px 0; color:#94a3b8; font-size:13px;">
-                    <span style="flex:1; border-bottom:1px solid rgba(148,163,184,0.4);"></span>
-                    <span>Already have a voucher?</span>
-                    <span style="flex:1; border-bottom:1px solid rgba(148,163,184,0.4);"></span>
-                </div>
-
-                <div style="background: rgba(255,255,255,0.88); padding:22px; border-radius:18px; border:1px solid rgba(255,255,255,0.6);">
-                    <h3 style="color:#0f172a; font-size:15px; margin:0 0 12px;">Enter Your Voucher Code:</h3>
-                    <form method="post" action="%%SERVERIP%%:%%SERVERPORT%%/login">
-                        <input type="hidden" name="auth_user" value="%%USERNAME%%">
-                        <input type="hidden" name="auth_pass" value="%%PASSWORD%%">
-                        <input type="hidden" name="redirurl" value="%%REDIRURL%%">
-                        <input type="hidden" name="auth_voucher" value="%%VOUCHER%%">
-
-                        <div style="margin-bottom:12px;">
-                            <input 
-                                type="text" 
-                                name="auth_voucher" 
-                                id="voucher" 
-                                placeholder="Enter Code"
-                                maxlength="12"
-                                required
-                                autocomplete="off"
-                                style="width:100%; padding:14px; border:1px solid rgba(148,163,184,0.4); border-radius:10px; font-size:16px; font-family: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; text-transform:uppercase; letter-spacing:2px; text-align:center; background: rgba(255,255,255,0.95);"
-                            >
-                        </div>
-
-                        <button type="submit" style="width:100%; padding:14px; background:#0f172a; color:white; border:none; border-radius:10px; font-size:15px; font-weight:600; cursor:pointer;">Connect to WiFi</button>
-                    </form>
-                </div>
-            </div>
+      <form id="voucher-form" autocomplete="off">
+        <div class="field">
+          <label for="voucherCode">Voucher code</label>
+          <input id="voucherCode" name="voucherCode" type="text" maxlength="64" placeholder="ENTER VOUCHER CODE" required />
         </div>
-    </div>
+        <div class="field">
+          <button id="connect-btn" class="btn" type="submit">Connect to Wi-Fi</button>
+        </div>
+      </form>
+
+      <p id="oper-hint" class="hint"></p>
+      <p id="network-meta" class="meta"></p>
+
+      <div class="buy-section">
+        <p class="buy-copy">Don&apos;t have a code?</p>
+        <a class="buy-link" href="//payspot.abdxl.cloud/t/walstreet">Buy code instead</a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    var Ajax = {
+      post: function (url, data, fn) {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", url, true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4) {
+            if (xhr.status === 200 || xhr.status === 304) {
+              fn(xhr.responseText);
+            } else {
+              fn(JSON.stringify({ errorCode: -1 }));
+            }
+          }
+        };
+        xhr.send(data);
+      }
+    };
+
+    function getQueryStringAsObject() {
+      var b, cv, e, k, ma, sk, v, r = {},
+        d = function (v) { return decodeURIComponent(v); },
+        q = window.location.search.substring(1),
+        s = /([^&;=]+)=?([^&;]*)/g;
+      ma = function (v) {
+        if (typeof v !== "object") {
+          cv = v;
+          v = {};
+          v.length = 0;
+          if (cv) { Array.prototype.push.call(v, cv); }
+        }
+        return v;
+      };
+      while (e = s.exec(q)) {
+        b = e[1].indexOf("[");
+        v = d(e[2]);
+        if (b < 0) {
+          k = d(e[1]);
+          if (r[k]) {
+            r[k] = ma(r[k]);
+            Array.prototype.push.call(r[k], v);
+          } else {
+            r[k] = v;
+          }
+        } else {
+          k = d(e[1].slice(0, b));
+          sk = d(e[1].slice(b + 1, e[1].indexOf("]", b)));
+          r[k] = ma(r[k]);
+          if (sk) { r[k][sk] = v; } else { Array.prototype.push.call(r[k], v); }
+        }
+      }
+      return r;
+    }
+
+    function getQueryStringKey(key) {
+      return getQueryStringAsObject()[key];
+    }
+
+    var errorHintMap = {
+      "0": "Connected successfully. Redirecting...",
+      "-1": "Network error. Please try again.",
+      "-41500": "Invalid authentication type.",
+      "-41501": "Authentication failed.",
+      "-41502": "Incorrect voucher code.",
+      "-41503": "Voucher code has expired.",
+      "-41504": "Voucher data limit reached.",
+      "-41505": "Maximum users reached for this voucher.",
+      "-41507": "Authentication limit reached for today.",
+      "-41518": "SSID not found. Reconnect and try again."
+    };
+
+    var state = {
+      clientMac: getQueryStringKey("clientMac"),
+      apMac: getQueryStringKey("apMac"),
+      gatewayMac: getQueryStringKey("gatewayMac") || undefined,
+      ssidName: getQueryStringKey("ssidName") || undefined,
+      radioId: getQueryStringKey("radioId") ? Number(getQueryStringKey("radioId")) : undefined,
+      vid: getQueryStringKey("vid") ? Number(getQueryStringKey("vid")) : undefined,
+      originUrl: getQueryStringKey("originUrl"),
+      previewSite: getQueryStringKey("previewSite"),
+      landingUrl: undefined,
+      ready: false,
+      submitting: false
+    };
+
+    function setHint(message, isError) {
+      var hint = document.getElementById("oper-hint");
+      hint.className = isError ? "hint error" : "hint";
+      hint.textContent = message || "";
+    }
+
+    function setNetworkMeta() {
+      var meta = [];
+      if (state.ssidName) {
+        meta.push("SSID: " + state.ssidName);
+      }
+      if (state.clientMac) {
+        meta.push("Client: " + state.clientMac);
+      }
+      document.getElementById("network-meta").textContent = meta.join(" | ");
+    }
+
+    function voucherAvailable(setting) {
+      if (setting.authType === 3) {
+        return true;
+      }
+      if (setting.authType === 11 && setting.hotspot && setting.hotspot.enabledTypes) {
+        for (var i = 0; i < setting.hotspot.enabledTypes.length; i++) {
+          if (Number(setting.hotspot.enabledTypes[i]) === 3) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function initPortal() {
+      setNetworkMeta();
+
+      Ajax.post(
+        "/portal/getPortalPageSetting",
+        JSON.stringify({
+          clientMac: state.clientMac,
+          apMac: state.apMac,
+          gatewayMac: state.gatewayMac,
+          ssidName: state.ssidName,
+          radioId: state.radioId,
+          vid: state.vid,
+          originUrl: state.originUrl
+        }),
+        function (res) {
+          var parsed;
+          try {
+            parsed = JSON.parse(res);
+          } catch (err) {
+            setHint("Unable to load portal settings.", true);
+            return;
+          }
+
+          if (parsed.errorCode !== 0 || !parsed.result) {
+            setHint(errorHintMap[String(parsed.errorCode)] || "Portal settings failed to load.", true);
+            return;
+          }
+
+          state.landingUrl = parsed.result.landingUrl || state.originUrl || "/";
+
+          if (!voucherAvailable(parsed.result)) {
+            setHint("Voucher login is not enabled on this SSID. Enable Voucher auth in Omada portal settings.", true);
+            return;
+          }
+
+          state.ready = true;
+          if (state.previewSite) {
+            setHint("Preview mode enabled. Authentication call is skipped in preview.", false);
+          } else {
+            setHint("Ready. Enter your voucher code to connect.", false);
+          }
+        }
+      );
+    }
+
+    function submitVoucher() {
+      if (!state.ready || state.submitting) {
+        return;
+      }
+
+      var voucherCode = document.getElementById("voucherCode").value;
+      voucherCode = voucherCode ? voucherCode.replace(/^\s+|\s+$/g, "") : "";
+      if (!voucherCode) {
+        setHint("Please enter your voucher code.", true);
+        return;
+      }
+
+      if (state.previewSite) {
+        setHint("Preview mode: voucher submit disabled. Upload and test on a real portal redirect.", true);
+        return;
+      }
+
+      state.submitting = true;
+      setHint("Connecting...", false);
+
+      Ajax.post(
+        "/portal/auth",
+        JSON.stringify({
+          authType: 3,
+          voucherCode: voucherCode,
+          clientMac: state.clientMac,
+          apMac: state.apMac,
+          gatewayMac: state.gatewayMac,
+          ssidName: state.ssidName,
+          radioId: state.radioId,
+          vid: state.vid,
+          originUrl: state.originUrl
+        }),
+        function (res) {
+          state.submitting = false;
+          var parsed;
+          try {
+            parsed = JSON.parse(res);
+          } catch (err) {
+            setHint("Authentication failed. Invalid server response.", true);
+            return;
+          }
+
+          if (parsed && parsed.errorCode === 0) {
+            setHint(errorHintMap["0"], false);
+            window.location.href = state.landingUrl;
+            return;
+          }
+
+          setHint(errorHintMap[String(parsed.errorCode)] || "Authentication failed.", true);
+        }
+      );
+    }
+
+    document.getElementById("voucher-form").addEventListener("submit", function (event) {
+      event.preventDefault();
+      submitVoucher();
+    });
+
+    initPortal();
+  </script>
 </body>
 </html>

@@ -24,21 +24,20 @@ export default async function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.25),_transparent_55%),_linear-gradient(135deg,_#f0fdf4,_#ecfeff_45%,_#ffffff)] text-slate-900">
-      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16 lg:py-24">
-        <div className="mb-6 flex flex-col gap-3 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/70 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-800">
-              Admin
+    <div className="app-shell">
+      <div className="app-container max-w-6xl">
+        <div className="mb-7 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+          <div className="space-y-3">
+            <div className="hero-chip">Platform admin</div>
+            <h1 className="panel-title">Control every tenant from one command center.</h1>
+            <p className="panel-copy">Create new portals, rotate credentials, and monitor readiness.</p>
+            <div className="hero-metric-grid max-w-2xl">
+              <div className="hero-metric"><strong>Tenants</strong><span>provisioned here</span></div>
+              <div className="hero-metric"><strong>Keys</strong><span>paystack managed</span></div>
+              <div className="hero-metric"><strong>Access</strong><span>roles and resets</span></div>
             </div>
-            <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              Tenant management
-            </h1>
-            <p className="text-slate-600">
-              Create, edit, delete tenants and manage access.
-            </p>
           </div>
-          <div className="flex justify-center sm:justify-end">
+          <div className="pt-1">
             <LogoutButton />
           </div>
         </div>

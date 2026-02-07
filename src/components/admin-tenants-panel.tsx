@@ -184,12 +184,12 @@ export function AdminTenantsPanel() {
 
   return (
     <div className="grid gap-6">
-      <Card className="border-slate-200/70 bg-white/60 shadow-sm">
+      <Card className="border-white/90 bg-white/95">
         <CardHeader className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+          <p className="section-kicker">
             Create tenant
           </p>
-          <CardTitle className="text-base">New tenant</CardTitle>
+          <CardTitle className="section-title">New tenant</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
           {error ? (
@@ -261,12 +261,12 @@ export function AdminTenantsPanel() {
 
       <Separator />
 
-      <Card className="border-slate-200/70 bg-white/60 shadow-sm">
+      <Card className="border-white/90 bg-white/95">
         <CardHeader className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+          <p className="section-kicker">
             Tenants
           </p>
-          <CardTitle className="text-base">
+          <CardTitle className="section-title">
             Manage tenants ({tenants.length})
           </CardTitle>
         </CardHeader>

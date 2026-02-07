@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -92,7 +92,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     void loadStats();
   }, [loadStats]);
 
-  const packages = stats?.packages ?? [];
+  const packages = useMemo(() => stats?.packages ?? [], [stats]);
   const hasImportedPlans = (stats?.voucherPool ?? []).some((pkg) => pkg.total > 0);
 
   useEffect(() => {
@@ -250,12 +250,12 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
   return (
     <div className="grid gap-6">
-      <Card className="border-slate-200/70 bg-white/60 shadow-sm">
+      <Card className="border-white/90 bg-white/95">
         <CardHeader className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+          <p className="section-kicker">
             Add vouchers
           </p>
-          <CardTitle className="text-base">Upload voucher codes (CSV)</CardTitle>
+          <CardTitle className="section-title">Upload voucher codes (CSV)</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -336,12 +336,12 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         <>
           <Separator />
 
-          <Card className="border-slate-200/70 bg-white/60 shadow-sm">
+          <Card className="border-white/90 bg-white/95">
             <CardHeader className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+              <p className="section-kicker">
                 Plans
               </p>
-              <CardTitle className="text-base">Edit plan prices</CardTitle>
+              <CardTitle className="section-title">Edit plan prices</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               {packageError ? (
@@ -362,7 +362,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                     return (
                       <div
                         key={pkg.id}
-                        className="rounded-xl border border-slate-200 bg-white/70 p-4 text-sm"
+                        className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 text-sm"
                       >
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="min-w-0">
@@ -406,12 +406,12 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
           <Separator />
 
-          <Card className="border-slate-200/70 bg-white/60 shadow-sm">
+          <Card className="border-white/90 bg-white/95">
             <CardHeader className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+              <p className="section-kicker">
                 Remove vouchers
               </p>
-              <CardTitle className="text-base">Delete vouchers</CardTitle>
+              <CardTitle className="section-title">Delete vouchers</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <form className="grid gap-4" onSubmit={handleDelete}>
@@ -512,12 +512,12 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <>
               <Separator />
 
-              <Card className="border-slate-200/70 bg-white/60 shadow-sm">
+              <Card className="border-white/90 bg-white/95">
                 <CardHeader className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  <p className="section-kicker">
                     Inventory
                   </p>
-                  <CardTitle className="text-base">Voucher pool</CardTitle>
+                  <CardTitle className="section-title">Voucher pool</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-3">
                   {stats.voucherPool.length === 0 ? (
@@ -527,7 +527,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                       {stats.voucherPool.map((pkg) => (
                         <div
                           key={pkg.code}
-                          className="rounded-xl border border-slate-200 bg-white/70 p-4 text-sm"
+                          className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 text-sm"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
@@ -542,15 +542,15 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                             </div>
                           </div>
                           <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-600">
-                            <div className="rounded-lg border border-slate-200 bg-white/60 p-2">
+                            <div className="rounded-lg border border-slate-200/80 bg-white p-2">
                               <p className="font-semibold text-slate-900">{pkg.total}</p>
                               <p>Total</p>
                             </div>
-                            <div className="rounded-lg border border-slate-200 bg-white/60 p-2">
+                            <div className="rounded-lg border border-slate-200/80 bg-white p-2">
                               <p className="font-semibold text-slate-900">{pkg.unused}</p>
                               <p>Unused</p>
                             </div>
-                            <div className="rounded-lg border border-slate-200 bg-white/60 p-2">
+                            <div className="rounded-lg border border-slate-200/80 bg-white p-2">
                               <p className="font-semibold text-slate-900">{pkg.assigned}</p>
                               <p>Assigned</p>
                             </div>
@@ -567,4 +567,5 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       ) : null}
     </div>
   );
+}
 

@@ -228,7 +228,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
         <Stepper step={step} />
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+            <p className="section-kicker">
               Choose a plan
             </p>
             <h2 className="text-lg font-semibold tracking-tight text-slate-900">
@@ -335,7 +335,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
                 }
               }}
               className={[
-                "min-w-[240px] select-none gap-0 border-slate-200/70 bg-white/60 py-0 shadow-sm transition sm:min-w-0",
+                "min-w-[240px] select-none gap-0 border-slate-200/80 bg-white/90 py-0 shadow-sm transition sm:min-w-0",
                 !isSoldOut ? "hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-md" : "",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20",
                 isSelected ? "ring-2 ring-slate-900/15 bg-white/90" : "",
@@ -354,7 +354,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
                     {isBestValue ? (
                       <Badge
                         variant="outline"
-                        className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                        className="border-amber-200 bg-amber-50 text-amber-700"
                       >
                         Best value
                       </Badge>
@@ -400,13 +400,13 @@ export function Checkout({ tenantSlug, packages }: Props) {
       <Separator />
 
       {!allSoldOut ? (
-        <Card className="border-slate-200/70 bg-white/60 shadow-sm">
+        <Card className="border-white/90 bg-white/95">
           <CardHeader className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+            <p className="section-kicker">
               Your details
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base">Where should we send the voucher?</CardTitle>
+              <CardTitle className="section-title">Where should we send the voucher?</CardTitle>
               {selected ? (
                 <Badge
                   variant="outline"
@@ -474,7 +474,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
         </Card>
       ) : null}
 
-      <details className="group rounded-xl border border-slate-200/70 bg-white/60 shadow-sm">
+      <details className="group rounded-xl border border-white/90 bg-white/95">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
           <span>Resume a payment</span>
           <ChevronDown className="size-4 text-slate-500 transition group-open:rotate-180" />
