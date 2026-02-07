@@ -99,6 +99,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentReference, setPaymentReference] = useState<string | null>(null);
 
   const [resumeReference, setResumeReference] = useState("");
   const [resumeEmail, setResumeEmail] = useState("");
@@ -158,6 +159,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
       const data = await readJsonResponse<{
         error?: string;
         authorizationUrl?: string;
+        reference?: string;
       }>(response);
       if (!response.ok) {
         throw new Error(data?.error || "Payment initialization failed.");
@@ -165,7 +167,14 @@ export function Checkout({ tenantSlug, packages }: Props) {
       if (!data?.authorizationUrl) {
         throw new Error("Payment initialization failed.");
       }
-      window.location.href = data.authorizationUrl;
+      if (data?.reference) {
+        setPaymentReference(data.reference);
+        setResumeReference(data.reference);
+      }
+      setResumeEmail(email.trim());
+      setTimeout(() => {
+        window.location.href = data.authorizationUrl!;
+      }, 1200);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong.";
@@ -275,6 +284,30 @@ export function Checkout({ tenantSlug, packages }: Props) {
         <Alert variant="destructive">
           <AlertTitle>Payment setup failed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {paymentReference ? (
+        <Alert>
+          <AlertTitle>Payment reference: {paymentReference}</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>
+              Save this reference in case you need to resume payment.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => navigator.clipboard.writeText(paymentReference)}
+              >
+                Copy reference
+              </Button>
+              <span className="text-xs text-slate-500 self-center">
+                Redirecting to Paystack...
+              </span>
+            </div>
+          </AlertDescription>
         </Alert>
       ) : null}
 
