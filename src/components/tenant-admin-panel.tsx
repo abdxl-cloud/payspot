@@ -43,6 +43,16 @@ type Props = {
   tenantSlug: string;
 };
 
+async function readJsonResponse<T>(response: Response): Promise<T | null> {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 export function TenantAdminPanel({ tenantSlug }: Props) {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -57,17 +67,28 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [packageEdits, setPackageEdits] = useState<Record<string, string>>({});
   const [packageSaving, setPackageSaving] = useState<Record<string, boolean>>({});
   const [packageError, setPackageError] = useState<string | null>(null);
+  const [deleteMode, setDeleteMode] = useState<"plan" | "codes" | "status">("plan");
+  const [deleteStatus, setDeleteStatus] = useState("UNUSED");
+  const [deletePackageId, setDeletePackageId] = useState("");
+  const [deleteCodes, setDeleteCodes] = useState("");
+  const [deleteFile, setDeleteFile] = useState<File | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteResult, setDeleteResult] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     setStatsError(null);
     setStatsLoading(true);
     try {
       const response = await fetch(`/api/t/${tenantSlug}/admin/stats`);
-      const data = await response.json();
+      const data = await readJsonResponse<{ error?: string; stats?: AdminStats }>(response);
       if (!response.ok) {
-        throw new Error(data?.error || "Unable to load stats.");
+        throw new Error(data?.error || response.statusText || "Unable to load stats.");
       }
-      setStats(data.stats as AdminStats);
+      if (!data?.stats) {
+        throw new Error("Unable to load stats.");
+      }
+      setStats(data.stats);
     } catch (err) {
       setStats(null);
       setStatsError(err instanceof Error ? err.message : "Something went wrong.");
@@ -79,6 +100,14 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   useEffect(() => {
     void loadStats();
   }, [loadStats]);
+
+  const packages = stats?.packages ?? [];
+
+  useEffect(() => {
+    if (!deletePackageId && packages.length > 0) {
+      setDeletePackageId(packages[0].id);
+    }
+  }, [packages, deletePackageId]);
 
   async function handleImport(event: React.FormEvent) {
     event.preventDefault();
@@ -98,14 +127,29 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         method: "POST",
         body: form,
       });
-      const data = await response.json();
+      const data = await readJsonResponse<
+        | {
+            error?: string;
+            imported?: number;
+            duplicates?: number;
+            skipped?: number;
+            expired?: number;
+            inUse?: number;
+            missingPlan?: number;
+            packagesCreated?: number;
+          }
+        | null
+      >(response);
       if (!response.ok) {
-        throw new Error(data?.error || "Import failed.");
+        throw new Error(data?.error || response.statusText || "Import failed.");
+      }
+      if (!data) {
+        throw new Error("Import failed.");
       }
       const parts = [
-        `Imported: ${data.imported}`,
-        `Duplicates: ${data.duplicates}`,
-        `Skipped: ${data.skipped}`,
+        `Imported: ${data.imported ?? 0}`,
+        `Duplicates: ${data.duplicates ?? 0}`,
+        `Skipped: ${data.skipped ?? 0}`,
       ];
       if (typeof data.expired === "number") {
         parts.push(`Expired: ${data.expired}`);
@@ -133,8 +177,6 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const canLoadStats = !statsLoading;
   const canImport = !!csvFile && !importLoading;
 
-  const packages = stats?.packages ?? [];
-
   function handlePackagePriceChange(packageId: string, value: string) {
     setPackageEdits((prev) => ({ ...prev, [packageId]: value }));
   }
@@ -154,15 +196,64 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ packageId, priceNgn: Math.round(parsed) }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse<{ error?: string }>(response);
       if (!response.ok) {
-        throw new Error(data?.error || "Failed to update price.");
+        throw new Error(data?.error || response.statusText || "Failed to update price.");
       }
       await loadStats();
     } catch (err) {
       setPackageError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setPackageSaving((prev) => ({ ...prev, [packageId]: false }));
+    }
+  }
+
+  async function handleDelete(event: React.FormEvent) {
+    event.preventDefault();
+    setDeleteError(null);
+    setDeleteResult(null);
+
+    if (deleteMode === "plan" && !deletePackageId) {
+      setDeleteError("Select a plan to delete.");
+      return;
+    }
+
+    if (deleteMode === "codes" && !deleteCodes.trim() && !deleteFile) {
+      setDeleteError("Provide voucher codes or upload a CSV.");
+      return;
+    }
+
+    setDeleteLoading(true);
+    try {
+      const form = new FormData();
+      form.append("mode", deleteMode);
+      form.append("status", deleteStatus);
+      if (deletePackageId) {
+        form.append("packageId", deletePackageId);
+      }
+      if (deleteCodes.trim()) {
+        form.append("codes", deleteCodes.trim());
+      }
+      if (deleteFile) {
+        form.append("file", deleteFile);
+      }
+
+      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers/delete`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Delete failed.");
+      }
+      setDeleteResult(`Deleted: ${data.deleted}`);
+      setDeleteCodes("");
+      setDeleteFile(null);
+      await loadStats();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setDeleteLoading(false);
     }
   }
 
@@ -255,6 +346,110 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               })}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Separator />
+
+      <Card className="border-slate-200/70 bg-white/60 shadow-sm">
+        <CardHeader className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+            Remove vouchers
+          </p>
+          <CardTitle className="text-base">Delete vouchers</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <form className="grid gap-4" onSubmit={handleDelete}>
+            <div className="grid gap-2">
+              <Label htmlFor="delete-mode">Delete mode</Label>
+              <select
+                id="delete-mode"
+                className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                value={deleteMode}
+                onChange={(event) =>
+                  setDeleteMode(event.target.value as "plan" | "codes" | "status")
+                }
+              >
+                <option value="plan">Delete by plan</option>
+                <option value="codes">Delete by codes (paste or CSV)</option>
+                <option value="status">Delete by status</option>
+              </select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="delete-status">Status filter</Label>
+              <select
+                id="delete-status"
+                className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                value={deleteStatus}
+                onChange={(event) => setDeleteStatus(event.target.value)}
+              >
+                <option value="UNUSED">Unused only</option>
+                <option value="ASSIGNED">Assigned only</option>
+                <option value="ALL">All statuses</option>
+              </select>
+            </div>
+
+            {deleteMode === "plan" ? (
+              <div className="grid gap-2">
+                <Label htmlFor="delete-plan">Plan</Label>
+                <select
+                  id="delete-plan"
+                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                  value={deletePackageId}
+                  onChange={(event) => setDeletePackageId(event.target.value)}
+                >
+                  {packages.map((pkg) => (
+                    <option key={pkg.id} value={pkg.id}>
+                      {pkg.name} ({pkg.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            {deleteMode === "codes" ? (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="delete-codes">Voucher codes</Label>
+                  <textarea
+                    id="delete-codes"
+                    className="min-h-[96px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    placeholder="Paste codes separated by commas or new lines"
+                    value={deleteCodes}
+                    onChange={(event) => setDeleteCodes(event.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="delete-csv">CSV file (optional)</Label>
+                  <Input
+                    id="delete-csv"
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(event) => setDeleteFile(event.target.files?.[0] ?? null)}
+                  />
+                </div>
+              </>
+            ) : null}
+
+            <Button type="submit" disabled={deleteLoading} className="h-11">
+              {deleteLoading ? "Deleting..." : "Delete vouchers"}
+            </Button>
+          </form>
+
+          {deleteError ? (
+            <Alert variant="destructive">
+              <AlertTitle>Delete failed</AlertTitle>
+              <AlertDescription>{deleteError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {deleteResult ? (
+            <Alert>
+              <AlertTitle>Delete complete</AlertTitle>
+              <AlertDescription>{deleteResult}</AlertDescription>
+            </Alert>
+          ) : null}
         </CardContent>
       </Card>
 
