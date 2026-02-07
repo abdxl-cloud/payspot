@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+.env*
+data
+npm-debug.log
+yarn.lock
+pnpm-lock.yaml

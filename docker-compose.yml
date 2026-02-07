@@ -1,0 +1,16 @@
+services:
+  payspot:
+    build: .
+    container_name: payspot
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    env_file:
+      - .env.local
+    volumes:
+      - payspot_data:/app/data
+
+volumes:
+  payspot_data:
