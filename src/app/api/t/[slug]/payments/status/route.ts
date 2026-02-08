@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
-import { getTenantBySlug, getTransactionByReferenceEmail } from "@/lib/store";
+import { getTenantBySlug, getTransactionByReferencePhone } from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -8,7 +8,7 @@ type Props = {
 
 const schema = z.object({
   reference: z.string().min(6),
-  email: z.string().email(),
+  phone: z.string().min(7),
 });
 
 export async function POST(request: Request, { params }: Props) {
@@ -30,8 +30,8 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const { reference, email } = parsed.data;
-  const transaction = getTransactionByReferenceEmail(tenant.id, reference, email);
+  const { reference, phone } = parsed.data;
+  const transaction = getTransactionByReferencePhone(tenant.id, reference, phone);
 
   if (!transaction) {
     return Response.json({ error: "Transaction not found" }, { status: 404 });

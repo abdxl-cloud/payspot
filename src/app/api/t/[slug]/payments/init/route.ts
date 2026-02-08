@@ -17,10 +17,15 @@ type Props = {
 };
 
 const schema = z.object({
-  email: z.string().email(),
   phone: z.string().min(7),
   packageCode: z.string().min(1),
 });
+
+function buildCheckoutEmailFromPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  const local = digits || `guest-${randomUUID().slice(0, 8)}`;
+  return `${local}@checkout.payspot.local`;
+}
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
@@ -48,7 +53,8 @@ export async function POST(request: Request, { params }: Props) {
     );
   }
 
-  const { email, phone, packageCode } = parsed.data;
+  const { phone, packageCode } = parsed.data;
+  const email = buildCheckoutEmailFromPhone(phone);
   const pkg = getPackageByCode(tenant.id, packageCode);
   if (!pkg) {
     return Response.json({ error: "Package not found" }, { status: 404 });

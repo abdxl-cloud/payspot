@@ -111,6 +111,10 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+function normalizePhoneForLookup(phone: string) {
+  return phone.replace(/\D/g, "");
+}
+
 export function getUserByUsername(username: string) {
   const db = getDb();
   return db
@@ -955,6 +959,25 @@ export function getTransactionByReferenceEmail(
       "SELECT * FROM transactions WHERE tenant_id = ? AND reference = ? AND lower(email) = ?",
     )
     .get(tenantId, reference, normalizedEmail) as TransactionRow | undefined;
+}
+
+export function getTransactionByReferencePhone(
+  tenantId: string,
+  reference: string,
+  phone: string,
+) {
+  const db = getDb();
+  const transaction = db
+    .prepare(
+      "SELECT * FROM transactions WHERE tenant_id = ? AND reference = ? ORDER BY created_at DESC LIMIT 1",
+    )
+    .get(tenantId, reference) as TransactionRow | undefined;
+
+  if (!transaction) return undefined;
+  const normalizedInput = normalizePhoneForLookup(phone);
+  const normalizedStored = normalizePhoneForLookup(transaction.phone);
+  if (!normalizedInput || !normalizedStored) return undefined;
+  return normalizedInput === normalizedStored ? transaction : undefined;
 }
 
 export function updateTransactionAuthUrl(params: {

@@ -95,7 +95,6 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
 
 export function Checkout({ tenantSlug, packages }: Props) {
   const [selected, setSelected] = useState<Package | null>(null);
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +102,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
   const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
 
   const [resumeReference, setResumeReference] = useState("");
-  const [resumeEmail, setResumeEmail] = useState("");
+  const [resumePhone, setResumePhone] = useState("");
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeMessage, setResumeMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -136,11 +135,10 @@ export function Checkout({ tenantSlug, packages }: Props) {
     return (
       !!selected &&
       selected.availableCount > 0 &&
-      email.length > 3 &&
       phone.length > 6 &&
       !loading
     );
-  }, [selected, email, phone, loading]);
+  }, [selected, phone, loading]);
 
   function redirectToPaystack(url: string, newTab = false) {
     if (newTab) {
@@ -196,7 +194,6 @@ export function Checkout({ tenantSlug, packages }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
           phone,
           packageCode: selected.code,
         }),
@@ -217,7 +214,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
         setResumeReference(data.reference);
       }
       setAuthorizationUrl(data.authorizationUrl);
-      setResumeEmail(email.trim());
+      setResumePhone(phone.trim());
       setTimeout(() => {
         redirectToPaystack(data.authorizationUrl!);
       }, 400);
@@ -242,7 +239,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reference: resumeReference.trim(),
-          email: resumeEmail.trim(),
+          phone: resumePhone.trim(),
         }),
       });
       const data = await readJsonResponse<{
@@ -445,18 +442,6 @@ export function Checkout({ tenantSlug, packages }: Props) {
           <CardContent>
             <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
               <div className="grid gap-2 sm:col-span-1">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  className="h-11"
-                  placeholder="you@email.com"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                />
-              </div>
-              <div className="grid gap-2 sm:col-span-1">
                 <Label htmlFor="phone">Phone</Label>
                 <Input
                   id="phone"
@@ -569,14 +554,14 @@ export function Checkout({ tenantSlug, packages }: Props) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="resume-email">Email used</Label>
+              <Label htmlFor="resume-phone">Phone used</Label>
               <Input
-                id="resume-email"
-                type="email"
+                id="resume-phone"
+                type="tel"
                 className="h-11"
-                placeholder="you@email.com"
-                value={resumeEmail}
-                onChange={(event) => setResumeEmail(event.target.value)}
+                placeholder="08012345678"
+                value={resumePhone}
+                onChange={(event) => setResumePhone(event.target.value)}
                 required
               />
             </div>

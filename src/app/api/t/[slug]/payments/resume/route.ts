@@ -4,7 +4,7 @@ import { verifyAndProcess } from "@/lib/payments";
 import {
   getTenantBySlug,
   getTransaction,
-  getTransactionByReferenceEmail,
+  getTransactionByReferencePhone,
   requireTenantPaystackSecretKey,
 } from "@/lib/store";
 import { getResumeTtlMs } from "@/lib/payments";
@@ -15,7 +15,7 @@ type Props = {
 
 const schema = z.object({
   reference: z.string().min(6),
-  email: z.string().email(),
+  phone: z.string().min(7),
 });
 
 function isExpired(expiresAt: string | null) {
@@ -42,8 +42,8 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const { reference, email } = parsed.data;
-  const transaction = getTransactionByReferenceEmail(tenant.id, reference, email);
+  const { reference, phone } = parsed.data;
+  const transaction = getTransactionByReferencePhone(tenant.id, reference, phone);
 
   if (!transaction) {
     return Response.json({ error: "Transaction not found" }, { status: 404 });
