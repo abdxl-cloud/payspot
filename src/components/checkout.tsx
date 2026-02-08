@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Check,
-  ChevronDown,
   CircleAlert,
   Lock,
   MessageSquareText,
@@ -108,6 +107,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeMessage, setResumeMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [flowMode, setFlowMode] = useState<"purchase" | "resume">("purchase");
 
   const hasAvailable = packages.some((pkg) => pkg.availableCount > 0);
   const allSoldOut = packages.length > 0 && !hasAvailable;
@@ -535,9 +535,55 @@ export function Checkout({ tenantSlug, packages }: Props) {
 
       <Separator />
 
-      {!allSoldOut ? (
-      <Card className="border-slate-200/80 bg-white/85">
-          <CardHeader className="space-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white/75 px-3 py-2">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+          <button
+            type="button"
+            onClick={() => setFlowMode("purchase")}
+            className={[
+              "rounded-md px-3 py-1.5 text-xs font-semibold transition",
+              flowMode === "purchase"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100",
+            ].join(" ")}
+          >
+            New purchase
+          </button>
+          <button
+            type="button"
+            onClick={() => setFlowMode("resume")}
+            className={[
+              "rounded-md px-3 py-1.5 text-xs font-semibold transition",
+              flowMode === "resume"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100",
+            ].join(" ")}
+          >
+            Resume payment
+          </button>
+        </div>
+        {flowMode === "purchase" ? (
+          <button
+            type="button"
+            onClick={() => setFlowMode("resume")}
+            className="text-xs font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900"
+          >
+            Have a reference? Resume instead
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setFlowMode("purchase")}
+            className="text-xs font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900"
+          >
+            Continue to purchase
+          </button>
+        )}
+      </div>
+
+      {!allSoldOut && flowMode === "purchase" ? (
+        <Card className="max-w-4xl border-slate-200/80 bg-white/85">
+          <CardHeader className="space-y-1 pb-2">
             <p className="section-kicker">Customer details</p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="section-title">Where should we send the voucher?</CardTitle>
@@ -555,8 +601,8 @@ export function Checkout({ tenantSlug, packages }: Props) {
             </div>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
-              <div className="grid gap-2 sm:col-span-1">
+            <form className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px] md:items-end" onSubmit={handleSubmit}>
+              <div className="grid gap-2">
                 <Label htmlFor="phone">Phone</Label>
                 <Input
                   id="phone"
@@ -572,8 +618,20 @@ export function Checkout({ tenantSlug, packages }: Props) {
                 </p>
               </div>
 
+              <Button
+                type="submit"
+                disabled={!canSubmit}
+                className="h-11 md:mb-[22px]"
+              >
+                {loading
+                  ? "Processing..."
+                  : selected
+                    ? `Pay NGN ${selected.priceNgn.toLocaleString()}`
+                    : "Select a plan"}
+              </Button>
+
               {paymentReference ? (
-                <Alert className="sm:col-span-2 border-emerald-200 bg-emerald-50/80">
+                <Alert className="border-emerald-200 bg-emerald-50/80 md:col-span-2">
                   <AlertTitle>Payment reference: {paymentReference}</AlertTitle>
                   <AlertDescription className="space-y-2">
                     <p>Save this code now. You can use it to resume payment.</p>
@@ -616,19 +674,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
                 </Alert>
               ) : null}
 
-              <Button
-                type="submit"
-                disabled={!canSubmit}
-                className="h-12 sm:col-span-2"
-              >
-                {loading
-                  ? "Processing..."
-                  : selected
-                    ? `Pay NGN ${selected.priceNgn.toLocaleString()}`
-                    : "Select a plan"}
-              </Button>
-
-              <div className="grid gap-2 text-xs text-slate-600 sm:col-span-2 sm:grid-cols-2">
+              <div className="grid gap-2 text-xs text-slate-600 md:col-span-2 sm:grid-cols-2">
                 <div className="flex items-center gap-2">
                   <Lock className="size-4 text-slate-500" />
                   Secured by Paystack
@@ -643,12 +689,13 @@ export function Checkout({ tenantSlug, packages }: Props) {
         </Card>
       ) : null}
 
-      <details className="group rounded-xl border border-slate-200/80 bg-white/85">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-sm font-semibold sm:px-6 sm:py-5 [&::-webkit-details-marker]:hidden">
-          <span>Resume a payment</span>
-          <ChevronDown className="size-4 text-slate-500 transition group-open:rotate-180" />
-        </summary>
-        <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+      {flowMode === "resume" ? (
+        <Card className="max-w-3xl border-slate-200/80 bg-white/85">
+          <CardHeader className="space-y-1 pb-2">
+            <p className="section-kicker">Resume flow</p>
+            <CardTitle className="section-title">Resume a payment</CardTitle>
+          </CardHeader>
+          <CardContent>
           <form className="grid gap-3 sm:grid-cols-2" onSubmit={handleResume}>
             {resumeMessage ? (
               <Alert className="sm:col-span-2">
@@ -684,8 +731,9 @@ export function Checkout({ tenantSlug, packages }: Props) {
               {resumeLoading ? "Checking..." : "Resume payment"}
             </Button>
           </form>
-        </div>
-      </details>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

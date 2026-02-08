@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Sora } from "next/font/google";
 import "./globals.css";
 
 const bodyFont = Sora({
   variable: "--font-body",
   subsets: ["latin"],
-});
-
-const displayFont = Sora({
-  variable: "--font-heading",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -25,8 +22,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${bodyFont.variable} ${displayFont.variable} antialiased`}>
+      <body className={`${bodyFont.variable} antialiased`}>
         {children}
+        <Script id="sw-register" strategy="afterInteractive">
+          {`
+            if ("serviceWorker" in navigator) {
+              window.addEventListener("load", function () {
+                navigator.serviceWorker.register("/sw.js").catch(function () {});
+              });
+            }
+          `}
+        </Script>
       </body>
     </html>
   );

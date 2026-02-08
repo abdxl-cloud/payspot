@@ -47,6 +47,7 @@
 }
 
 :root {
+  --font-heading: var(--font-body);
   --radius: 0.85rem;
   --background: oklch(0.97 0.007 228);
   --foreground: oklch(0.24 0.04 258);

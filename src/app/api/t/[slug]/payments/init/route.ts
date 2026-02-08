@@ -23,8 +23,8 @@ const schema = z.object({
 
 function buildCheckoutEmailFromPhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
-  const local = digits || `guest-${randomUUID().slice(0, 8)}`;
-  return `${local}@checkout.payspot.local`;
+  const localPart = (digits || `guest${randomUUID().slice(0, 8)}`).slice(0, 40);
+  return `${localPart}@guest.payspot.co`;
 }
 
 export async function POST(request: Request, { params }: Props) {
