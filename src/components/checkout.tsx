@@ -174,7 +174,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
       setResumeEmail(email.trim());
       setTimeout(() => {
         window.location.href = data.authorizationUrl!;
-      }, 1200);
+      }, 5000);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong.";
@@ -284,30 +284,6 @@ export function Checkout({ tenantSlug, packages }: Props) {
         <Alert variant="destructive">
           <AlertTitle>Payment setup failed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {paymentReference ? (
-        <Alert>
-          <AlertTitle>Payment reference: {paymentReference}</AlertTitle>
-          <AlertDescription className="space-y-2">
-            <p>
-              Save this reference in case you need to resume payment.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => navigator.clipboard.writeText(paymentReference)}
-              >
-                Copy reference
-              </Button>
-              <span className="text-xs text-slate-500 self-center">
-                Redirecting to Paystack...
-              </span>
-            </div>
-          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -446,6 +422,28 @@ export function Checkout({ tenantSlug, packages }: Props) {
                   Nigeria (+234). We&apos;ll format your number automatically.
                 </p>
               </div>
+
+              {paymentReference ? (
+                <Alert className="sm:col-span-2 border-emerald-200 bg-emerald-50/80">
+                  <AlertTitle>Payment reference: {paymentReference}</AlertTitle>
+                  <AlertDescription className="space-y-2">
+                    <p>Save this code now. You can use it to resume payment.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigator.clipboard.writeText(paymentReference)}
+                      >
+                        Copy reference
+                      </Button>
+                      <span className="self-center text-xs text-slate-600">
+                        Redirecting to Paystack in 5 seconds...
+                      </span>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
 
               <Button
                 type="submit"

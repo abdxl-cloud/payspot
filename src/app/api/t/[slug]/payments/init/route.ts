@@ -62,20 +62,21 @@ export async function POST(request: Request, { params }: Props) {
     );
   }
 
-  const reference = `WIFI-${randomUUID().split("-")[0].toUpperCase()}`;
-  const expiresAt = new Date(Date.now() + getResumeTtlMs()).toISOString();
-  createTransaction({
-    tenantId: tenant.id,
-    reference,
-    email,
-    phone,
-    amountNgn: pkg.price_ngn,
-    packageId: pkg.id,
-    authorizationUrl: null,
-    expiresAt,
-  });
-
+  let reference: string | null = null;
   try {
+    reference = `WIFI-${randomUUID().split("-")[0].toUpperCase()}`;
+    const expiresAt = new Date(Date.now() + getResumeTtlMs()).toISOString();
+    createTransaction({
+      tenantId: tenant.id,
+      reference,
+      email,
+      phone,
+      amountNgn: pkg.price_ngn,
+      packageId: pkg.id,
+      authorizationUrl: null,
+      expiresAt,
+    });
+
     const callbackUrl = getCallbackUrl({ tenantSlug: tenant.slug, reference });
     const init = await initializeTransaction({
       secretKey: paystackSecretKey,
@@ -103,13 +104,21 @@ export async function POST(request: Request, { params }: Props) {
     });
   } catch (error) {
     console.error("Paystack init failed", error);
-    markTransactionFailed({
-      tenantId: tenant.id,
-      reference,
-      status: "init_failed",
-    });
+    const reason =
+      error instanceof Error ? error.message : "Unknown initialization error";
+    if (reference) {
+      try {
+        markTransactionFailed({
+          tenantId: tenant.id,
+          reference,
+          status: "init_failed",
+        });
+      } catch (markError) {
+        console.error("Unable to mark transaction as failed", markError);
+      }
+    }
     return Response.json(
-      { error: "Unable to initialize payment" },
+      { error: reason || "Unable to initialize payment" },
       { status: 502 },
     );
   }
