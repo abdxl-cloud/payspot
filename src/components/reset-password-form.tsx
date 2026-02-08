@@ -68,12 +68,10 @@ export function ResetPasswordForm({ token }: Props) {
       : null;
 
   return (
-    <Card className="border-white/90 bg-white/95">
+    <Card className="border-slate-200/80 bg-white/85">
       <CardHeader className="space-y-1">
-        <p className="section-kicker">
-          New password
-        </p>
-        <CardTitle className="section-title">Update</CardTitle>
+        <p className="section-kicker">Password update</p>
+        <CardTitle className="section-title">Set a new password</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         {error ? (

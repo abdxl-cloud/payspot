@@ -22,14 +22,18 @@ export default async function ForgotPasswordPage() {
   return (
     <div className="app-shell">
       <div className="auth-container">
-        <div className="mx-auto w-full max-w-md">
-          <div className="mb-6 space-y-3 text-center">
-            <div className="hero-chip">Password reset</div>
-            <h1 className="panel-title">Forgot password</h1>
-            <p className="panel-copy">Enter your email and we will send a reset link.</p>
-          </div>
+        <div className="mx-auto grid w-full max-w-5xl gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <section className="space-y-5 text-center lg:text-left">
+            <div className="hero-chip">Account recovery</div>
+            <h1 className="panel-title">Reset access securely without support tickets.</h1>
+            <p className="panel-copy max-w-xl">
+              Enter your admin email and we will send a one-time link so you can return to your dashboard quickly.
+            </p>
+          </section>
 
-          <ForgotPasswordForm />
+          <section className="surface-card p-5 sm:p-6">
+            <ForgotPasswordForm />
+          </section>
         </div>
       </div>
     </div>

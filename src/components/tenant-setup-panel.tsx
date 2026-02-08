@@ -76,12 +76,10 @@ export function TenantSetupPanel({
   }
 
   return (
-    <Card className="border-white/90 bg-white/95">
+    <Card className="border-slate-200/80 bg-white/85">
       <CardHeader className="space-y-1">
-        <p className="section-kicker">
-          Required setup
-        </p>
-        <CardTitle className="section-title">Finish setup</CardTitle>
+        <p className="section-kicker">Launch checklist</p>
+        <CardTitle className="section-title">Finish required setup</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         {error ? (

@@ -46,12 +46,10 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <Card className="border-white/90 bg-white/95">
+    <Card className="border-slate-200/80 bg-white/85">
       <CardHeader className="space-y-1">
-        <p className="section-kicker">
-          Reset link
-        </p>
-        <CardTitle className="section-title">Send email</CardTitle>
+        <p className="section-kicker">Reset link</p>
+        <CardTitle className="section-title">Send recovery email</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         {error ? (

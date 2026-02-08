@@ -47,31 +47,31 @@
 }
 
 :root {
-  --radius: 0.95rem;
-  --background: oklch(0.98 0.008 95);
-  --foreground: oklch(0.22 0.03 253);
-  --card: oklch(1 0 0 / 96%);
+  --radius: 0.85rem;
+  --background: oklch(0.97 0.007 228);
+  --foreground: oklch(0.24 0.04 258);
+  --card: oklch(0.995 0.003 240 / 95%);
   --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.33 0.09 256);
-  --primary-foreground: oklch(0.98 0.006 95);
-  --secondary: oklch(0.95 0.012 95);
-  --secondary-foreground: oklch(0.25 0.03 253);
-  --muted: oklch(0.95 0.012 95);
-  --muted-foreground: oklch(0.5 0.03 253);
-  --accent: oklch(0.77 0.09 58);
-  --accent-foreground: oklch(0.2 0.03 253);
-  --destructive: oklch(0.58 0.21 27);
-  --border: oklch(0.9 0.014 95);
-  --input: oklch(0.9 0.014 95);
-  --ring: oklch(0.45 0.13 256);
-  --chart-1: oklch(0.58 0.17 256);
-  --chart-2: oklch(0.7 0.12 195);
-  --chart-3: oklch(0.72 0.12 140);
-  --chart-4: oklch(0.75 0.13 82);
-  --chart-5: oklch(0.65 0.16 35);
-  --sidebar: oklch(0.97 0.01 95);
+  --primary: oklch(0.36 0.08 253);
+  --primary-foreground: oklch(0.99 0.004 240);
+  --secondary: oklch(0.94 0.012 223);
+  --secondary-foreground: oklch(0.29 0.04 258);
+  --muted: oklch(0.94 0.01 226);
+  --muted-foreground: oklch(0.5 0.035 252);
+  --accent: oklch(0.74 0.12 75);
+  --accent-foreground: oklch(0.22 0.04 258);
+  --destructive: oklch(0.62 0.21 27);
+  --border: oklch(0.88 0.013 233);
+  --input: oklch(0.88 0.013 233);
+  --ring: oklch(0.58 0.13 253);
+  --chart-1: oklch(0.56 0.16 253);
+  --chart-2: oklch(0.69 0.12 205);
+  --chart-3: oklch(0.72 0.13 145);
+  --chart-4: oklch(0.76 0.11 85);
+  --chart-5: oklch(0.67 0.15 35);
+  --sidebar: oklch(0.96 0.01 230);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
@@ -82,30 +82,30 @@
 }
 
 .dark {
-  --background: oklch(0.18 0.03 253);
-  --foreground: oklch(0.96 0.008 95);
-  --card: oklch(0.24 0.03 253);
+  --background: oklch(0.19 0.035 255);
+  --foreground: oklch(0.96 0.006 234);
+  --card: oklch(0.24 0.03 255 / 92%);
   --card-foreground: var(--foreground);
-  --popover: oklch(0.24 0.03 253);
+  --popover: oklch(0.24 0.03 255);
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.8 0.09 95);
-  --primary-foreground: oklch(0.2 0.03 253);
-  --secondary: oklch(0.3 0.02 253);
+  --primary: oklch(0.72 0.12 84);
+  --primary-foreground: oklch(0.22 0.03 255);
+  --secondary: oklch(0.31 0.03 255);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.3 0.02 253);
-  --muted-foreground: oklch(0.76 0.01 95);
-  --accent: oklch(0.38 0.08 62);
+  --muted: oklch(0.31 0.03 255);
+  --muted-foreground: oklch(0.78 0.01 234);
+  --accent: oklch(0.58 0.1 83);
   --accent-foreground: var(--foreground);
-  --destructive: oklch(0.72 0.17 22);
-  --border: oklch(0.4 0.02 253 / 35%);
-  --input: oklch(0.4 0.02 253 / 45%);
-  --ring: oklch(0.79 0.08 95);
-  --chart-1: oklch(0.68 0.17 256);
-  --chart-2: oklch(0.69 0.12 195);
-  --chart-3: oklch(0.71 0.12 140);
-  --chart-4: oklch(0.73 0.13 82);
-  --chart-5: oklch(0.64 0.15 35);
-  --sidebar: oklch(0.24 0.03 253);
+  --destructive: oklch(0.7 0.18 25);
+  --border: oklch(0.4 0.02 252 / 45%);
+  --input: oklch(0.4 0.02 252 / 45%);
+  --ring: oklch(0.74 0.12 84);
+  --chart-1: oklch(0.65 0.16 253);
+  --chart-2: oklch(0.68 0.12 205);
+  --chart-3: oklch(0.69 0.12 145);
+  --chart-4: oklch(0.72 0.11 85);
+  --chart-5: oklch(0.64 0.14 35);
+  --sidebar: oklch(0.24 0.03 255);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
@@ -122,70 +122,68 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans);
+    font-family: var(--font-body), "Sora", ui-sans-serif, system-ui, sans-serif;
     min-height: 100vh;
     background-image:
-      radial-gradient(circle at 10% 12%, rgba(253, 186, 116, 0.26), transparent 28%),
-      radial-gradient(circle at 92% 8%, rgba(96, 165, 250, 0.18), transparent 33%),
-      linear-gradient(150deg, #fff8ef 0%, #f2f0e8 45%, #ecf2fa 100%);
+      radial-gradient(circle at 0% 18%, rgba(15, 23, 42, 0.09), transparent 42%),
+      radial-gradient(circle at 85% 0%, rgba(245, 158, 11, 0.18), transparent 34%),
+      linear-gradient(150deg, #f6f8fc 0%, #edf2f8 42%, #eef4fa 100%);
+  }
+
+  select,
+  textarea {
+    @apply border-input bg-white text-foreground placeholder:text-muted-foreground rounded-xl border px-3 py-2 text-sm shadow-sm transition-[color,box-shadow] outline-none;
+  }
+
+  select:focus-visible,
+  textarea:focus-visible {
+    @apply border-ring ring-ring/40 ring-[3px];
   }
 }
 
 @layer components {
   .app-shell {
-    @apply relative min-h-screen text-slate-900;
+    @apply relative min-h-screen overflow-hidden;
   }
 
   .app-shell::before {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: -16rem -10rem auto;
+    height: 30rem;
+    background: radial-gradient(circle at center, rgba(15, 23, 42, 0.16), transparent 68%);
+    opacity: 0.65;
     pointer-events: none;
-    background-image: linear-gradient(110deg, rgba(255, 255, 255, 0.38), transparent 42%);
+  }
+
+  .app-shell::after {
+    content: "";
+    position: absolute;
+    inset: auto -8rem -10rem;
+    height: 24rem;
+    background: radial-gradient(circle at center, rgba(245, 158, 11, 0.14), transparent 66%);
+    opacity: 0.85;
+    pointer-events: none;
   }
 
   .app-container {
-    @apply relative z-10 mx-auto w-full max-w-[1320px] px-4 py-10 sm:px-8 sm:py-14 lg:px-12 lg:py-18 xl:px-16;
+    @apply relative z-10 mx-auto w-full max-w-[1240px] px-4 py-10 sm:px-8 sm:py-14 lg:px-12 lg:py-16;
   }
 
   .auth-container {
-    @apply relative z-10 mx-auto flex min-h-screen w-full max-w-[1320px] items-center px-4 py-10 sm:px-8 sm:py-14 lg:px-12 xl:px-16;
+    @apply relative z-10 mx-auto flex min-h-screen w-full max-w-[1240px] items-center px-4 py-10 sm:px-8 sm:py-14 lg:px-12;
   }
 
   .hero-chip {
-    @apply inline-flex items-center rounded-full border border-amber-300/70 bg-amber-100/90 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-950;
+    @apply inline-flex items-center rounded-full border border-slate-300/80 bg-white/88 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-700;
   }
 
   .hero-title {
-    @apply font-display text-balance text-[clamp(2.1rem,4.2vw,4rem)] font-bold leading-[1.02] tracking-tight text-slate-900;
+    @apply font-display text-balance text-[clamp(2rem,4vw,3.5rem)] font-semibold leading-[1.05] tracking-tight text-slate-950;
   }
 
   .hero-copy {
-    @apply max-w-2xl text-[clamp(1.02rem,2vw,1.2rem)] leading-relaxed text-slate-700;
-  }
-
-  .surface-card {
-    @apply rounded-[2rem] border-2 border-white/90 bg-white/95 shadow-[0_26px_72px_rgba(15,23,42,0.18)];
-  }
-
-  .soft-panel {
-    @apply rounded-2xl border-2 border-slate-200/90 bg-white/96 shadow-[0_10px_24px_rgba(15,23,42,0.08)];
-  }
-
-  .section-kicker {
-    @apply text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500;
-  }
-
-  .section-title {
-    @apply text-lg font-bold tracking-tight text-slate-900;
-  }
-
-  .pill-list {
-    @apply flex flex-wrap gap-2.5 text-sm text-slate-700;
-  }
-
-  .pill-item {
-    @apply rounded-xl border border-slate-300/80 bg-white/85 px-3.5 py-1.5;
+    @apply max-w-2xl text-[clamp(1rem,2vw,1.15rem)] leading-relaxed text-slate-700;
   }
 
   .hero-metric-grid {
@@ -193,29 +191,104 @@
   }
 
   .hero-metric {
-    @apply rounded-xl border border-slate-300/80 bg-white/90 px-4 py-3 text-left;
+    @apply rounded-2xl border border-slate-200/90 bg-white/86 p-4 backdrop-blur-sm;
   }
 
   .hero-metric strong {
-    @apply block text-xl font-bold text-slate-900;
+    @apply block text-lg font-semibold text-slate-950;
   }
 
   .hero-metric span {
-    @apply text-xs font-semibold uppercase tracking-[0.12em] text-slate-600;
+    @apply mt-1 block text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-600;
+  }
+
+  .surface-card {
+    @apply rounded-[1.6rem] border border-white/80 bg-white/86 shadow-[0_24px_60px_rgba(15,23,42,0.13)] backdrop-blur-md;
+  }
+
+  .soft-panel {
+    @apply rounded-2xl border border-slate-200/90 bg-white/82 shadow-[0_10px_24px_rgba(15,23,42,0.08)];
+  }
+
+  .section-kicker {
+    @apply text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500;
+  }
+
+  .section-title {
+    @apply text-xl font-semibold tracking-tight text-slate-950;
   }
 
   .panel-title {
-    @apply font-display text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl;
+    @apply font-display text-balance text-[clamp(1.85rem,3.5vw,2.7rem)] font-semibold tracking-tight text-slate-950;
   }
 
   .panel-copy {
     @apply text-slate-700;
   }
+
+  .workspace-grid {
+    @apply grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start;
+  }
+
+  .workspace-main {
+    @apply min-w-0;
+  }
+
+  .workspace-side {
+    @apply space-y-4;
+  }
+
+  .workspace-rail {
+    @apply rounded-2xl border border-slate-200/85 bg-white/80 p-5;
+  }
+
+  .workspace-rail h3 {
+    @apply text-base font-semibold tracking-tight text-slate-950;
+  }
+
+  .workspace-rail p {
+    @apply mt-2 text-sm leading-relaxed text-slate-600;
+  }
+
+  .status-card {
+    @apply rounded-[1.6rem] border border-white/80 bg-white/86 p-8 shadow-[0_24px_60px_rgba(15,23,42,0.13)] backdrop-blur-md sm:p-10;
+  }
+
+  .status-title {
+    @apply font-display text-3xl font-semibold tracking-tight text-slate-950;
+  }
+
+  .status-copy {
+    @apply mt-3 text-slate-700;
+  }
+
+  .text-gradient {
+    background: linear-gradient(120deg, #111827 0%, #1e3a8a 55%, #92400e 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .ops-grid {
+    @apply grid gap-6 md:grid-cols-3;
+  }
+
+  .ops-card {
+    @apply rounded-2xl border border-slate-200/85 bg-white/84 p-4;
+  }
+
+  .ops-card strong {
+    @apply block text-sm font-semibold text-slate-950;
+  }
+
+  .ops-card span {
+    @apply mt-1 block text-xs text-slate-600;
+  }
 }
 
 @layer utilities {
   .font-display {
-    font-family: var(--font-display);
+    font-family: var(--font-heading), "Sora", ui-sans-serif, system-ui, sans-serif;
   }
 
   .text-balance {

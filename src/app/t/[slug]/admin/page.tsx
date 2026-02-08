@@ -39,26 +39,52 @@ export default async function TenantAdminPage({ params }: Props) {
 
   return (
     <div className="app-shell">
-      <div className="app-container max-w-6xl">
-        <div className="mb-7 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-          <div className="space-y-3">
+      <div className="app-container">
+        <div className="mb-8 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+          <div className="space-y-4">
             <div className="hero-chip">{tenant.name}</div>
-            <h1 className="panel-title">Run your voucher operations like a real product team.</h1>
-            <p className="panel-copy">
-              Manage plans, stock, and cleanup flows for <span className="font-mono">/t/{tenant.slug}</span>.
+            <h1 className="panel-title">Run voucher sales like a disciplined product operation.</h1>
+            <p className="panel-copy max-w-3xl">
+              Maintain plans, control pricing, and manage voucher inventory for <span className="font-mono">/t/{tenant.slug}</span>.
             </p>
-            <div className="hero-metric-grid max-w-2xl">
-              <div className="hero-metric"><strong>Import</strong><span>bulk voucher csv</span></div>
-              <div className="hero-metric"><strong>Price</strong><span>plan controls</span></div>
-              <div className="hero-metric"><strong>Delete</strong><span>safe cleanup modes</span></div>
+            <div className="hero-metric-grid max-w-3xl">
+              <div className="hero-metric">
+                <strong>Bulk import</strong>
+                <span>upload CSV voucher inventories</span>
+              </div>
+              <div className="hero-metric">
+                <strong>Price control</strong>
+                <span>set sell price per package</span>
+              </div>
+              <div className="hero-metric">
+                <strong>Safe cleanup</strong>
+                <span>delete by plan, status, or code list</span>
+              </div>
             </div>
           </div>
           <div className="pt-1">
             <LogoutButton />
           </div>
         </div>
-
-        <TenantAdminPanel tenantSlug={tenant.slug} />
+        <div className="workspace-grid">
+          <div className="workspace-main">
+            <TenantAdminPanel tenantSlug={tenant.slug} />
+          </div>
+          <aside className="workspace-side">
+            <div className="workspace-rail">
+              <h3>Daily operations</h3>
+              <p>Review payment health and inventory each morning before editing plans or running cleanup tasks.</p>
+            </div>
+            <div className="workspace-rail">
+              <h3>Import quality</h3>
+              <p>Validate CSV files in staging format first. Duplicates and missing plan codes slow down rollout.</p>
+            </div>
+            <div className="workspace-rail">
+              <h3>Cleanup caution</h3>
+              <p>Use deletion modes after reconciliation only. Once removed, voucher records cannot be restored.</p>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );

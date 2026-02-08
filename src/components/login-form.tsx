@@ -46,12 +46,10 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="border-white/90 bg-white/95">
+    <Card className="border-slate-200/80 bg-white/85">
       <CardHeader className="space-y-1">
-        <p className="section-kicker">
-          Sign in
-        </p>
-        <CardTitle className="section-title">Login</CardTitle>
+        <p className="section-kicker">Authentication</p>
+        <CardTitle className="section-title">Sign in</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         {error ? (

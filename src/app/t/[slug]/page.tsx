@@ -16,11 +16,11 @@ export default async function TenantPurchasePage({ params }: Props) {
   if (tenant.status !== "active") {
     return (
       <div className="app-shell">
-        <div className="app-container max-w-2xl py-20 sm:py-24">
-          <div className="surface-card p-8">
-            <h1 className="font-display text-3xl font-bold text-slate-900">Not ready yet</h1>
-            <p className="mt-3 text-slate-600">
-              This voucher portal is still being set up. Please check back soon.
+        <div className="app-container max-w-3xl py-20 sm:py-24">
+          <div className="status-card">
+            <h1 className="status-title">Portal setup in progress</h1>
+            <p className="status-copy">
+              This voucher storefront is still being configured. Please check again shortly.
             </p>
           </div>
         </div>
@@ -42,11 +42,11 @@ export default async function TenantPurchasePage({ params }: Props) {
   if (packages.length === 0) {
     return (
       <div className="app-shell">
-        <div className="app-container max-w-2xl py-20 sm:py-24">
-          <div className="surface-card p-8">
-            <h1 className="font-display text-3xl font-bold text-slate-900">Coming soon</h1>
-            <p className="mt-3 text-slate-600">
-              This tenant portal will go live after voucher plans are imported.
+        <div className="app-container max-w-3xl py-20 sm:py-24">
+          <div className="status-card">
+            <h1 className="status-title">Plans are coming soon</h1>
+            <p className="status-copy">
+              Voucher plans are not available yet for this location. The operator will publish pricing soon.
             </p>
           </div>
         </div>
@@ -57,32 +57,34 @@ export default async function TenantPurchasePage({ params }: Props) {
   return (
     <div className="app-shell">
       <div className="app-container">
-        <div className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start xl:gap-16">
-          <div className="space-y-6 pt-2 text-center lg:space-y-8 lg:text-left">
+        <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-start xl:gap-14">
+          <section className="space-y-7 pt-1 text-center lg:text-left">
             <div className="hero-chip">{tenant.name}</div>
-            <h1 className="hero-title">Get fast guest Wi-Fi without lines, paper slips, or manual setup.</h1>
+            <h1 className="hero-title">
+              Buy guest Wi-Fi in seconds with a checkout that feels product-grade.
+            </h1>
             <p className="hero-copy mx-auto lg:mx-0">
-              Pick a plan, pay securely with Paystack, and receive your voucher code by SMS in seconds.
+              Select a plan, complete payment via Paystack, and receive your voucher code instantly over SMS.
             </p>
             <div className="hero-metric-grid max-w-3xl">
               <div className="hero-metric">
-                <strong>Live</strong>
-                <span>plan availability</span>
+                <strong>Live inventory</strong>
+                <span>only available plans are shown</span>
               </div>
               <div className="hero-metric">
-                <strong>Secure</strong>
-                <span>paystack checkout</span>
+                <strong>Secure checkout</strong>
+                <span>payments processed by Paystack</span>
               </div>
               <div className="hero-metric">
-                <strong>Instant</strong>
-                <span>code delivery</span>
+                <strong>Instant delivery</strong>
+                <span>voucher sent by SMS after success</span>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="surface-card p-5 sm:p-6 md:p-7">
+          <section className="surface-card p-5 sm:p-6 md:p-7">
             <Checkout tenantSlug={tenant.slug} packages={packages} />
-          </div>
+          </section>
         </div>
       </div>
     </div>

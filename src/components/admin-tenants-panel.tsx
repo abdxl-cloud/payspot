@@ -20,16 +20,22 @@ type TenantDto = {
   updatedAt: string;
 };
 
+const COMMON_STATUSES = ["active", "pending", "inactive", "suspended"];
+
 export function AdminTenantsPanel() {
   const [tenants, setTenants] = useState<TenantDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   const [newSlug, setNewSlug] = useState("");
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [createResult, setCreateResult] = useState<string | null>(null);
+
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const canCreate = useMemo(() => {
     return (
@@ -40,6 +46,33 @@ export function AdminTenantsPanel() {
     );
   }, [newSlug, newName, newEmail, loading]);
 
+  const tenantStats = useMemo(() => {
+    const active = tenants.filter((tenant) => tenant.status.toLowerCase() === "active").length;
+    const pending = tenants.filter((tenant) => tenant.status.toLowerCase() === "pending").length;
+    const configuredPayments = tenants.filter((tenant) => !!tenant.paystackLast4).length;
+    return {
+      total: tenants.length,
+      active,
+      pending,
+      configuredPayments,
+    };
+  }, [tenants]);
+
+  const filteredTenants = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return tenants.filter((tenant) => {
+      const matchStatus =
+        statusFilter === "all" || tenant.status.toLowerCase() === statusFilter.toLowerCase();
+      if (!matchStatus) return false;
+      if (!normalizedQuery) return true;
+      return (
+        tenant.slug.toLowerCase().includes(normalizedQuery) ||
+        tenant.name.toLowerCase().includes(normalizedQuery) ||
+        tenant.adminEmail.toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [tenants, query, statusFilter]);
+
   async function loadTenants() {
     setError(null);
     setLoading(true);
@@ -49,6 +82,7 @@ export function AdminTenantsPanel() {
       if (!response.ok) throw new Error(data?.error || "Unable to load tenants.");
       if (!data?.tenants) throw new Error("Unable to load tenants.");
       setTenants(data.tenants);
+      setLastRefreshedAt(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -184,12 +218,17 @@ export function AdminTenantsPanel() {
 
   return (
     <div className="grid gap-6">
-      <Card className="border-white/90 bg-white/95">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Total tenants" value={String(tenantStats.total)} />
+        <StatTile label="Active" value={String(tenantStats.active)} />
+        <StatTile label="Pending" value={String(tenantStats.pending)} />
+        <StatTile label="Paystack configured" value={String(tenantStats.configuredPayments)} />
+      </div>
+
+      <Card className="border-slate-200/80 bg-white/88">
         <CardHeader className="space-y-1">
-          <p className="section-kicker">
-            Create tenant
-          </p>
-          <CardTitle className="section-title">New tenant</CardTitle>
+          <p className="section-kicker">Tenant provisioning</p>
+          <CardTitle className="section-title">Create tenant workspace</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
           {error ? (
@@ -223,7 +262,7 @@ export function AdminTenantsPanel() {
               <Input
                 id="name"
                 className="h-11"
-                placeholder="WALSTREET"
+                placeholder="Walstreet Lounge"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 required
@@ -242,7 +281,7 @@ export function AdminTenantsPanel() {
               />
             </div>
             <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="password">Temp password (optional)</Label>
+              <Label htmlFor="password">Temporary password (optional)</Label>
               <Input
                 id="password"
                 type="text"
@@ -252,7 +291,7 @@ export function AdminTenantsPanel() {
                 onChange={(e) => setNewPassword(e.target.value)}
               />
             </div>
-            <Button type="submit" className="h-12 sm:col-span-2" disabled={!canCreate}>
+            <Button type="submit" className="h-11 sm:col-span-2" disabled={!canCreate}>
               {loading ? "Working..." : "Create tenant"}
             </Button>
           </form>
@@ -261,36 +300,64 @@ export function AdminTenantsPanel() {
 
       <Separator />
 
-      <Card className="border-white/90 bg-white/95">
-        <CardHeader className="space-y-1">
-          <p className="section-kicker">
-            Tenants
+      <Card className="border-slate-200/80 bg-white/88">
+        <CardHeader className="space-y-3">
+          <div>
+            <p className="section-kicker">Tenant registry</p>
+            <CardTitle className="section-title">Manage tenants ({filteredTenants.length})</CardTitle>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1fr_180px_auto]">
+            <Input
+              placeholder="Search by slug, name, or email"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <select className="w-full" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="all">All statuses</option>
+              {Array.from(new Set(tenants.map((tenant) => tenant.status.toLowerCase()))).map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+            <Button variant="outline" onClick={loadTenants} disabled={loading} className="h-11" type="button">
+              {loading ? "Refreshing..." : "Refresh"}
+            </Button>
+          </div>
+          <p className="text-xs text-slate-500">
+            {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "No sync yet"}
           </p>
-          <CardTitle className="section-title">
-            Manage tenants ({tenants.length})
-          </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {tenants.length === 0 ? (
+          {filteredTenants.length === 0 ? (
             <p className="text-sm text-slate-600">
-              {loading ? "Loading..." : "No tenants found."}
+              {loading ? "Loading..." : "No tenants match your filters."}
             </p>
           ) : (
             <div className="grid gap-4">
-              {tenants.map((t) => (
+              {filteredTenants.map((tenant) => (
                 <TenantRow
-                  key={t.id}
-                  tenant={t}
+                  key={tenant.id}
+                  tenant={tenant}
                   disabled={loading}
-                  onUpdate={(patch) => handleUpdate(t.id, patch)}
-                  onDelete={() => handleDelete(t.id)}
-                  onResetPassword={() => handleResetPassword(t.id)}
+                  onUpdate={(patch) => handleUpdate(tenant.id, patch)}
+                  onDelete={() => handleDelete(tenant.id)}
+                  onResetPassword={() => handleResetPassword(tenant.id)}
                 />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white/82 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
     </div>
   );
 }
@@ -307,6 +374,12 @@ function TenantRow(props: {
   const [adminEmail, setAdminEmail] = useState(props.tenant.adminEmail);
   const [status, setStatus] = useState(props.tenant.status);
 
+  const statusOptions = useMemo(() => {
+    const normalized = props.tenant.status.toLowerCase();
+    if (COMMON_STATUSES.includes(normalized)) return COMMON_STATUSES;
+    return [...COMMON_STATUSES, normalized];
+  }, [props.tenant.status]);
+
   const dirty =
     slug !== props.tenant.slug ||
     name !== props.tenant.name ||
@@ -314,15 +387,15 @@ function TenantRow(props: {
     status !== props.tenant.status;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white/70 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="rounded-2xl border border-slate-200/85 bg-slate-50/70 p-4">
+      <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
         <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
           <div className="grid gap-2">
             <Label>Slug</Label>
             <Input
               className="h-10"
               value={slug}
-              onChange={(e) => setSlug(e.target.value)}
+              onChange={(event) => setSlug(event.target.value)}
               disabled={props.disabled}
             />
           </div>
@@ -331,7 +404,7 @@ function TenantRow(props: {
             <Input
               className="h-10"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(event) => setName(event.target.value)}
               disabled={props.disabled}
             />
           </div>
@@ -340,47 +413,45 @@ function TenantRow(props: {
             <Input
               className="h-10"
               value={adminEmail}
-              onChange={(e) => setAdminEmail(e.target.value)}
+              onChange={(event) => setAdminEmail(event.target.value)}
               disabled={props.disabled}
             />
           </div>
-          <div className="grid gap-2 sm:col-span-2">
-            <Label>Status</Label>
-            <Input
-              className="h-10"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              disabled={props.disabled}
-            />
-            <p className="text-xs text-muted-foreground">
-              Paystack: {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
-            </p>
+          <div className="grid gap-2 sm:col-span-2 md:grid-cols-[180px_1fr] md:items-end">
+            <div className="grid gap-2">
+              <Label>Status</Label>
+              <select
+                className="h-10 w-full"
+                value={status.toLowerCase()}
+                onChange={(event) => setStatus(event.target.value)}
+                disabled={props.disabled}
+              >
+                {statusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-600">
+              Portal: <span className="font-mono">/t/{slug || props.tenant.slug}</span> | Paystack: {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 sm:flex-col sm:items-end">
+        <div className="flex flex-wrap gap-2 lg:flex-col lg:items-end">
           <Button
             className="h-10"
             onClick={() => props.onUpdate({ slug, name, adminEmail, status })}
             disabled={props.disabled || !dirty}
           >
-            Update
+            Save changes
           </Button>
-          <Button
-            variant="outline"
-            className="h-10"
-            onClick={props.onResetPassword}
-            disabled={props.disabled}
-          >
+          <Button variant="outline" className="h-10" onClick={props.onResetPassword} disabled={props.disabled}>
             Reset password
           </Button>
-          <Button
-            variant="destructive"
-            className="h-10"
-            onClick={props.onDelete}
-            disabled={props.disabled}
-          >
-            Delete
+          <Button variant="destructive" className="h-10" onClick={props.onDelete} disabled={props.disabled}>
+            Delete tenant
           </Button>
         </div>
       </div>

@@ -75,7 +75,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
                   ? "border-slate-900 bg-slate-900 text-white"
                   : state === "complete"
                     ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-200 bg-white/70 text-slate-500",
+                  : "border-slate-300/80 bg-white/80 text-slate-500",
               ].join(" ")}
             >
               {state === "complete" ? <Check className="size-4" /> : s.id}
@@ -274,11 +274,9 @@ export function Checkout({ tenantSlug, packages }: Props) {
         <Stepper step={step} />
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
-            <p className="section-kicker">
-              Choose a plan
-            </p>
+            <p className="section-kicker">Purchase flow</p>
             <h2 className="text-lg font-semibold tracking-tight text-slate-900">
-              Buy WiFi access
+              Buy Wi-Fi access
             </h2>
           </div>
           {selected ? (
@@ -357,8 +355,8 @@ export function Checkout({ tenantSlug, packages }: Props) {
                 }
               }}
               className={[
-                "min-w-[240px] select-none gap-0 border-slate-200/80 bg-white/90 py-0 shadow-sm transition sm:min-w-0",
-                !isSoldOut ? "hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-md" : "",
+                "min-w-[240px] select-none gap-0 border-slate-200/80 bg-white/88 py-0 shadow-sm transition sm:min-w-0",
+                !isSoldOut ? "hover:-translate-y-0.5 hover:bg-white/94 hover:shadow-md" : "",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20",
                 isSelected ? "ring-2 ring-slate-900/15 bg-white/90" : "",
                 isSoldOut ? "cursor-not-allowed opacity-60" : "cursor-pointer",
@@ -422,11 +420,9 @@ export function Checkout({ tenantSlug, packages }: Props) {
       <Separator />
 
       {!allSoldOut ? (
-        <Card className="border-white/90 bg-white/95">
+      <Card className="border-slate-200/80 bg-white/85">
           <CardHeader className="space-y-1">
-            <p className="section-kicker">
-              Your details
-            </p>
+            <p className="section-kicker">Customer details</p>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="section-title">Where should we send the voucher?</CardTitle>
               {selected ? (
@@ -528,7 +524,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
         </Card>
       ) : null}
 
-      <details className="group rounded-xl border border-white/90 bg-white/95">
+      <details className="group rounded-xl border border-slate-200/80 bg-white/85">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
           <span>Resume a payment</span>
           <ChevronDown className="size-4 text-slate-500 transition group-open:rotate-180" />

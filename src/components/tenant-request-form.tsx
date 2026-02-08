@@ -71,12 +71,17 @@ export function TenantRequestForm() {
   }
 
   return (
-    <Card className="border-white/90 bg-white/95">
+    <Card className="border-slate-200/80 bg-white/85">
       <CardHeader className="space-y-1">
-        <p className="section-kicker">Get started</p>
-        <CardTitle className="section-title">Request your Wi-Fi voucher page</CardTitle>
+        <p className="section-kicker">New tenant onboarding</p>
+        <CardTitle className="section-title">Request your Wi-Fi sales portal</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
+        <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-xs text-slate-600">
+          <p>1. Submit business and admin details.</p>
+          <p>2. Receive setup credentials by email.</p>
+        </div>
+
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>Request failed</AlertTitle>
@@ -136,7 +141,7 @@ export function TenantRequestForm() {
           </div>
 
           <Button type="submit" className="h-12" disabled={!canSubmit || loading}>
-            {loading ? "Submitting..." : "Request my page"}
+            {loading ? "Submitting..." : "Start onboarding"}
           </Button>
         </form>
 

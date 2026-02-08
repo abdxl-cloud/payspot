@@ -25,24 +25,52 @@ export default async function AdminPage() {
 
   return (
     <div className="app-shell">
-      <div className="app-container max-w-6xl">
-        <div className="mb-7 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-          <div className="space-y-3">
-            <div className="hero-chip">Platform admin</div>
-            <h1 className="panel-title">Control every tenant from one command center.</h1>
-            <p className="panel-copy">Create new portals, rotate credentials, and monitor readiness.</p>
-            <div className="hero-metric-grid max-w-2xl">
-              <div className="hero-metric"><strong>Tenants</strong><span>provisioned here</span></div>
-              <div className="hero-metric"><strong>Keys</strong><span>paystack managed</span></div>
-              <div className="hero-metric"><strong>Access</strong><span>roles and resets</span></div>
+      <div className="app-container">
+        <div className="mb-8 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+          <div className="space-y-4">
+            <div className="hero-chip">Platform administration</div>
+            <h1 className="panel-title">Operate tenant rollout from one command layer.</h1>
+            <p className="panel-copy max-w-3xl">
+              Provision tenants, maintain credentials, and keep deployment health visible without switching tools.
+            </p>
+            <div className="hero-metric-grid max-w-3xl">
+              <div className="hero-metric">
+                <strong>Tenant lifecycle</strong>
+                <span>create, edit, reset, and remove</span>
+              </div>
+              <div className="hero-metric">
+                <strong>Credential control</strong>
+                <span>password reset and setup enforcement</span>
+              </div>
+              <div className="hero-metric">
+                <strong>Operational visibility</strong>
+                <span>status and configuration checks</span>
+              </div>
             </div>
           </div>
           <div className="pt-1">
             <LogoutButton />
           </div>
         </div>
-
-        <AdminTenantsPanel />
+        <div className="workspace-grid">
+          <div className="workspace-main">
+            <AdminTenantsPanel />
+          </div>
+          <aside className="workspace-side">
+            <div className="workspace-rail">
+              <h3>Admin standards</h3>
+              <p>Use predictable tenant slugs and verified admin email addresses to avoid login and routing issues later.</p>
+            </div>
+            <div className="workspace-rail">
+              <h3>Provisioning flow</h3>
+              <p>1. Create tenant. 2. Share temporary access details. 3. Confirm setup completion before go-live.</p>
+            </div>
+            <div className="workspace-rail">
+              <h3>Security controls</h3>
+              <p>Reset credentials immediately when role ownership changes or incident alerts are raised.</p>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );

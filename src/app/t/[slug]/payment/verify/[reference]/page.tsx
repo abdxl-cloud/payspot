@@ -23,10 +23,10 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
   if (!transaction) {
     return (
       <div className="app-shell">
-        <div className="app-container max-w-2xl py-20 sm:py-24">
-          <div className="surface-card p-8">
-            <h1 className="font-display text-3xl font-semibold text-slate-900">Transaction not found</h1>
-            <p className="mt-3 text-slate-600">
+        <div className="app-container max-w-3xl py-20 sm:py-24">
+          <div className="status-card">
+            <h1 className="status-title">Transaction not found</h1>
+            <p className="status-copy">
               We could not locate this payment reference. Please contact support if you were charged.
             </p>
           </div>
@@ -42,10 +42,10 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
     } catch {
       return (
         <div className="app-shell">
-          <div className="app-container max-w-2xl py-20 sm:py-24">
-            <div className="surface-card p-8">
-              <h1 className="font-display text-3xl font-semibold text-slate-900">Unable to verify payment</h1>
-              <p className="mt-3 text-slate-600">Payments are not configured for this tenant.</p>
+          <div className="app-container max-w-3xl py-20 sm:py-24">
+            <div className="status-card">
+              <h1 className="status-title">Unable to verify payment</h1>
+              <p className="status-copy">Payments are not configured for this tenant.</p>
             </div>
           </div>
         </div>
@@ -65,28 +65,28 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
   if (updated?.payment_status === "success" && updated.voucher_code) {
     return (
       <div className="app-shell">
-        <div className="app-container max-w-2xl py-20 sm:py-24">
-          <div className="surface-card p-8 sm:p-10">
+        <div className="app-container max-w-3xl py-20 sm:py-24">
+          <div className="status-card">
             <p className="section-kicker">Payment confirmed</p>
-            <h1 className="mt-3 font-display text-3xl font-semibold text-slate-900">Your voucher is ready</h1>
+            <h1 className="mt-2 status-title">Your voucher is ready</h1>
             <p className="mt-2 text-slate-600">
               {pkg?.name ?? "WiFi Access"} | Reference: {reference}
             </p>
 
-            <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-7 text-center sm:px-6 sm:py-8">
+            <div className="mt-6 rounded-2xl border border-slate-300/90 bg-slate-50/85 px-5 py-7 text-center sm:px-6 sm:py-8">
               <p className="text-sm text-slate-500">Voucher code</p>
-              <p className="mt-2 break-all text-3xl font-semibold tracking-[0.23em] text-slate-900">
+              <p className="mt-2 break-all text-3xl font-semibold tracking-[0.23em] text-slate-950">
                 {updated.voucher_code}
               </p>
             </div>
 
-            <div className="mt-6 space-y-2 text-sm text-slate-600">
-              <p>1. Connect to the WiFi network.</p>
-              <p>2. Open your browser to the login portal.</p>
-              <p>3. Enter your voucher code to start browsing.</p>
+            <div className="mt-6 space-y-2 text-sm text-slate-700">
+              <p>1. Connect to the Wi-Fi network.</p>
+              <p>2. Open the login page in your browser.</p>
+              <p>3. Enter this voucher code to begin browsing.</p>
             </div>
 
-            <p className="mt-6 text-xs text-slate-500">We also sent this code to your phone by SMS.</p>
+            <p className="mt-6 text-xs text-slate-500">This voucher was also delivered to your phone by SMS.</p>
           </div>
         </div>
       </div>
@@ -111,10 +111,10 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
 
     return (
       <div className="app-shell">
-        <div className="app-container max-w-2xl py-20 sm:py-24">
-          <div className="surface-card p-8">
-            <h1 className="font-display text-3xl font-semibold text-slate-900">Payment not completed</h1>
-            <p className="mt-3 text-slate-600">{message}</p>
+        <div className="app-container max-w-3xl py-20 sm:py-24">
+          <div className="status-card">
+            <h1 className="status-title">Payment not completed</h1>
+            <p className="status-copy">{message}</p>
             <p className="mt-2 text-sm text-slate-500">Reference: {reference}</p>
           </div>
         </div>
@@ -124,12 +124,10 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
 
   return (
     <div className="app-shell">
-      <div className="app-container max-w-2xl py-20 sm:py-24">
-        <div className="surface-card p-8">
-          <h1 className="font-display text-3xl font-semibold text-slate-900">Payment pending</h1>
-          <p className="mt-3 text-slate-600">
-            We are verifying your payment. Please refresh this page in a moment.
-          </p>
+      <div className="app-container max-w-3xl py-20 sm:py-24">
+        <div className="status-card">
+          <h1 className="status-title">Payment pending</h1>
+          <p className="status-copy">We are verifying your payment. Please refresh this page in a moment.</p>
           <p className="mt-2 text-sm text-slate-500">Reference: {reference}</p>
         </div>
       </div>

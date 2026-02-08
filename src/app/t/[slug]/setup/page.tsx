@@ -39,19 +39,37 @@ export default async function TenantSetupPage({ params }: Props) {
 
   return (
     <div className="app-shell">
-      <div className="app-container max-w-4xl">
-        <div className="mx-auto max-w-2xl space-y-6 text-center">
-          <div className="hero-chip">{tenant.name}</div>
-          <h1 className="panel-title">Finish setup</h1>
-          <p className="panel-copy">
-            Complete required setup to activate <span className="font-mono">/t/{tenant.slug}</span>.
-          </p>
+      <div className="app-container max-w-5xl">
+        <div className="mx-auto grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+          <section className="space-y-5 text-center lg:text-left">
+            <div className="hero-chip">{tenant.name}</div>
+            <h1 className="panel-title">Complete launch setup before going live.</h1>
+            <p className="panel-copy max-w-xl">
+              Finish security and payments to activate <span className="font-mono">/t/{tenant.slug}</span> for customers.
+            </p>
+            <div className="ops-grid max-w-2xl text-left">
+              <div className="ops-card">
+                <strong>Password hardening</strong>
+                <span>Require secure account credentials.</span>
+              </div>
+              <div className="ops-card">
+                <strong>Paystack key</strong>
+                <span>Enable live transaction processing.</span>
+              </div>
+              <div className="ops-card">
+                <strong>Activation gate</strong>
+                <span>Portal opens only when checks pass.</span>
+              </div>
+            </div>
+          </section>
 
-          <TenantSetupPanel
-            tenantSlug={tenant.slug}
-            requirePasswordChange={user.mustChangePassword}
-            requirePaystackKey={!tenant.paystack_secret_enc}
-          />
+          <section className="surface-card p-5 sm:p-6">
+            <TenantSetupPanel
+              tenantSlug={tenant.slug}
+              requirePasswordChange={user.mustChangePassword}
+              requirePaystackKey={!tenant.paystack_secret_enc}
+            />
+          </section>
         </div>
       </div>
     </div>

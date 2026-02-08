@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
-import { Bitter, Playfair_Display } from "next/font/google";
+import { Sora } from "next/font/google";
 import "./globals.css";
 
-const bodyFont = Bitter({
+const bodyFont = Sora({
   variable: "--font-body",
   subsets: ["latin"],
 });
 
-const displayFont = Playfair_Display({
+const displayFont = Sora({
   variable: "--font-heading",
   subsets: ["latin"],
 });
