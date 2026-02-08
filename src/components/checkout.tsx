@@ -100,11 +100,13 @@ export function Checkout({ tenantSlug, packages }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentReference, setPaymentReference] = useState<string | null>(null);
+  const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
 
   const [resumeReference, setResumeReference] = useState("");
   const [resumeEmail, setResumeEmail] = useState("");
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeMessage, setResumeMessage] = useState<string | null>(null);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
 
   const hasAvailable = packages.some((pkg) => pkg.availableCount > 0);
   const allSoldOut = packages.length > 0 && !hasAvailable;
@@ -140,11 +142,54 @@ export function Checkout({ tenantSlug, packages }: Props) {
     );
   }, [selected, email, phone, loading]);
 
+  function redirectToPaystack(url: string, newTab = false) {
+    if (newTab) {
+      const tab = window.open(url, "_blank", "noopener,noreferrer");
+      if (!tab) {
+        window.location.assign(url);
+      }
+      return;
+    }
+    window.location.assign(url);
+  }
+
+  async function copyReference(reference: string) {
+    setCopyMessage(null);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(reference);
+        setCopyMessage("Reference copied.");
+        return;
+      }
+    } catch {
+      // Fallback below.
+    }
+
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = reference;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.top = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      if (!ok) throw new Error("copy failed");
+      setCopyMessage("Reference copied.");
+    } catch {
+      setCopyMessage("Copy failed. Please write it down manually.");
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!selected || selected.availableCount <= 0) return;
 
     setError(null);
+    setAuthorizationUrl(null);
+    setPaymentReference(null);
     setLoading(true);
     try {
       const response = await fetch(`/api/t/${tenantSlug}/payments/init`, {
@@ -171,9 +216,13 @@ export function Checkout({ tenantSlug, packages }: Props) {
         setPaymentReference(data.reference);
         setResumeReference(data.reference);
       }
+      setAuthorizationUrl(data.authorizationUrl);
       setResumeEmail(email.trim());
       setTimeout(() => {
-        window.location.href = data.authorizationUrl!;
+        redirectToPaystack(data.authorizationUrl!);
+      }, 400);
+      setTimeout(() => {
+        redirectToPaystack(data.authorizationUrl!);
       }, 5000);
     } catch (err) {
       const message =
@@ -433,14 +482,36 @@ export function Checkout({ tenantSlug, packages }: Props) {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => navigator.clipboard.writeText(paymentReference)}
+                        onClick={() => copyReference(paymentReference)}
                       >
                         Copy reference
                       </Button>
+                      {authorizationUrl ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => redirectToPaystack(authorizationUrl)}
+                        >
+                          Continue to Paystack
+                        </Button>
+                      ) : null}
+                      {authorizationUrl ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => redirectToPaystack(authorizationUrl, true)}
+                        >
+                          Open in browser
+                        </Button>
+                      ) : null}
                       <span className="self-center text-xs text-slate-600">
-                        Redirecting to Paystack in 5 seconds...
+                        Redirecting to Paystack...
                       </span>
                     </div>
+                    {copyMessage ? (
+                      <p className="text-xs text-slate-600">{copyMessage}</p>
+                    ) : null}
                   </AlertDescription>
                 </Alert>
               ) : null}
