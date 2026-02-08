@@ -458,8 +458,24 @@ export function updateTenant(params: {
   const status = params.status ?? existing.status;
 
   const nextUserEmail = params.adminEmail ? normalizeEmail(params.adminEmail) : null;
+  const slugChanged = slug !== existing.slug;
 
   const run = db.transaction(() => {
+    if (slugChanged) {
+      const slugConflict = db
+        .prepare(
+          `
+            SELECT 1
+            FROM tenants
+            WHERE slug = ? AND id != ?
+          `,
+        )
+        .get(slug, params.tenantId);
+      if (slugConflict) {
+        return { status: "slug_taken" as const };
+      }
+    }
+
     if (nextUserEmail) {
       const conflict = db
         .prepare(

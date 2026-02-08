@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Checkout } from "@/components/checkout";
+import { AppTopbar } from "@/components/app-topbar";
 import { getPackagesWithAvailability, getTenantBySlug } from "@/lib/store";
 
 type Props = {
@@ -17,11 +18,10 @@ export default async function TenantPurchasePage({ params }: Props) {
     return (
       <div className="app-shell">
         <div className="app-container max-w-3xl py-20 sm:py-24">
+          <AppTopbar breadcrumb="Purchase portal" environment="Live" accountLabel={tenant.name} />
           <div className="status-card">
             <h1 className="status-title">Portal setup in progress</h1>
-            <p className="status-copy">
-              This voucher storefront is still being configured. Please check again shortly.
-            </p>
+            <p className="status-copy">This voucher storefront is still being configured. Please check again shortly.</p>
           </div>
         </div>
       </div>
@@ -43,11 +43,10 @@ export default async function TenantPurchasePage({ params }: Props) {
     return (
       <div className="app-shell">
         <div className="app-container max-w-3xl py-20 sm:py-24">
+          <AppTopbar breadcrumb="Purchase portal" environment="Live" accountLabel={tenant.name} />
           <div className="status-card">
             <h1 className="status-title">Plans are coming soon</h1>
-            <p className="status-copy">
-              Voucher plans are not available yet for this location. The operator will publish pricing soon.
-            </p>
+            <p className="status-copy">Voucher plans are not available yet for this location. The operator will publish pricing soon.</p>
           </div>
         </div>
       </div>
@@ -57,32 +56,20 @@ export default async function TenantPurchasePage({ params }: Props) {
   return (
     <div className="app-shell">
       <div className="app-container">
-        <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-start xl:gap-14">
-          <section className="space-y-7 pt-1 text-center lg:text-left">
+        <AppTopbar breadcrumb={`Purchase / ${tenant.slug}`} environment="Live" accountLabel={tenant.name} />
+        <section className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/82 px-4 py-3">
+          <div className="min-w-0">
             <div className="hero-chip">{tenant.name}</div>
-            <h1 className="hero-title">
-              Buy guest Wi-Fi in seconds with a checkout that feels product-grade.
-            </h1>
-            <p className="hero-copy mx-auto lg:mx-0">
-              Select a plan, complete payment via Paystack, and receive your voucher code instantly over SMS.
-            </p>
-            <div className="hero-metric-grid max-w-3xl">
-              <div className="hero-metric">
-                <strong>Live inventory</strong>
-                <span>only available plans are shown</span>
-              </div>
-              <div className="hero-metric">
-                <strong>Secure checkout</strong>
-                <span>payments processed by Paystack</span>
-              </div>
-              <div className="hero-metric">
-                <strong>Instant delivery</strong>
-                <span>voucher sent by SMS after success</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="surface-card p-5 sm:p-6 md:p-7">
+            <h1 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">Choose a plan and pay</h1>
+            <p className="mt-1 text-sm text-slate-600">Instant voucher delivery after successful payment.</p>
+          </div>
+          <div className="flex gap-2 text-xs text-slate-600">
+            <span className="rounded-full border border-slate-300/80 bg-white px-2.5 py-1">Live inventory</span>
+            <span className="rounded-full border border-slate-300/80 bg-white px-2.5 py-1">Paystack secure</span>
+          </div>
+        </section>
+        <div className="grid gap-6">
+          <section>
             <Checkout tenantSlug={tenant.slug} packages={packages} />
           </section>
         </div>

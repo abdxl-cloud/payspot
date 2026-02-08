@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminTenantsPanel } from "@/components/admin-tenants-panel";
 import { LogoutButton } from "@/components/logout-button";
+import { AppTopbar } from "@/components/app-topbar";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
 import { getSessionUser } from "@/lib/store";
 
@@ -12,62 +13,49 @@ export default async function AdminPage() {
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
   const user = token ? getSessionUser(token) : null;
 
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   if (user.role !== "admin") {
-    if (user.tenantSlug) {
-      redirect(`/t/${user.tenantSlug}/admin`);
-    }
+    if (user.tenantSlug) redirect(`/t/${user.tenantSlug}/admin`);
     redirect("/login");
   }
 
   return (
     <div className="app-shell">
       <div className="app-container">
-        <div className="mb-8 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-          <div className="space-y-4">
+        <AppTopbar breadcrumb="Admin / Tenants" environment="Production" accountLabel="Platform Admin" action={<LogoutButton />} />
+
+        <header className="dashboard-header">
+          <div className="dashboard-header-top">
             <div className="hero-chip">Platform administration</div>
-            <h1 className="panel-title">Operate tenant rollout from one command layer.</h1>
-            <p className="panel-copy max-w-3xl">
-              Provision tenants, maintain credentials, and keep deployment health visible without switching tools.
-            </p>
-            <div className="hero-metric-grid max-w-3xl">
-              <div className="hero-metric">
-                <strong>Tenant lifecycle</strong>
-                <span>create, edit, reset, and remove</span>
-              </div>
-              <div className="hero-metric">
-                <strong>Credential control</strong>
-                <span>password reset and setup enforcement</span>
-              </div>
-              <div className="hero-metric">
-                <strong>Operational visibility</strong>
-                <span>status and configuration checks</span>
-              </div>
-            </div>
           </div>
-          <div className="pt-1">
-            <LogoutButton />
+          <h1 className="dashboard-title">Tenant Operations Dashboard</h1>
+          <p className="dashboard-subtitle">
+            Provision tenants, manage credentials, and keep platform rollout health visible from a single control plane.
+          </p>
+          <div className="dashboard-kpi-grid">
+            <div className="dashboard-kpi"><p className="dashboard-kpi-label">Tenant lifecycle</p><p className="dashboard-kpi-value">Provisioning</p></div>
+            <div className="dashboard-kpi"><p className="dashboard-kpi-label">Credential control</p><p className="dashboard-kpi-value">Account security</p></div>
+            <div className="dashboard-kpi"><p className="dashboard-kpi-label">Visibility</p><p className="dashboard-kpi-value">Status tracking</p></div>
+            <div className="dashboard-kpi"><p className="dashboard-kpi-label">Operator mode</p><p className="dashboard-kpi-value">High control</p></div>
           </div>
-        </div>
+        </header>
+
         <div className="workspace-grid">
           <div className="workspace-main">
             <AdminTenantsPanel />
           </div>
           <aside className="workspace-side">
             <div className="workspace-rail">
-              <h3>Admin standards</h3>
-              <p>Use predictable tenant slugs and verified admin email addresses to avoid login and routing issues later.</p>
+              <h3>Quick actions</h3>
+              <p><a className="underline underline-offset-4" href="#tenant-provisioning">Open provisioning</a></p>
+              <p><a className="underline underline-offset-4" href="#tenant-directory">Open tenant directory</a></p>
             </div>
             <div className="workspace-rail">
-              <h3>Provisioning flow</h3>
-              <p>1. Create tenant. 2. Share temporary access details. 3. Confirm setup completion before go-live.</p>
-            </div>
-            <div className="workspace-rail">
-              <h3>Security controls</h3>
-              <p>Reset credentials immediately when role ownership changes or incident alerts are raised.</p>
+              <h3>Readiness checklist</h3>
+              <p>[ ] Slug conventions validated</p>
+              <p>[ ] Admin email ownership confirmed</p>
+              <p>[ ] Credential handover completed</p>
             </div>
           </aside>
         </div>

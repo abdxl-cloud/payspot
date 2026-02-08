@@ -1,11 +1,13 @@
 import { TenantRequestForm } from "@/components/tenant-request-form";
+import { AppTopbar } from "@/components/app-topbar";
 
 export default function Home() {
   return (
     <div className="app-shell">
       <div className="app-container">
-        <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-start xl:gap-14">
-          <section className="space-y-7 pt-1 text-center lg:text-left">
+        <AppTopbar breadcrumb="Platform onboarding" environment="Public" accountLabel="Operator" />
+        <div className="grid gap-6 sm:gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-start xl:gap-14">
+          <section className="order-2 space-y-5 pt-1 text-center sm:space-y-6 lg:order-1 lg:space-y-7 lg:text-left">
             <div className="hero-chip">PaySpot operator suite</div>
             <h1 className="hero-title">
               Launch a modern <span className="text-gradient">Wi-Fi commerce</span> flow for every venue.
@@ -16,36 +18,21 @@ export default function Home() {
 
             <div className="hero-metric-grid max-w-3xl">
               <div className="hero-metric">
-                <strong>Fast checkout</strong>
-                <span>plan to payment in under a minute</span>
+                <strong>Sell guest access faster</strong>
+                <span>short payment flow for venue customers</span>
               </div>
               <div className="hero-metric">
-                <strong>Automated SMS</strong>
-                <span>voucher delivered after payment</span>
+                <strong>Instant voucher delivery</strong>
+                <span>code sent by SMS right after payment</span>
               </div>
               <div className="hero-metric">
-                <strong>Admin controls</strong>
-                <span>pricing, stock, and tenant management</span>
-              </div>
-            </div>
-
-            <div className="ops-grid max-w-3xl text-left">
-              <div className="ops-card">
-                <strong>Multi-tenant ready</strong>
-                <span>Run many venue portals from one platform.</span>
-              </div>
-              <div className="ops-card">
-                <strong>Paystack integrated</strong>
-                <span>Secure payments without custom checkout plumbing.</span>
-              </div>
-              <div className="ops-card">
-                <strong>Zero paper slips</strong>
-                <span>Digital voucher handling from import to delivery.</span>
+                <strong>Control pricing and stock</strong>
+                <span>manage plans and voucher inventory centrally</span>
               </div>
             </div>
           </section>
 
-          <section className="surface-card p-5 sm:p-6 md:p-7">
+          <section className="order-1 lg:order-2">
             <TenantRequestForm />
           </section>
         </div>

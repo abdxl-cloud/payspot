@@ -61,7 +61,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
   ] as const;
 
   return (
-    <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+    <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-500 sm:gap-2">
       {steps.map((s, idx) => {
         const state =
           s.id < step ? "complete" : s.id === step ? "active" : "upcoming";
@@ -70,7 +70,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
           <div key={s.id} className="flex items-center gap-2">
             <div
               className={[
-                "flex size-7 items-center justify-center rounded-full border text-[11px]",
+                "flex size-6 items-center justify-center rounded-full border text-[10px] sm:size-7 sm:text-[11px]",
                 state === "active"
                   ? "border-slate-900 bg-slate-900 text-white"
                   : state === "complete"
@@ -84,7 +84,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
               {s.label}
             </span>
             {idx < steps.length - 1 ? (
-              <div className="mx-1 hidden h-px w-10 bg-slate-200 sm:block" />
+              <div className="mx-1 hidden h-px w-8 bg-slate-200 sm:block" />
             ) : null}
           </div>
         );
@@ -95,6 +95,8 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
 
 export function Checkout({ tenantSlug, packages }: Props) {
   const [selected, setSelected] = useState<Package | null>(null);
+  const [planQuery, setPlanQuery] = useState("");
+  const [visiblePlanCount, setVisiblePlanCount] = useState(8);
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +111,24 @@ export function Checkout({ tenantSlug, packages }: Props) {
 
   const hasAvailable = packages.some((pkg) => pkg.availableCount > 0);
   const allSoldOut = packages.length > 0 && !hasAvailable;
+  const isLongPlanList = packages.length > 12;
+
+  const filteredPackages = useMemo(() => {
+    const query = planQuery.trim().toLowerCase();
+    if (!query) return packages;
+    return packages.filter((pkg) => {
+      return (
+        pkg.name.toLowerCase().includes(query) ||
+        pkg.code.toLowerCase().includes(query) ||
+        formatDuration(pkg.durationMinutes).toLowerCase().includes(query)
+      );
+    });
+  }, [packages, planQuery]);
+
+  const hasHiddenPlans = isLongPlanList && filteredPackages.length > visiblePlanCount;
+  const displayedPackages = hasHiddenPlans
+    ? filteredPackages.slice(0, visiblePlanCount)
+    : filteredPackages;
 
   useEffect(() => {
     const firstAvailable = packages.find((pkg) => pkg.availableCount > 0) ?? null;
@@ -119,6 +139,14 @@ export function Checkout({ tenantSlug, packages }: Props) {
       return prev;
     });
   }, [packages]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const selectedIndex = filteredPackages.findIndex((pkg) => pkg.code === selected.code);
+    if (selectedIndex >= 0 && selectedIndex + 1 > visiblePlanCount) {
+      setVisiblePlanCount(selectedIndex + 1);
+    }
+  }, [filteredPackages, selected, visiblePlanCount]);
 
   const bestValueCode = useMemo(() => {
     const available = packages.filter((pkg) => pkg.availableCount > 0);
@@ -139,6 +167,19 @@ export function Checkout({ tenantSlug, packages }: Props) {
       !loading
     );
   }, [selected, phone, loading]);
+
+  const formatPriceCompact = (value: number) => {
+    if (value >= 1_000_000_000_000) {
+      return `${(value / 1_000_000_000_000).toFixed(1).replace(/\.0$/, "")}T`;
+    }
+    if (value >= 1_000_000_000) {
+      return `${(value / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+    }
+    if (value >= 1_000_000) {
+      return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+    }
+    return value.toLocaleString();
+  };
 
   function redirectToPaystack(url: string, newTab = false) {
     if (newTab) {
@@ -269,8 +310,8 @@ export function Checkout({ tenantSlug, packages }: Props) {
   }
 
   return (
-    <div className="grid gap-6">
-      <div className="space-y-2">
+    <div className="grid gap-5 sm:gap-6">
+      <div className="space-y-1.5 sm:space-y-2">
         <Stepper step={step} />
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
@@ -331,8 +372,35 @@ export function Checkout({ tenantSlug, packages }: Props) {
         </Alert>
       ) : null}
 
-      <div className="flex gap-4 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-2 sm:overflow-visible xl:grid-cols-3">
-        {packages.map((pkg) => {
+      {isLongPlanList ? (
+        <div className="grid gap-2 rounded-xl border border-slate-200/80 bg-white/70 p-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center sm:p-4">
+          <div className="text-xs text-slate-600 sm:text-sm">
+            {filteredPackages.length} plan{filteredPackages.length === 1 ? "" : "s"} available
+          </div>
+          <Input
+            value={planQuery}
+            onChange={(event) => {
+              setPlanQuery(event.target.value);
+              setVisiblePlanCount(8);
+            }}
+            placeholder="Search plan name, code, or duration"
+            className="h-10"
+            aria-label="Search plans"
+          />
+        </div>
+      ) : null}
+
+      <div
+        className={[
+          "grid gap-3",
+          displayedPackages.length <= 1
+            ? "grid-cols-1"
+            : displayedPackages.length === 2
+              ? "sm:grid-cols-2"
+              : "sm:grid-cols-2 xl:grid-cols-3",
+        ].join(" ")}
+      >
+        {displayedPackages.map((pkg) => {
           const isSoldOut = pkg.availableCount <= 0;
           const isSelected = selected?.code === pkg.code;
           const isBestValue = bestValueCode === pkg.code && !isSoldOut;
@@ -355,17 +423,23 @@ export function Checkout({ tenantSlug, packages }: Props) {
                 }
               }}
               className={[
-                "min-w-[240px] select-none gap-0 border-slate-200/80 bg-white/88 py-0 shadow-sm transition sm:min-w-0",
+                "select-none gap-0 border-slate-200/80 bg-white/88 py-0 shadow-sm transition",
                 !isSoldOut ? "hover:-translate-y-0.5 hover:bg-white/94 hover:shadow-md" : "",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20",
                 isSelected ? "ring-2 ring-slate-900/15 bg-white/90" : "",
+                displayedPackages.length === 1 ? "mx-auto w-full max-w-xl" : "",
                 isSoldOut ? "cursor-not-allowed opacity-60" : "cursor-pointer",
               ].join(" ")}
             >
-              <CardContent className="p-5">
+              <CardContent className="p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900">{pkg.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="text-sm font-semibold text-slate-900 [overflow-wrap:anywhere]"
+                      title={pkg.name}
+                    >
+                      {pkg.name}
+                    </p>
                     <p className="text-xs text-slate-500">
                       {formatDuration(pkg.durationMinutes)}
                     </p>
@@ -392,23 +466,30 @@ export function Checkout({ tenantSlug, packages }: Props) {
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-end justify-between">
+                <div className="mt-5 flex items-end justify-between sm:mt-6">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                       NGN
                     </p>
-                    <p className="font-display text-3xl font-semibold tracking-tight text-slate-900">
-                      {pkg.priceNgn.toLocaleString()}
+                    <p
+                      className="font-display text-[clamp(1.5rem,5.2vw,2.1rem)] font-semibold tracking-tight leading-none text-slate-900 [overflow-wrap:anywhere]"
+                      title={pkg.priceNgn.toLocaleString()}
+                    >
+                      <span className="sm:hidden">{formatPriceCompact(pkg.priceNgn)}</span>
+                      <span className="hidden sm:inline">{pkg.priceNgn.toLocaleString()}</span>
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Code: <span className="font-medium [overflow-wrap:anywhere]">{pkg.code}</span>
                     </p>
                   </div>
                   {isSelected ? (
-                    <div className="flex size-9 items-center justify-center rounded-full bg-slate-900 text-white">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white">
                       <Check className="size-4" />
                     </div>
                   ) : null}
                 </div>
 
-                <p className="mt-4 min-h-[2.25rem] text-xs leading-relaxed text-slate-600">
+                <p className="mt-3 text-xs leading-relaxed text-slate-600 sm:mt-4 [overflow-wrap:anywhere]">
                   {pkg.description || "Instant access voucher for your WiFi network."}
                 </p>
               </CardContent>
@@ -416,6 +497,41 @@ export function Checkout({ tenantSlug, packages }: Props) {
           );
         })}
       </div>
+
+      {isLongPlanList && filteredPackages.length === 0 ? (
+        <Alert>
+          <AlertTitle>No plans match your search</AlertTitle>
+          <AlertDescription>Try a different name, code, or duration.</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {hasHiddenPlans ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setVisiblePlanCount((count) => count + 8)}
+          >
+            Show more plans
+          </Button>
+          <span className="text-xs text-slate-600">
+            Showing {displayedPackages.length} of {filteredPackages.length}
+          </span>
+        </div>
+      ) : null}
+
+      {isLongPlanList && filteredPackages.length > 8 && !hasHiddenPlans ? (
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setVisiblePlanCount(8)}
+          >
+            Collapse list
+          </Button>
+        </div>
+      ) : null}
 
       <Separator />
 
@@ -428,9 +544,12 @@ export function Checkout({ tenantSlug, packages }: Props) {
               {selected ? (
                 <Badge
                   variant="outline"
-                  className="self-start whitespace-nowrap sm:self-auto"
+                  className="max-w-full self-start sm:max-w-[340px] sm:self-auto"
+                  title={`${selected.name} - NGN ${selected.priceNgn.toLocaleString()}`}
                 >
-                  {selected.name} - NGN {selected.priceNgn.toLocaleString()}
+                  <span className="truncate">
+                    {selected.name} - NGN {selected.priceNgn.toLocaleString()}
+                  </span>
                 </Badge>
               ) : null}
             </div>
@@ -525,14 +644,14 @@ export function Checkout({ tenantSlug, packages }: Props) {
       ) : null}
 
       <details className="group rounded-xl border border-slate-200/80 bg-white/85">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-sm font-semibold sm:px-6 sm:py-5 [&::-webkit-details-marker]:hidden">
           <span>Resume a payment</span>
           <ChevronDown className="size-4 text-slate-500 transition group-open:rotate-180" />
         </summary>
-        <div className="px-6 pb-6">
-          <form className="grid gap-4" onSubmit={handleResume}>
+        <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+          <form className="grid gap-3 sm:grid-cols-2" onSubmit={handleResume}>
             {resumeMessage ? (
-              <Alert>
+              <Alert className="sm:col-span-2">
                 <AlertTitle>Resume status</AlertTitle>
                 <AlertDescription>{resumeMessage}</AlertDescription>
               </Alert>
@@ -561,7 +680,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
                 required
               />
             </div>
-            <Button type="submit" variant="outline" disabled={resumeLoading}>
+            <Button type="submit" variant="outline" disabled={resumeLoading} className="sm:col-span-2">
               {resumeLoading ? "Checking..." : "Resume payment"}
             </Button>
           </form>

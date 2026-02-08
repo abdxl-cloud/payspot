@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { getSessionUserFromRequest } from "@/lib/auth";
-import { getTenantBySlug, getUserById, setTenantPaystackSecret, setUserMustChangePassword, updateUserPassword } from "@/lib/store";
+import {
+  getTenantBySlug,
+  getUserById,
+  isTenantSlugAvailable,
+  setTenantPaystackSecret,
+  setUserMustChangePassword,
+  updateTenant,
+  updateUserPassword,
+} from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -9,6 +17,13 @@ type Props = {
 const schema = z.object({
   newPassword: z.string().min(8).max(200).optional(),
   paystackSecretKey: z.string().min(10).max(200).optional(),
+  newSlug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(40)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format")
+    .optional(),
 });
 
 function validatePassword(pw: string) {
@@ -51,6 +66,7 @@ export async function POST(request: Request, { params }: Props) {
 
   const mustChangePassword = userRow.must_change_password === 1;
   const requirePaystackKey = !tenant.paystack_secret_enc;
+  const requestedSlug = parsed.data.newSlug?.toLowerCase() ?? tenant.slug;
 
   if (mustChangePassword) {
     if (!parsed.data.newPassword) {
@@ -64,6 +80,10 @@ export async function POST(request: Request, { params }: Props) {
 
   if (requirePaystackKey && !parsed.data.paystackSecretKey) {
     return Response.json({ error: "Paystack secret key is required" }, { status: 400 });
+  }
+
+  if (requestedSlug !== tenant.slug && !isTenantSlugAvailable(requestedSlug)) {
+    return Response.json({ error: "That link name is not available" }, { status: 409 });
   }
 
   if (parsed.data.newPassword) {
@@ -96,8 +116,23 @@ export async function POST(request: Request, { params }: Props) {
     }
   }
 
+  if (requestedSlug !== tenant.slug) {
+    const updated = updateTenant({
+      tenantId: tenant.id,
+      slug: requestedSlug,
+    });
+    if (updated.status === "slug_taken") {
+      return Response.json({ error: "That link name is not available" }, { status: 409 });
+    }
+    if (updated.status === "missing") {
+      return Response.json({ error: "Tenant not found" }, { status: 404 });
+    }
+  }
+
+  const latest = getTenantBySlug(requestedSlug) ?? tenant;
+
   return Response.json({
     status: "ok",
-    redirectTo: `/t/${tenant.slug}/admin`,
+    redirectTo: `/t/${latest.slug}/admin`,
   });
 }

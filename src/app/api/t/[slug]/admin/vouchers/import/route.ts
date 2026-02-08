@@ -247,17 +247,6 @@ export async function POST(request: Request, { params }: Props) {
       if (user.tenantId !== tenant.id) {
         return Response.json({ error: "Forbidden" }, { status: 403 });
       }
-
-      const needsSetup =
-        user.mustChangePassword ||
-        !tenant.paystack_secret_enc ||
-        tenant.status !== "active";
-      if (needsSetup) {
-        return Response.json(
-          { error: "Complete setup before importing vouchers" },
-          { status: 409 },
-        );
-      }
     }
 
     const form = await request.formData();

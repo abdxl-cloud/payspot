@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -61,6 +60,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
   const [packageEdits, setPackageEdits] = useState<Record<string, string>>({});
   const [packageSaving, setPackageSaving] = useState<Record<string, boolean>>({});
+  const [saveAllLoading, setSaveAllLoading] = useState(false);
+  const [pricingSuccess, setPricingSuccess] = useState<string | null>(null);
   const [packageError, setPackageError] = useState<string | null>(null);
   const [packageQuery, setPackageQuery] = useState("");
 
@@ -114,22 +115,28 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     const normalized = packageQuery.trim().toLowerCase();
     if (!normalized) return packages;
     return packages.filter((pkg) => {
-      return (
-        pkg.name.toLowerCase().includes(normalized) ||
-        pkg.code.toLowerCase().includes(normalized)
-      );
+      return pkg.name.toLowerCase().includes(normalized) || pkg.code.toLowerCase().includes(normalized);
     });
   }, [packages, packageQuery]);
+
+  const dirtyPackageIds = useMemo(() => {
+    return packages
+      .filter((pkg) => {
+        const raw = packageEdits[pkg.id];
+        if (typeof raw !== "string") return false;
+        const parsed = Number.parseFloat(raw);
+        if (!Number.isFinite(parsed) || parsed < 0) return false;
+        return Math.round(parsed) !== pkg.priceNgn;
+      })
+      .map((pkg) => pkg.id);
+  }, [packages, packageEdits]);
 
   const filteredInventory = useMemo(() => {
     const pool = stats?.voucherPool ?? [];
     const normalized = inventoryQuery.trim().toLowerCase();
     if (!normalized) return pool;
     return pool.filter((pkg) => {
-      return (
-        pkg.name.toLowerCase().includes(normalized) ||
-        pkg.code.toLowerCase().includes(normalized)
-      );
+      return pkg.name.toLowerCase().includes(normalized) || pkg.code.toLowerCase().includes(normalized);
     });
   }, [stats, inventoryQuery]);
 
@@ -175,18 +182,11 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         `Duplicates: ${data.duplicates ?? 0}`,
         `Skipped: ${data.skipped ?? 0}`,
       ];
-      if (typeof data.expired === "number") {
-        parts.push(`Expired: ${data.expired}`);
-      }
-      if (typeof data.inUse === "number") {
-        parts.push(`In use: ${data.inUse}`);
-      }
-      if (typeof data.missingPlan === "number") {
-        parts.push(`Missing plan: ${data.missingPlan}`);
-      }
-      if (typeof data.packagesCreated === "number") {
-        parts.push(`New plans: ${data.packagesCreated}`);
-      }
+      if (typeof data.expired === "number") parts.push(`Expired: ${data.expired}`);
+      if (typeof data.inUse === "number") parts.push(`In use: ${data.inUse}`);
+      if (typeof data.missingPlan === "number") parts.push(`Missing plan: ${data.missingPlan}`);
+      if (typeof data.packagesCreated === "number") parts.push(`New plans: ${data.packagesCreated}`);
+
       setImportResult(parts.join(" | "));
       setCsvFile(null);
       setPackageCode("");
@@ -213,6 +213,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       return;
     }
     setPackageError(null);
+    setPricingSuccess(null);
     setPackageSaving((prev) => ({ ...prev, [packageId]: true }));
     try {
       const response = await fetch(`/api/t/${tenantSlug}/admin/packages`, {
@@ -225,10 +226,46 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         throw new Error(data?.error || response.statusText || "Failed to update price.");
       }
       await loadStats();
+      setPricingSuccess("Price updated.");
     } catch (err) {
       setPackageError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setPackageSaving((prev) => ({ ...prev, [packageId]: false }));
+    }
+  }
+
+  async function handleSaveAllPrices() {
+    if (dirtyPackageIds.length === 0 || saveAllLoading) return;
+
+    setPricingSuccess(null);
+    setPackageError(null);
+    setSaveAllLoading(true);
+
+    try {
+      for (const packageId of dirtyPackageIds) {
+        const raw = packageEdits[packageId];
+        const parsed = Number.parseFloat(raw);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          throw new Error("One or more prices are invalid.");
+        }
+        const response = await fetch(`/api/t/${tenantSlug}/admin/packages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ packageId, priceNgn: Math.round(parsed) }),
+        });
+        const data = await readJsonResponse<{ error?: string }>(response);
+        if (!response.ok) {
+          throw new Error(data?.error || response.statusText || "Failed to update prices.");
+        }
+      }
+
+      await loadStats();
+      setPackageEdits({});
+      setPricingSuccess(`Saved ${dirtyPackageIds.length} price update${dirtyPackageIds.length > 1 ? "s" : ""}.`);
+    } catch (err) {
+      setPackageError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSaveAllLoading(false);
     }
   }
 
@@ -252,15 +289,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       const form = new FormData();
       form.append("mode", deleteMode);
       form.append("status", deleteStatus);
-      if (deletePackageId) {
-        form.append("packageId", deletePackageId);
-      }
-      if (deleteCodes.trim()) {
-        form.append("codes", deleteCodes.trim());
-      }
-      if (deleteFile) {
-        form.append("file", deleteFile);
-      }
+      if (deletePackageId) form.append("packageId", deletePackageId);
+      if (deleteCodes.trim()) form.append("codes", deleteCodes.trim());
+      if (deleteFile) form.append("file", deleteFile);
 
       const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers/delete`, {
         method: "POST",
@@ -285,40 +316,36 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const transactionStats = stats?.transactions;
 
   return (
-    <div className="grid gap-6">
-      <Card className="border-slate-200/80 bg-white/88">
-        <CardContent className="pt-6">
-          <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <p className="section-kicker">Operations command</p>
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-                Manage stock, pricing, and cleanup in one workflow
-              </h2>
-              <p className="mt-2 text-sm text-slate-600">
-                {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "Syncing data..."}
-              </p>
-            </div>
-            <Button variant="outline" onClick={loadStats} disabled={statsLoading} className="h-11" type="button">
-              {statsLoading ? "Refreshing..." : "Refresh data"}
-            </Button>
+    <div className="grid gap-5">
+      <section className="panel-surface">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <p className="section-kicker">Operations command</p>
+            <h2 className="section-title mt-1">Manage stock, pricing, and cleanup</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "Syncing data..."}
+            </p>
           </div>
+          <Button variant="outline" onClick={loadStats} disabled={statsLoading} className="h-10" type="button">
+            {statsLoading ? "Refreshing..." : "Refresh data"}
+          </Button>
+        </div>
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            <ViewButton label="Overview" view="overview" activeView={activeView} onChange={setActiveView} />
-            <ViewButton label="Import" view="import" activeView={activeView} onChange={setActiveView} />
-            <ViewButton label="Pricing" view="pricing" activeView={activeView} onChange={setActiveView} />
-            <ViewButton label="Cleanup" view="cleanup" activeView={activeView} onChange={setActiveView} />
-            <ViewButton label="Inventory" view="inventory" activeView={activeView} onChange={setActiveView} />
-          </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <ViewButton label="Overview" view="overview" activeView={activeView} onChange={setActiveView} />
+          <ViewButton label="Import" view="import" activeView={activeView} onChange={setActiveView} />
+          <ViewButton label="Pricing" view="pricing" activeView={activeView} onChange={setActiveView} />
+          <ViewButton label="Cleanup" view="cleanup" activeView={activeView} onChange={setActiveView} />
+          <ViewButton label="Inventory" view="inventory" activeView={activeView} onChange={setActiveView} />
+        </div>
 
-          {statsError ? (
-            <Alert variant="destructive" className="mt-4">
-              <AlertTitle>Stats failed</AlertTitle>
-              <AlertDescription>{statsError}</AlertDescription>
-            </Alert>
-          ) : null}
-        </CardContent>
-      </Card>
+        {statsError ? (
+          <Alert variant="destructive" className="mt-4">
+            <AlertTitle>Stats failed</AlertTitle>
+            <AlertDescription>{statsError}</AlertDescription>
+          </Alert>
+        ) : null}
+      </section>
 
       {activeView === "overview" ? (
         <>
@@ -329,59 +356,39 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <StatTile label="Failed" value={String(transactionStats?.failed ?? 0)} />
           </div>
 
-          <Card className="border-slate-200/80 bg-white/88">
-            <CardHeader className="space-y-1">
-              <p className="section-kicker">Readiness</p>
-              <CardTitle className="section-title">Operational checklist</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 text-sm text-slate-700">
-              <p>1. Import voucher CSV with consistent package mapping.</p>
-              <p>2. Confirm each package price and available quantities.</p>
-              <p>3. Use cleanup tools only when reconciliation is complete.</p>
-            </CardContent>
-          </Card>
+          <section className="panel-surface text-sm text-slate-700">
+            <p className="section-kicker">Readiness checklist</p>
+            <h3 className="section-title mt-1">Before publishing changes</h3>
+            <p className="mt-3">1. Import CSV with correct package mapping.</p>
+            <p>2. Validate plan pricing and active counts.</p>
+            <p>3. Run cleanup only after reconciliation.</p>
+          </section>
         </>
       ) : null}
 
       {activeView === "import" ? (
-        <Card className="border-slate-200/80 bg-white/88">
-          <CardHeader className="space-y-1">
-            <p className="section-kicker">Voucher ingestion</p>
-            <CardTitle className="section-title">Upload voucher codes (CSV)</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
+        <section id="ops-import" className="panel-surface">
+          <p className="section-kicker">Voucher ingestion</p>
+          <h3 className="section-title mt-1">Upload voucher codes (CSV)</h3>
+
+          <div className="mt-4 grid gap-4">
             {!hasImportedPlans ? (
               <Alert>
                 <AlertTitle>Plan management is locked</AlertTitle>
-                <AlertDescription>
-                  Import voucher plans to unlock pricing and inventory controls.
-                </AlertDescription>
+                <AlertDescription>Import voucher plans to unlock pricing and inventory controls.</AlertDescription>
               </Alert>
             ) : null}
 
             <form className="grid gap-4" onSubmit={handleImport}>
               <div className="grid gap-2">
                 <Label htmlFor="csv">CSV file</Label>
-                <Input
-                  id="csv"
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
-                />
+                <Input id="csv" type="file" accept=".csv,text/csv" onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)} />
               </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="packageCode">Plan code (optional)</Label>
-                <Input
-                  id="packageCode"
-                  className="h-11"
-                  placeholder="3h"
-                  value={packageCode}
-                  onChange={(event) => setPackageCode(event.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Leave blank to use duration data from your CSV.
-                </p>
+                <Input id="packageCode" className="h-11" placeholder="3h" value={packageCode} onChange={(event) => setPackageCode(event.target.value)} />
+                <p className="text-xs text-muted-foreground">Leave blank to use duration data from your CSV.</p>
               </div>
 
               <Button type="submit" disabled={!canImport} className="h-11">
@@ -402,24 +409,28 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 <AlertDescription>{importResult}</AlertDescription>
               </Alert>
             ) : null}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       ) : null}
 
       {activeView === "pricing" ? (
-        <Card className="border-slate-200/80 bg-white/88">
-          <CardHeader className="space-y-3">
-            <div>
-              <p className="section-kicker">Pricing controls</p>
-              <CardTitle className="section-title">Edit plan prices</CardTitle>
+        <section id="ops-pricing" className="panel-surface">
+          <p className="section-kicker">Pricing controls</p>
+          <h3 className="section-title mt-1">Edit plan prices</h3>
+
+          <div className="mt-4 grid gap-4">
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+              <Input placeholder="Search plan by name or code" value={packageQuery} onChange={(event) => setPackageQuery(event.target.value)} />
+              <Button
+                type="button"
+                className="h-10"
+                onClick={handleSaveAllPrices}
+                disabled={dirtyPackageIds.length === 0 || saveAllLoading}
+              >
+                {saveAllLoading ? "Saving..." : `Save all (${dirtyPackageIds.length})`}
+              </Button>
             </div>
-            <Input
-              placeholder="Search plan by name or code"
-              value={packageQuery}
-              onChange={(event) => setPackageQuery(event.target.value)}
-            />
-          </CardHeader>
-          <CardContent className="grid gap-4">
+
             {packageError ? (
               <Alert variant="destructive">
                 <AlertTitle>Update failed</AlertTitle>
@@ -427,44 +438,47 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               </Alert>
             ) : null}
 
+            {pricingSuccess ? (
+              <Alert>
+                <AlertTitle>Pricing updated</AlertTitle>
+                <AlertDescription>{pricingSuccess}</AlertDescription>
+              </Alert>
+            ) : null}
+
             {filteredPackages.length === 0 ? (
               <p className="text-sm text-slate-600">No plans match your filter.</p>
             ) : (
-              <div className="grid gap-3">
+              <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white">
+                <div className="sticky top-0 z-10 hidden border-b border-slate-200 bg-slate-50/95 px-4 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 md:grid md:grid-cols-[minmax(0,1fr)_180px_100px]">
+                  <span>Plan</span>
+                  <span>Price (NGN)</span>
+                  <span>Action</span>
+                </div>
+                <div className="max-h-[520px] overflow-y-auto">
                 {filteredPackages.map((pkg) => {
-                  const value =
-                    packageEdits[pkg.id] ?? (Number.isFinite(pkg.priceNgn) ? String(pkg.priceNgn) : "0");
+                  const value = packageEdits[pkg.id] ?? (Number.isFinite(pkg.priceNgn) ? String(pkg.priceNgn) : "0");
+                  const parsed = Number.parseFloat(value);
+                  const isDirty = Number.isFinite(parsed) && Math.round(parsed) !== pkg.priceNgn;
                   return (
-                    <div
-                      key={pkg.id}
-                      className="rounded-xl border border-slate-200/80 bg-slate-50/75 p-4 text-sm"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div key={pkg.id} className="border-b border-slate-100 p-4 text-sm last:border-b-0">
+                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_100px] md:items-center">
                         <div className="min-w-0">
                           <p className="font-semibold text-slate-900">{pkg.name}</p>
-                          <p className="text-xs text-slate-500">
-                            {pkg.code} | {pkg.durationMinutes} mins | {pkg.active} active vouchers
-                          </p>
+                          <p className="text-xs text-slate-500">{pkg.code} | {pkg.durationMinutes} mins | {pkg.active} active vouchers</p>
                         </div>
-                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                          <div className="grid gap-1">
-                            <Label htmlFor={`price-${pkg.id}`} className="text-xs">
-                              Price (NGN)
-                            </Label>
-                            <Input
-                              id={`price-${pkg.id}`}
-                              className="h-10 w-full sm:w-36"
-                              inputMode="numeric"
-                              value={value}
-                              onChange={(event) => handlePackagePriceChange(pkg.id, event.target.value)}
-                            />
-                          </div>
-                          <Button
+                        <div className="grid gap-1">
+                          <Label htmlFor={`price-${pkg.id}`} className="text-xs md:sr-only">Price (NGN)</Label>
+                          <Input
+                            id={`price-${pkg.id}`}
                             className="h-10"
-                            type="button"
-                            disabled={packageSaving[pkg.id]}
-                            onClick={() => handlePackageSave(pkg.id)}
-                          >
+                            inputMode="numeric"
+                            value={value}
+                            onChange={(event) => handlePackagePriceChange(pkg.id, event.target.value)}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isDirty ? <span className="text-xs font-semibold text-amber-700">Unsaved</span> : null}
+                          <Button className="h-10" type="button" disabled={packageSaving[pkg.id]} onClick={() => handlePackageSave(pkg.id)}>
                             {packageSaving[pkg.id] ? "Saving..." : "Save"}
                           </Button>
                         </div>
@@ -472,95 +486,67 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       ) : null}
 
       {activeView === "cleanup" ? (
-        <Card className="border-rose-200/85 bg-white/88">
-          <CardHeader className="space-y-1">
-            <p className="section-kicker text-rose-600">Danger zone</p>
-            <CardTitle className="section-title">Delete vouchers</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <form className="grid gap-4" onSubmit={handleDelete}>
+        <section className="panel-surface border-rose-200/85">
+          <p className="section-kicker text-rose-600">Danger zone</p>
+          <h3 className="section-title mt-1">Delete vouchers</h3>
+
+          <form className="mt-4 grid gap-4" onSubmit={handleDelete}>
+            <div className="grid gap-2">
+              <Label htmlFor="delete-mode">Delete mode</Label>
+              <select id="delete-mode" className="h-11 w-full" value={deleteMode} onChange={(event) => setDeleteMode(event.target.value as "plan" | "codes" | "status")}> 
+                <option value="plan">Delete by plan</option>
+                <option value="codes">Delete by codes (paste or CSV)</option>
+                <option value="status">Delete by status</option>
+              </select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="delete-status">Status filter</Label>
+              <select id="delete-status" className="h-11 w-full" value={deleteStatus} onChange={(event) => setDeleteStatus(event.target.value)}>
+                <option value="UNUSED">Unused only</option>
+                <option value="ASSIGNED">Assigned only</option>
+                <option value="ALL">All statuses</option>
+              </select>
+            </div>
+
+            {deleteMode === "plan" ? (
               <div className="grid gap-2">
-                <Label htmlFor="delete-mode">Delete mode</Label>
-                <select
-                  id="delete-mode"
-                  className="h-11 w-full"
-                  value={deleteMode}
-                  onChange={(event) => setDeleteMode(event.target.value as "plan" | "codes" | "status")}
-                >
-                  <option value="plan">Delete by plan</option>
-                  <option value="codes">Delete by codes (paste or CSV)</option>
-                  <option value="status">Delete by status</option>
+                <Label htmlFor="delete-plan">Plan</Label>
+                <select id="delete-plan" className="h-11 w-full" value={deletePackageId} onChange={(event) => setDeletePackageId(event.target.value)}>
+                  {packages.map((pkg) => (
+                    <option key={pkg.id} value={pkg.id}>{pkg.name} ({pkg.code})</option>
+                  ))}
                 </select>
               </div>
+            ) : null}
 
-              <div className="grid gap-2">
-                <Label htmlFor="delete-status">Status filter</Label>
-                <select
-                  id="delete-status"
-                  className="h-11 w-full"
-                  value={deleteStatus}
-                  onChange={(event) => setDeleteStatus(event.target.value)}
-                >
-                  <option value="UNUSED">Unused only</option>
-                  <option value="ASSIGNED">Assigned only</option>
-                  <option value="ALL">All statuses</option>
-                </select>
-              </div>
-
-              {deleteMode === "plan" ? (
+            {deleteMode === "codes" ? (
+              <>
                 <div className="grid gap-2">
-                  <Label htmlFor="delete-plan">Plan</Label>
-                  <select
-                    id="delete-plan"
-                    className="h-11 w-full"
-                    value={deletePackageId}
-                    onChange={(event) => setDeletePackageId(event.target.value)}
-                  >
-                    {packages.map((pkg) => (
-                      <option key={pkg.id} value={pkg.id}>
-                        {pkg.name} ({pkg.code})
-                      </option>
-                    ))}
-                  </select>
+                  <Label htmlFor="delete-codes">Voucher codes</Label>
+                  <textarea id="delete-codes" className="min-h-[110px]" placeholder="Paste codes separated by commas or new lines" value={deleteCodes} onChange={(event) => setDeleteCodes(event.target.value)} />
                 </div>
-              ) : null}
+                <div className="grid gap-2">
+                  <Label htmlFor="delete-csv">CSV file (optional)</Label>
+                  <Input id="delete-csv" type="file" accept=".csv,text/csv" onChange={(event) => setDeleteFile(event.target.files?.[0] ?? null)} />
+                </div>
+              </>
+            ) : null}
 
-              {deleteMode === "codes" ? (
-                <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="delete-codes">Voucher codes</Label>
-                    <textarea
-                      id="delete-codes"
-                      className="min-h-[110px]"
-                      placeholder="Paste codes separated by commas or new lines"
-                      value={deleteCodes}
-                      onChange={(event) => setDeleteCodes(event.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="delete-csv">CSV file (optional)</Label>
-                    <Input
-                      id="delete-csv"
-                      type="file"
-                      accept=".csv,text/csv"
-                      onChange={(event) => setDeleteFile(event.target.files?.[0] ?? null)}
-                    />
-                  </div>
-                </>
-              ) : null}
+            <Button type="submit" disabled={deleteLoading} className="h-11" variant="destructive">
+              {deleteLoading ? "Deleting..." : "Delete vouchers"}
+            </Button>
+          </form>
 
-              <Button type="submit" disabled={deleteLoading} className="h-11" variant="destructive">
-                {deleteLoading ? "Deleting..." : "Delete vouchers"}
-              </Button>
-            </form>
-
+          <div className="mt-4 grid gap-3">
             {deleteError ? (
               <Alert variant="destructive">
                 <AlertTitle>Delete failed</AlertTitle>
@@ -574,33 +560,24 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 <AlertDescription>{deleteResult}</AlertDescription>
               </Alert>
             ) : null}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       ) : null}
 
       {activeView === "inventory" ? (
-        <Card className="border-slate-200/80 bg-white/88">
-          <CardHeader className="space-y-3">
-            <div>
-              <p className="section-kicker">Inventory analytics</p>
-              <CardTitle className="section-title">Voucher pool</CardTitle>
-            </div>
-            <Input
-              placeholder="Search package by name or code"
-              value={inventoryQuery}
-              onChange={(event) => setInventoryQuery(event.target.value)}
-            />
-          </CardHeader>
-          <CardContent className="grid gap-3">
+        <section id="ops-inventory" className="panel-surface">
+          <p className="section-kicker">Inventory analytics</p>
+          <h3 className="section-title mt-1">Voucher pool</h3>
+
+          <div className="mt-4 grid gap-4">
+            <Input placeholder="Search package by name or code" value={inventoryQuery} onChange={(event) => setInventoryQuery(event.target.value)} />
+
             {filteredInventory.length === 0 ? (
               <p className="text-sm text-slate-600">No packages found.</p>
             ) : (
               <div className="grid gap-3">
                 {filteredInventory.map((pkg) => (
-                  <div
-                    key={pkg.code}
-                    className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 text-sm"
-                  >
+                  <div key={pkg.code} className="rounded-xl border border-slate-200/80 bg-white p-4 text-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-semibold text-slate-900">{pkg.name}</p>
@@ -612,25 +589,16 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                       </div>
                     </div>
                     <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-600">
-                      <div className="rounded-lg border border-slate-200/80 bg-white p-2">
-                        <p className="font-semibold text-slate-900">{pkg.total}</p>
-                        <p>Total</p>
-                      </div>
-                      <div className="rounded-lg border border-slate-200/80 bg-white p-2">
-                        <p className="font-semibold text-slate-900">{pkg.unused}</p>
-                        <p>Unused</p>
-                      </div>
-                      <div className="rounded-lg border border-slate-200/80 bg-white p-2">
-                        <p className="font-semibold text-slate-900">{pkg.assigned}</p>
-                        <p>Assigned</p>
-                      </div>
+                      <div className="rounded-lg border border-slate-200/80 bg-slate-50 p-2"><p className="font-semibold text-slate-900">{pkg.total}</p><p>Total</p></div>
+                      <div className="rounded-lg border border-slate-200/80 bg-slate-50 p-2"><p className="font-semibold text-slate-900">{pkg.unused}</p><p>Unused</p></div>
+                      <div className="rounded-lg border border-slate-200/80 bg-slate-50 p-2"><p className="font-semibold text-slate-900">{pkg.assigned}</p><p>Assigned</p></div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       ) : null}
     </div>
   );
@@ -648,12 +616,7 @@ function ViewButton({
   onChange: (view: AdminView) => void;
 }) {
   return (
-    <Button
-      type="button"
-      variant={activeView === view ? "default" : "outline"}
-      size="sm"
-      onClick={() => onChange(view)}
-    >
+    <Button type="button" variant={activeView === view ? "default" : "outline"} size="sm" onClick={() => onChange(view)}>
       {label}
     </Button>
   );
@@ -661,9 +624,9 @@ function ViewButton({
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white/82 px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+    <div className="dashboard-kpi">
+      <p className="dashboard-kpi-label">{label}</p>
+      <p className="dashboard-kpi-value">{value}</p>
     </div>
   );
 }

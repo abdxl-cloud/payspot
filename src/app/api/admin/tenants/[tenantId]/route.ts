@@ -50,6 +50,10 @@ export async function PATCH(request: Request, { params }: Props) {
     return Response.json({ error: "That email is already in use" }, { status: 409 });
   }
 
+  if (result.status === "slug_taken") {
+    return Response.json({ error: "That slug is already in use" }, { status: 409 });
+  }
+
   return Response.json({
     status: "ok",
     tenant: {

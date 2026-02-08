@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,13 @@ import { readJsonResponse } from "@/lib/http";
 
 type Props = {
   tenantSlug: string;
+  currentSlug: string;
   requirePasswordChange: boolean;
   requirePaystackKey: boolean;
+  requireVoucherImport: boolean;
 };
+
+type SlugState = "idle" | "checking" | "available" | "taken" | "invalid";
 
 function validatePassword(pw: string) {
   if (pw.length < 8) return "Password must be at least 8 characters.";
@@ -22,20 +26,92 @@ function validatePassword(pw: string) {
   return null;
 }
 
+function normalizeSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
 export function TenantSetupPanel({
   tenantSlug,
+  currentSlug,
   requirePasswordChange,
   requirePaystackKey,
+  requireVoucherImport,
 }: Props) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [paystackSecretKey, setPaystackSecretKey] = useState("");
+  const [portalSlug, setPortalSlug] = useState(currentSlug);
+  const [slugState, setSlugState] = useState<SlugState>("idle");
+  const [slugMessage, setSlugMessage] = useState<string>("Keep this short and brand-specific. Example: walstreet");
+
+  const [voucherFile, setVoucherFile] = useState<File | null>(null);
+  const [voucherImporting, setVoucherImporting] = useState(false);
+  const [voucherResult, setVoucherResult] = useState<string | null>(null);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
+  const [voucherImported, setVoucherImported] = useState(!requireVoucherImport);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  useEffect(() => {
+    const normalized = normalizeSlug(portalSlug);
+    if (!normalized || normalized.length < 2) {
+      setSlugState("invalid");
+      setSlugMessage("Use at least 2 lowercase letters or numbers.");
+      return;
+    }
+    if (normalized === currentSlug) {
+      setSlugState("available");
+      setSlugMessage("Current link name is valid.");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setSlugState("checking");
+      try {
+        const response = await fetch(
+          `/api/t/${tenantSlug}/setup/slug-availability?slug=${encodeURIComponent(normalized)}`,
+          { signal: controller.signal },
+        );
+        const data = await readJsonResponse<{ available?: boolean }>(response);
+        if (!response.ok) {
+          setSlugState("invalid");
+          setSlugMessage("Unable to validate link right now.");
+          return;
+        }
+        if (data?.available) {
+          setSlugState("available");
+          setSlugMessage("Link name is available.");
+        } else {
+          setSlugState("taken");
+          setSlugMessage("This link name is already taken.");
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setSlugState("invalid");
+          setSlugMessage("Unable to validate link right now.");
+        }
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [portalSlug, tenantSlug, currentSlug]);
+
   const canSubmit = useMemo(() => {
     if (loading) return false;
+    if (!voucherImported) return false;
+    if (slugState !== "available") return false;
     if (requirePasswordChange) {
       if (!newPassword || !confirmPassword) return false;
       if (newPassword !== confirmPassword) return false;
@@ -45,7 +121,51 @@ export function TenantSetupPanel({
       if (paystackSecretKey.trim().length < 10) return false;
     }
     return true;
-  }, [loading, requirePasswordChange, requirePaystackKey, newPassword, confirmPassword, paystackSecretKey]);
+  }, [
+    loading,
+    voucherImported,
+    slugState,
+    requirePasswordChange,
+    newPassword,
+    confirmPassword,
+    requirePaystackKey,
+    paystackSecretKey,
+  ]);
+
+  async function handleVoucherImport() {
+    if (!voucherFile || voucherImporting) return;
+
+    setVoucherError(null);
+    setVoucherResult(null);
+    setVoucherImporting(true);
+    try {
+      const form = new FormData();
+      form.append("file", voucherFile);
+
+      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers/import`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await readJsonResponse<{
+        error?: string;
+        imported?: number;
+        duplicates?: number;
+        skipped?: number;
+      }>(response);
+      if (!response.ok) {
+        throw new Error(data?.error || "Import failed.");
+      }
+      setVoucherImported(true);
+      setVoucherResult(
+        `Imported: ${data?.imported ?? 0} | Duplicates: ${data?.duplicates ?? 0} | Skipped: ${data?.skipped ?? 0}`,
+      );
+      setVoucherFile(null);
+    } catch (err) {
+      setVoucherError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setVoucherImporting(false);
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -61,6 +181,7 @@ export function TenantSetupPanel({
         body: JSON.stringify({
           newPassword: newPassword ? newPassword : undefined,
           paystackSecretKey: paystackSecretKey.trim() ? paystackSecretKey.trim() : undefined,
+          newSlug: normalizeSlug(portalSlug),
         }),
       });
       const data = await readJsonResponse<{ error?: string; redirectTo?: string }>(response);
@@ -97,6 +218,30 @@ export function TenantSetupPanel({
         ) : null}
 
         <form className="grid gap-4" onSubmit={handleSubmit}>
+          <div className="grid gap-2">
+            <Label htmlFor="portalSlug">Portal link name</Label>
+            <Input
+              id="portalSlug"
+              className="h-11"
+              placeholder="walstreet"
+              value={portalSlug}
+              onChange={(event) => setPortalSlug(event.target.value)}
+              required
+            />
+            <p
+              className={[
+                "text-xs",
+                slugState === "taken" || slugState === "invalid"
+                  ? "text-red-700"
+                  : slugState === "available"
+                    ? "text-emerald-700"
+                    : "text-muted-foreground",
+              ].join(" ")}
+            >
+              {slugState === "checking" ? "Checking availability..." : slugMessage}
+            </p>
+          </div>
+
           {requirePasswordChange ? (
             <>
               <div className="grid gap-2">
@@ -106,7 +251,7 @@ export function TenantSetupPanel({
                   type="password"
                   className="h-11"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(event) => setNewPassword(event.target.value)}
                   required
                 />
                 <p className="text-xs text-muted-foreground">
@@ -121,7 +266,7 @@ export function TenantSetupPanel({
                   type="password"
                   className="h-11"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
                   required
                 />
               </div>
@@ -137,7 +282,7 @@ export function TenantSetupPanel({
                 className="h-11"
                 placeholder="sk_live_..."
                 value={paystackSecretKey}
-                onChange={(e) => setPaystackSecretKey(e.target.value)}
+                onChange={(event) => setPaystackSecretKey(event.target.value)}
                 required
               />
               <p className="text-xs text-muted-foreground">
@@ -145,6 +290,29 @@ export function TenantSetupPanel({
               </p>
             </div>
           ) : null}
+
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 sm:p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Voucher import</p>
+            <p className="mt-1 text-sm text-slate-600">Upload voucher CSV now so your dashboard starts with real inventory.</p>
+
+            {voucherImported ? (
+              <p className="mt-3 text-sm font-semibold text-emerald-700">Voucher CSV imported.</p>
+            ) : (
+              <div className="mt-3 grid gap-3">
+                <Input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(event) => setVoucherFile(event.target.files?.[0] ?? null)}
+                />
+                <Button type="button" variant="outline" disabled={!voucherFile || voucherImporting} onClick={handleVoucherImport}>
+                  {voucherImporting ? "Importing..." : "Import voucher CSV"}
+                </Button>
+              </div>
+            )}
+
+            {voucherError ? <p className="mt-2 text-sm text-red-700">{voucherError}</p> : null}
+            {voucherResult ? <p className="mt-2 text-sm text-slate-600">{voucherResult}</p> : null}
+          </div>
 
           <Button type="submit" className="h-12" disabled={!canSubmit}>
             {loading ? "Saving..." : "Complete setup"}

@@ -6,13 +6,23 @@ import { createTenantRequest, isTenantSlugAvailable } from "@/lib/store";
 
 const schema = z.object({
   name: z.string().min(2).max(80),
-  slug: z
-    .string()
-    .min(2)
-    .max(40)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
   email: z.string().email().max(120),
 });
+
+function slugify(input: string) {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 26);
+}
+
+function makeProvisionalSlug(name: string) {
+  const base = slugify(name) || "tenant";
+  const suffix = Math.random().toString(36).slice(2, 7);
+  return `${base}-${suffix}`;
+}
 
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "local";
@@ -30,16 +40,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, slug, email } = parsed.data;
-  if (!isTenantSlugAvailable(slug)) {
-    return Response.json(
-      { error: "That tenant slug is not available" },
-      { status: 409 },
-    );
+  const { name, email } = parsed.data;
+  let provisionalSlug = makeProvisionalSlug(name);
+  for (let i = 0; i < 5 && !isTenantSlugAvailable(provisionalSlug); i += 1) {
+    provisionalSlug = makeProvisionalSlug(name);
+  }
+  if (!isTenantSlugAvailable(provisionalSlug)) {
+    return Response.json({ error: "Unable to allocate tenant id" }, { status: 500 });
   }
 
   const { reviewToken } = createTenantRequest({
-    requestedSlug: slug,
+    requestedSlug: provisionalSlug,
     requestedName: name,
     requestedEmail: email,
   });
@@ -56,11 +67,11 @@ export async function POST(request: Request) {
     APP_URL,
   ).toString();
 
-  const subject = `Tenant request: ${name} (${slug})`;
+  const subject = `Tenant request: ${name}`;
   const text = [
     "New tenant request received:",
     `- Name: ${name}`,
-    `- Slug: ${slug}`,
+    `- Provisional slug: ${provisionalSlug} (tenant can update in setup)`,
     `- Admin email: ${email}`,
     "",
     "Review:",

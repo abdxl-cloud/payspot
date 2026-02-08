@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { TenantAdminPanel } from "@/components/tenant-admin-panel";
 import { LogoutButton } from "@/components/logout-button";
+import { AppTopbar } from "@/components/app-topbar";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
 import { getSessionUser, getTenantBySlug } from "@/lib/store";
 
@@ -16,72 +17,57 @@ export default async function TenantAdminPage({ params }: Props) {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
   const user = token ? getSessionUser(token) : null;
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   const tenant = getTenantBySlug(slug);
   if (!tenant) notFound();
 
   if (user.role === "tenant" && user.tenantId !== tenant.id) {
-    if (user.tenantSlug) {
-      redirect(`/t/${user.tenantSlug}/admin`);
-    }
+    if (user.tenantSlug) redirect(`/t/${user.tenantSlug}/admin`);
     redirect("/login");
   }
 
-  if (
-    user.role === "tenant" &&
-    (user.mustChangePassword || !tenant.paystack_secret_enc || tenant.status !== "active")
-  ) {
+  if (user.role === "tenant" && (user.mustChangePassword || !tenant.paystack_secret_enc || tenant.status !== "active")) {
     redirect(`/t/${tenant.slug}/setup`);
   }
 
   return (
     <div className="app-shell">
       <div className="app-container">
-        <div className="mb-8 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-          <div className="space-y-4">
+        <AppTopbar breadcrumb={`Tenant Admin / ${tenant.slug}`} environment="Production" accountLabel={tenant.name} action={<LogoutButton />} />
+
+        <header className="dashboard-header">
+          <div className="dashboard-header-top">
             <div className="hero-chip">{tenant.name}</div>
-            <h1 className="panel-title">Run voucher sales like a disciplined product operation.</h1>
-            <p className="panel-copy max-w-3xl">
-              Maintain plans, control pricing, and manage voucher inventory for <span className="font-mono">/t/{tenant.slug}</span>.
-            </p>
-            <div className="hero-metric-grid max-w-3xl">
-              <div className="hero-metric">
-                <strong>Bulk import</strong>
-                <span>upload CSV voucher inventories</span>
-              </div>
-              <div className="hero-metric">
-                <strong>Price control</strong>
-                <span>set sell price per package</span>
-              </div>
-              <div className="hero-metric">
-                <strong>Safe cleanup</strong>
-                <span>delete by plan, status, or code list</span>
-              </div>
-            </div>
           </div>
-          <div className="pt-1">
-            <LogoutButton />
+          <h1 className="dashboard-title">Voucher Operations Dashboard</h1>
+          <p className="dashboard-subtitle">
+            Manage pricing, imports, and inventory for <span className="font-mono">/t/{tenant.slug}</span> with production-safe workflows.
+          </p>
+          <div className="dashboard-kpi-grid">
+            <div className="dashboard-kpi"><p className="dashboard-kpi-label">Bulk import</p><p className="dashboard-kpi-value">CSV ingestion</p></div>
+            <div className="dashboard-kpi"><p className="dashboard-kpi-label">Pricing</p><p className="dashboard-kpi-value">Plan controls</p></div>
+            <div className="dashboard-kpi"><p className="dashboard-kpi-label">Inventory</p><p className="dashboard-kpi-value">Live tracking</p></div>
+            <div className="dashboard-kpi"><p className="dashboard-kpi-label">Cleanup</p><p className="dashboard-kpi-value">Guarded actions</p></div>
           </div>
-        </div>
+        </header>
+
         <div className="workspace-grid">
           <div className="workspace-main">
             <TenantAdminPanel tenantSlug={tenant.slug} />
           </div>
           <aside className="workspace-side">
             <div className="workspace-rail">
-              <h3>Daily operations</h3>
-              <p>Review payment health and inventory each morning before editing plans or running cleanup tasks.</p>
+              <h3>Quick actions</h3>
+              <p><a className="underline underline-offset-4" href="#ops-import">Go to import</a></p>
+              <p><a className="underline underline-offset-4" href="#ops-pricing">Go to pricing</a></p>
+              <p><a className="underline underline-offset-4" href="#ops-inventory">Go to inventory</a></p>
             </div>
             <div className="workspace-rail">
-              <h3>Import quality</h3>
-              <p>Validate CSV files in staging format first. Duplicates and missing plan codes slow down rollout.</p>
-            </div>
-            <div className="workspace-rail">
-              <h3>Cleanup caution</h3>
-              <p>Use deletion modes after reconciliation only. Once removed, voucher records cannot be restored.</p>
+              <h3>Action checklist</h3>
+              <p>[ ] Import completed</p>
+              <p>[ ] Pricing validated</p>
+              <p>[ ] Cleanup reconciliation done</p>
             </div>
           </aside>
         </div>

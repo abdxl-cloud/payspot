@@ -5,20 +5,20 @@ import { Slot } from "@radix-ui/react-slot"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold transition-all duration-200 active:scale-[0.99] disabled:pointer-events-none disabled:cursor-not-allowed disabled:shadow-none disabled:opacity-55 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-[0_14px_30px_rgba(30,64,175,0.28)] hover:-translate-y-0.5 hover:brightness-105",
+          "bg-primary text-primary-foreground shadow-[0_14px_30px_rgba(30,64,175,0.28)] hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0",
         destructive:
-          "bg-destructive text-white shadow-[0_10px_22px_rgba(185,28,28,0.24)] hover:bg-destructive/90",
+          "bg-destructive text-white shadow-[0_10px_22px_rgba(185,28,28,0.24)] hover:bg-destructive/90 active:bg-destructive/95",
         outline:
-          "border border-slate-300/85 bg-white/92 text-slate-800 shadow-[0_8px_18px_rgba(15,23,42,0.08)] hover:bg-slate-100/80",
+          "border border-slate-300/85 bg-white/92 text-slate-800 shadow-[0_8px_18px_rgba(15,23,42,0.08)] hover:bg-slate-100/90 active:bg-slate-100",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/90",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/90 active:bg-secondary/95",
         ghost:
-          "text-slate-700 hover:bg-slate-100/80",
+          "text-slate-700 hover:bg-slate-100/80 active:bg-slate-100",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

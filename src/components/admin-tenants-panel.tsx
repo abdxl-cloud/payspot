@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -217,7 +216,7 @@ export function AdminTenantsPanel() {
   }
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Total tenants" value={String(tenantStats.total)} />
         <StatTile label="Active" value={String(tenantStats.active)} />
@@ -225,12 +224,11 @@ export function AdminTenantsPanel() {
         <StatTile label="Paystack configured" value={String(tenantStats.configuredPayments)} />
       </div>
 
-      <Card className="border-slate-200/80 bg-white/88">
-        <CardHeader className="space-y-1">
-          <p className="section-kicker">Tenant provisioning</p>
-          <CardTitle className="section-title">Create tenant workspace</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4">
+      <section id="tenant-provisioning" className="panel-surface">
+        <p className="section-kicker">Tenant provisioning</p>
+        <h2 className="section-title mt-1">Create tenant workspace</h2>
+
+        <div className="mt-4 grid gap-4">
           {error ? (
             <Alert variant="destructive">
               <AlertTitle>Action failed</AlertTitle>
@@ -253,7 +251,7 @@ export function AdminTenantsPanel() {
                 className="h-11"
                 placeholder="walstreet"
                 value={newSlug}
-                onChange={(e) => setNewSlug(e.target.value)}
+                onChange={(event) => setNewSlug(event.target.value)}
                 required
               />
             </div>
@@ -264,7 +262,7 @@ export function AdminTenantsPanel() {
                 className="h-11"
                 placeholder="Walstreet Lounge"
                 value={newName}
-                onChange={(e) => setNewName(e.target.value)}
+                onChange={(event) => setNewName(event.target.value)}
                 required
               />
             </div>
@@ -276,7 +274,7 @@ export function AdminTenantsPanel() {
                 className="h-11"
                 placeholder="tenant@company.com"
                 value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
+                onChange={(event) => setNewEmail(event.target.value)}
                 required
               />
             </div>
@@ -288,76 +286,77 @@ export function AdminTenantsPanel() {
                 className="h-11"
                 placeholder="leave blank to auto-generate"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={(event) => setNewPassword(event.target.value)}
               />
             </div>
             <Button type="submit" className="h-11 sm:col-span-2" disabled={!canCreate}>
               {loading ? "Working..." : "Create tenant"}
             </Button>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       <Separator />
 
-      <Card className="border-slate-200/80 bg-white/88">
-        <CardHeader className="space-y-3">
+      <section id="tenant-directory" className="panel-surface">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
           <div>
-            <p className="section-kicker">Tenant registry</p>
-            <CardTitle className="section-title">Manage tenants ({filteredTenants.length})</CardTitle>
+            <p className="section-kicker">Tenant directory</p>
+            <h2 className="section-title mt-1">Manage tenants ({filteredTenants.length})</h2>
           </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_180px_auto]">
-            <Input
-              placeholder="Search by slug, name, or email"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <select className="w-full" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">All statuses</option>
-              {Array.from(new Set(tenants.map((tenant) => tenant.status.toLowerCase()))).map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-            <Button variant="outline" onClick={loadTenants} disabled={loading} className="h-11" type="button">
-              {loading ? "Refreshing..." : "Refresh"}
-            </Button>
-          </div>
-          <p className="text-xs text-slate-500">
-            {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "No sync yet"}
-          </p>
-        </CardHeader>
-        <CardContent className="grid gap-4">
+          <Button variant="outline" onClick={loadTenants} disabled={loading} className="h-10" type="button">
+            {loading ? "Refreshing..." : "Refresh"}
+          </Button>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px]">
+          <Input
+            placeholder="Search by slug, name, or email"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <select className="w-full" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">All statuses</option>
+            {Array.from(new Set(tenants.map((tenant) => tenant.status.toLowerCase()))).map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <p className="mt-3 text-xs text-slate-500">
+          {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "No sync yet"}
+        </p>
+
+        <div className="mt-4 grid gap-4">
           {filteredTenants.length === 0 ? (
             <p className="text-sm text-slate-600">
               {loading ? "Loading..." : "No tenants match your filters."}
             </p>
           ) : (
-            <div className="grid gap-4">
-              {filteredTenants.map((tenant) => (
-                <TenantRow
-                  key={tenant.id}
-                  tenant={tenant}
-                  disabled={loading}
-                  onUpdate={(patch) => handleUpdate(tenant.id, patch)}
-                  onDelete={() => handleDelete(tenant.id)}
-                  onResetPassword={() => handleResetPassword(tenant.id)}
-                />
-              ))}
-            </div>
+            filteredTenants.map((tenant) => (
+              <TenantRow
+                key={tenant.id}
+                tenant={tenant}
+                disabled={loading}
+                onUpdate={(patch) => handleUpdate(tenant.id, patch)}
+                onDelete={() => handleDelete(tenant.id)}
+                onResetPassword={() => handleResetPassword(tenant.id)}
+              />
+            ))
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   );
 }
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white/82 px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+    <div className="dashboard-kpi">
+      <p className="dashboard-kpi-label">{label}</p>
+      <p className="dashboard-kpi-value">{value}</p>
     </div>
   );
 }
@@ -387,45 +386,25 @@ function TenantRow(props: {
     status !== props.tenant.status;
 
   return (
-    <div className="rounded-2xl border border-slate-200/85 bg-slate-50/70 p-4">
+    <div className="rounded-xl border border-slate-200/80 bg-white p-4">
       <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-2">
             <Label>Slug</Label>
-            <Input
-              className="h-10"
-              value={slug}
-              onChange={(event) => setSlug(event.target.value)}
-              disabled={props.disabled}
-            />
+            <Input className="h-10" value={slug} onChange={(event) => setSlug(event.target.value)} disabled={props.disabled} />
           </div>
           <div className="grid gap-2">
             <Label>Name</Label>
-            <Input
-              className="h-10"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              disabled={props.disabled}
-            />
+            <Input className="h-10" value={name} onChange={(event) => setName(event.target.value)} disabled={props.disabled} />
           </div>
           <div className="grid gap-2 sm:col-span-2">
             <Label>Admin email</Label>
-            <Input
-              className="h-10"
-              value={adminEmail}
-              onChange={(event) => setAdminEmail(event.target.value)}
-              disabled={props.disabled}
-            />
+            <Input className="h-10" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} disabled={props.disabled} />
           </div>
           <div className="grid gap-2 sm:col-span-2 md:grid-cols-[180px_1fr] md:items-end">
             <div className="grid gap-2">
               <Label>Status</Label>
-              <select
-                className="h-10 w-full"
-                value={status.toLowerCase()}
-                onChange={(event) => setStatus(event.target.value)}
-                disabled={props.disabled}
-              >
+              <select className="h-10 w-full" value={status.toLowerCase()} onChange={(event) => setStatus(event.target.value)} disabled={props.disabled}>
                 {statusOptions.map((option) => (
                   <option key={option} value={option}>
                     {option}
@@ -433,18 +412,14 @@ function TenantRow(props: {
                 ))}
               </select>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-600">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
               Portal: <span className="font-mono">/t/{slug || props.tenant.slug}</span> | Paystack: {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2 lg:flex-col lg:items-end">
-          <Button
-            className="h-10"
-            onClick={() => props.onUpdate({ slug, name, adminEmail, status })}
-            disabled={props.disabled || !dirty}
-          >
+          <Button className="h-10" onClick={() => props.onUpdate({ slug, name, adminEmail, status })} disabled={props.disabled || !dirty}>
             Save changes
           </Button>
           <Button variant="outline" className="h-10" onClick={props.onResetPassword} disabled={props.disabled}>
