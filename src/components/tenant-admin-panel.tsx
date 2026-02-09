@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { readJsonResponse } from "@/lib/http";
 
 type VoucherStat = {
@@ -378,9 +377,6 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         imported?: number;
         duplicates?: number;
         skipped?: number;
-        expired?: number;
-        inUse?: number;
-        missingPlan?: number;
         packagesCreated?: number;
       }>(response);
       if (!response.ok) throw new Error(data?.error || "Import failed.");
@@ -399,12 +395,11 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
   return (
     <div className="grid gap-5">
-      <section id="ops-plans" className="panel-surface">
+      <section className="panel-surface">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
           <div>
-            <p className="section-kicker">Executive View</p>
-            <h2 className="section-title mt-1">Org-tier voucher operations dashboard</h2>
-            <p className="mt-2 text-sm text-slate-600">Manage plans, inventory, and code-level operations from one command center.</p>
+            <h2 className="section-title">Overview</h2>
+            <p className="mt-1 text-sm text-slate-600">Live business metrics and inventory health.</p>
           </div>
           <Button type="button" variant="outline" onClick={refreshAll} disabled={statsLoading || plansLoading || vouchersLoading}>
             Refresh all
@@ -425,70 +420,68 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         ) : null}
       </section>
 
-      <section id="ops-vouchers" className="panel-surface">
-        <div className="grid gap-3 lg:grid-cols-[1fr_380px]">
-          <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white">
-            <div className="border-b border-slate-200 bg-slate-50/95 px-4 py-3">
-              <p className="section-kicker">Plan Management</p>
-              <h3 className="section-title mt-1">Plan table</h3>
-            </div>
-            <div className="max-h-[520px] overflow-y-auto">
+      <section id="ops-plans" className="panel-surface">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <h2 className="section-title">Plans</h2>
+          <form id="ops-plan-create" className="grid gap-2 sm:grid-cols-4 md:grid-cols-5" onSubmit={createPlan}>
+            <Input value={newPlanCode} onChange={(event) => setNewPlanCode(event.target.value)} placeholder="Code" />
+            <Input value={newPlanName} onChange={(event) => setNewPlanName(event.target.value)} placeholder="Name" />
+            <Input value={newPlanDuration} inputMode="numeric" onChange={(event) => setNewPlanDuration(event.target.value)} placeholder="Minutes" />
+            <Input value={newPlanPrice} inputMode="numeric" onChange={(event) => setNewPlanPrice(event.target.value)} placeholder="Price (NGN)" />
+            <Button type="submit" disabled={creatingPlan}>
+              {creatingPlan ? "Creating..." : "Add plan"}
+            </Button>
+          </form>
+        </div>
+
+        <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200/80 bg-white">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.06em] text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Code</th>
+                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Minutes</th>
+                <th className="px-3 py-2">Price</th>
+                <th className="px-3 py-2">Unused</th>
+                <th className="px-3 py-2">Assigned</th>
+                <th className="px-3 py-2">Active</th>
+                <th className="px-3 py-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
               {plans.map((plan) => {
                 const draft = planDrafts[plan.id];
                 if (!draft) return null;
                 return (
-                  <div key={plan.id} className="border-b border-slate-100 p-4 text-sm last:border-b-0">
-                    <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_90px_100px_110px_90px_120px] md:items-center">
-                      <div className="grid gap-1">
-                        <Input value={draft.name} onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], name: event.target.value } }))} />
-                        <Input value={draft.code} onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], code: event.target.value } }))} />
-                      </div>
+                  <tr key={plan.id} className="border-b border-slate-100 last:border-0">
+                    <td className="px-3 py-2">
+                      <Input value={draft.code} onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], code: event.target.value } }))} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input value={draft.name} onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], name: event.target.value } }))} />
+                    </td>
+                    <td className="px-3 py-2">
                       <Input value={draft.duration} inputMode="numeric" onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], duration: event.target.value } }))} />
+                    </td>
+                    <td className="px-3 py-2">
                       <Input value={draft.price} inputMode="numeric" onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], price: event.target.value } }))} />
-                      <div className="text-xs text-slate-600">
-                        <p>U {plan.unusedCount}</p>
-                        <p>A {plan.assignedCount}</p>
-                      </div>
-                      <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
-                        <input type="checkbox" checked={draft.active} onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], active: event.target.checked } }))} />
-                        Active
-                      </label>
-                      <Button type="button" onClick={() => savePlan(plan)} disabled={savingPlanIds[plan.id]}>
+                    </td>
+                    <td className="px-3 py-2">{plan.unusedCount}</td>
+                    <td className="px-3 py-2">{plan.assignedCount}</td>
+                    <td className="px-3 py-2">
+                      <input type="checkbox" checked={draft.active} onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], active: event.target.checked } }))} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Button type="button" size="sm" onClick={() => savePlan(plan)} disabled={savingPlanIds[plan.id]}>
                         {savingPlanIds[plan.id] ? "Saving..." : "Save"}
                       </Button>
-                    </div>
-                  </div>
+                    </td>
+                  </tr>
                 );
               })}
-              {plans.length === 0 && !plansLoading ? <p className="p-4 text-sm text-slate-600">No plans available.</p> : null}
-            </div>
-          </div>
-
-          <form id="ops-plan-create" className="grid gap-3 rounded-xl border border-slate-200/80 bg-white p-4" onSubmit={createPlan}>
-            <p className="section-kicker">Create Plan</p>
-            <h3 className="section-title mt-1">Add new plan</h3>
-            <div className="grid gap-2">
-              <Label htmlFor="new-plan-code">Code</Label>
-              <Input id="new-plan-code" value={newPlanCode} onChange={(event) => setNewPlanCode(event.target.value)} placeholder="2gb-3h" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="new-plan-name">Name</Label>
-              <Input id="new-plan-name" value={newPlanName} onChange={(event) => setNewPlanName(event.target.value)} placeholder="2 GB / 3 hours" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="new-plan-duration">Minutes</Label>
-                <Input id="new-plan-duration" value={newPlanDuration} inputMode="numeric" onChange={(event) => setNewPlanDuration(event.target.value)} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="new-plan-price">Price (NGN)</Label>
-                <Input id="new-plan-price" value={newPlanPrice} inputMode="numeric" onChange={(event) => setNewPlanPrice(event.target.value)} />
-              </div>
-            </div>
-            <Button type="submit" disabled={creatingPlan}>
-              {creatingPlan ? "Creating..." : "Create plan"}
-            </Button>
-          </form>
+            </tbody>
+          </table>
+          {plans.length === 0 && !plansLoading ? <p className="p-4 text-sm text-slate-600">No plans available.</p> : null}
         </div>
 
         {plansError ? (
@@ -505,136 +498,124 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         ) : null}
       </section>
 
-      <section className="panel-surface">
-        <div className="grid gap-3 lg:grid-cols-[1fr_360px]">
-          <div className="grid gap-3">
-            <div className="grid gap-3 sm:grid-cols-[1fr_170px_170px_auto]">
-              <Input placeholder="Search voucher, plan, or email" value={voucherQuery} onChange={(event) => setVoucherQuery(event.target.value)} />
-              <select value={voucherStatus} onChange={(event) => setVoucherStatus(event.target.value)}>
-                <option value="all">All statuses</option>
-                <option value="UNUSED">Unused</option>
-                <option value="ASSIGNED">Assigned</option>
-              </select>
-              <select value={voucherPlan} onChange={(event) => setVoucherPlan(event.target.value)}>
-                <option value="all">All plans</option>
-                {plans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.name}
-                  </option>
-                ))}
-              </select>
-              <Button type="button" variant="outline" onClick={loadVouchers} disabled={vouchersLoading}>
-                {vouchersLoading ? "Loading..." : "Refresh"}
-              </Button>
-            </div>
+      <section id="ops-vouchers" className="panel-surface">
+        <h2 className="section-title">Vouchers</h2>
+        <p className="mt-1 text-sm text-slate-600">Search and manage voucher codes in one table.</p>
 
-            <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white">
-              <div className="border-b border-slate-200 bg-slate-50/95 px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="section-kicker">Voucher Inventory</p>
-                    <h3 className="section-title mt-1">Code management table</h3>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    Showing {vouchers.length} / {voucherTotal}
-                  </p>
-                </div>
-              </div>
-              <div className="max-h-[560px] overflow-y-auto">
-                {vouchers.map((row) => (
-                  <div key={row.id} className="border-b border-slate-100 p-4 text-sm last:border-b-0">
-                    <div className="grid gap-2 md:grid-cols-[32px_minmax(0,1fr)_180px_90px_160px] md:items-start">
-                      <input
-                        type="checkbox"
-                        checked={selectedVoucherIds.includes(row.id)}
-                        onChange={(event) =>
-                          setSelectedVoucherIds((prev) =>
-                            event.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
-                          )
-                        }
-                      />
-                      <div>
-                        <p className="font-semibold text-slate-900">{row.voucherCode}</p>
-                        <p className="text-xs text-slate-600">{row.packageName}</p>
-                        <p className="text-xs text-slate-500">{row.packageCode}</p>
-                      </div>
-                      <div className="text-xs text-slate-600">
-                        <p>{row.assignedToEmail || "-"}</p>
-                        <p>{row.assignedToPhone || "-"}</p>
-                      </div>
-                      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${row.status === "UNUSED" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-                        {row.status}
-                      </span>
-                      <div className="text-xs text-slate-500">
-                        <p>C: {dt(row.createdAt)}</p>
-                        <p>A: {dt(row.assignedAt)}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {vouchers.length === 0 && !vouchersLoading ? <p className="p-4 text-sm text-slate-600">No vouchers found.</p> : null}
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3">
-                <p className="text-xs text-slate-600">Selected {selectedVoucherIds.length}</p>
-                <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" onClick={reclaimSelected} disabled={selectedVoucherIds.length === 0}>
-                    Reclaim
-                  </Button>
-                  <Button type="button" variant="destructive" onClick={deleteSelected} disabled={selectedVoucherIds.length === 0}>
-                    Delete
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setVoucherPage((prev) => Math.max(1, prev - 1))} disabled={voucherPage <= 1}>
-                    Prev
-                  </Button>
-                  <span className="text-xs text-slate-600">
-                    {voucherPage} / {voucherTotalPages}
-                  </span>
-                  <Button type="button" variant="outline" onClick={() => setVoucherPage((prev) => Math.min(voucherTotalPages, prev + 1))} disabled={voucherPage >= voucherTotalPages}>
-                    Next
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
+        <details className="mt-4 rounded-xl border border-slate-200/80 bg-white p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-800">Add voucher code</summary>
+          <form id="ops-voucher-create" className="mt-3 grid gap-2 sm:grid-cols-3" onSubmit={createVoucher}>
+            <Input value={newVoucherCode} onChange={(event) => setNewVoucherCode(event.target.value)} placeholder="Voucher code" />
+            <select value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </select>
+            <Button type="submit" disabled={creatingVoucher}>
+              {creatingVoucher ? "Adding..." : "Add voucher"}
+            </Button>
+          </form>
+        </details>
 
-          <div className="grid gap-4">
-            <form id="ops-voucher-create" className="grid gap-3 rounded-xl border border-slate-200/80 bg-white p-4" onSubmit={createVoucher}>
-              <p className="section-kicker">Quick Add</p>
-              <h3 className="section-title mt-1">Create voucher code</h3>
-              <div className="grid gap-2">
-                <Label htmlFor="new-voucher-code">Voucher code</Label>
-                <Input id="new-voucher-code" value={newVoucherCode} onChange={(event) => setNewVoucherCode(event.target.value)} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="new-voucher-plan">Plan</Label>
-                <select id="new-voucher-plan" value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
-                  {plans.map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Button type="submit" disabled={creatingVoucher}>
-                {creatingVoucher ? "Adding..." : "Add voucher"}
-              </Button>
-            </form>
+        <details id="ops-import" className="mt-3 rounded-xl border border-slate-200/80 bg-white p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-800">Import CSV vouchers</summary>
+          <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={importCsv}>
+            <Input type="file" accept=".csv,text/csv" onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)} />
+            <Input value={importPackageCode} onChange={(event) => setImportPackageCode(event.target.value)} placeholder="Optional forced plan code" />
+            <Button type="submit" disabled={importLoading}>
+              {importLoading ? "Importing..." : "Import"}
+            </Button>
+          </form>
+        </details>
 
-            <form id="ops-import" className="grid gap-3 rounded-xl border border-slate-200/80 bg-white p-4" onSubmit={importCsv}>
-              <p className="section-kicker">Bulk Import</p>
-              <h3 className="section-title mt-1">Upload CSV vouchers</h3>
-              <div className="grid gap-2">
-                <Label htmlFor="import-csv">CSV file</Label>
-                <Input id="import-csv" type="file" accept=".csv,text/csv" onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="import-plan">Force plan code (optional)</Label>
-                <Input id="import-plan" value={importPackageCode} onChange={(event) => setImportPackageCode(event.target.value)} />
-              </div>
-              <Button type="submit" disabled={importLoading}>
-                {importLoading ? "Importing..." : "Import vouchers"}
-              </Button>
-            </form>
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_170px_170px_auto]">
+          <Input placeholder="Search voucher, plan, or email" value={voucherQuery} onChange={(event) => setVoucherQuery(event.target.value)} />
+          <select value={voucherStatus} onChange={(event) => setVoucherStatus(event.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="UNUSED">Unused</option>
+            <option value="ASSIGNED">Assigned</option>
+          </select>
+          <select value={voucherPlan} onChange={(event) => setVoucherPlan(event.target.value)}>
+            <option value="all">All plans</option>
+            {plans.map((plan) => (
+              <option key={plan.id} value={plan.id}>
+                {plan.name}
+              </option>
+            ))}
+          </select>
+          <Button type="button" variant="outline" onClick={loadVouchers} disabled={vouchersLoading}>
+            {vouchersLoading ? "Loading..." : "Refresh"}
+          </Button>
+        </div>
+
+        <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200/80 bg-white">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.06em] text-slate-500">
+              <tr>
+                <th className="px-3 py-2"></th>
+                <th className="px-3 py-2">Voucher</th>
+                <th className="px-3 py-2">Plan</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Assigned email</th>
+                <th className="px-3 py-2">Assigned phone</th>
+                <th className="px-3 py-2">Created</th>
+                <th className="px-3 py-2">Assigned</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vouchers.map((row) => (
+                <tr key={row.id} className="border-b border-slate-100 last:border-0">
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedVoucherIds.includes(row.id)}
+                      onChange={(event) =>
+                        setSelectedVoucherIds((prev) =>
+                          event.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
+                        )
+                      }
+                    />
+                  </td>
+                  <td className="px-3 py-2 font-medium">{row.voucherCode}</td>
+                  <td className="px-3 py-2">{row.packageName}</td>
+                  <td className="px-3 py-2">
+                    <span className={`rounded-md px-2 py-1 text-xs font-semibold ${row.status === "UNUSED" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                      {row.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">{row.assignedToEmail || "-"}</td>
+                  <td className="px-3 py-2">{row.assignedToPhone || "-"}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{dt(row.createdAt)}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{dt(row.assignedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {vouchers.length === 0 && !vouchersLoading ? <p className="p-4 text-sm text-slate-600">No vouchers found.</p> : null}
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-slate-600">
+            Showing {vouchers.length} / {voucherTotal} | Selected {selectedVoucherIds.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={reclaimSelected} disabled={selectedVoucherIds.length === 0}>
+              Reclaim
+            </Button>
+            <Button type="button" variant="destructive" onClick={deleteSelected} disabled={selectedVoucherIds.length === 0}>
+              Delete
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setVoucherPage((prev) => Math.max(1, prev - 1))} disabled={voucherPage <= 1}>
+              Prev
+            </Button>
+            <span className="text-xs text-slate-600">
+              {voucherPage} / {voucherTotalPages}
+            </span>
+            <Button type="button" variant="outline" onClick={() => setVoucherPage((prev) => Math.min(voucherTotalPages, prev + 1))} disabled={voucherPage >= voucherTotalPages}>
+              Next
+            </Button>
           </div>
         </div>
 
