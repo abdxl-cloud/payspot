@@ -19,6 +19,10 @@ type TenantDto = {
   updatedAt: string;
 };
 
+type TenantUpdatePayload = Partial<TenantDto> & {
+  paystackSecretKey?: string;
+};
+
 const COMMON_STATUSES = ["active", "pending", "inactive", "suspended"];
 
 export function AdminTenantsPanel() {
@@ -142,7 +146,7 @@ export function AdminTenantsPanel() {
     }
   }
 
-  async function handleUpdate(tenantId: string, patch: Partial<TenantDto>) {
+  async function handleUpdate(tenantId: string, patch: TenantUpdatePayload) {
     setError(null);
     setLoading(true);
     try {
@@ -154,6 +158,7 @@ export function AdminTenantsPanel() {
           name: patch.name,
           adminEmail: patch.adminEmail,
           status: patch.status,
+          paystackSecretKey: patch.paystackSecretKey,
         }),
       });
       const data = await readJsonResponse<{ error?: string }>(response);
@@ -364,7 +369,7 @@ function StatTile({ label, value }: { label: string; value: string }) {
 function TenantRow(props: {
   tenant: TenantDto;
   disabled: boolean;
-  onUpdate: (patch: Partial<TenantDto>) => void;
+  onUpdate: (patch: TenantUpdatePayload) => void;
   onDelete: () => void;
   onResetPassword: () => void;
 }) {
@@ -372,6 +377,7 @@ function TenantRow(props: {
   const [name, setName] = useState(props.tenant.name);
   const [adminEmail, setAdminEmail] = useState(props.tenant.adminEmail);
   const [status, setStatus] = useState(props.tenant.status);
+  const [paystackSecretKey, setPaystackSecretKey] = useState("");
 
   const statusOptions = useMemo(() => {
     const normalized = props.tenant.status.toLowerCase();
@@ -384,6 +390,7 @@ function TenantRow(props: {
     name !== props.tenant.name ||
     adminEmail !== props.tenant.adminEmail ||
     status !== props.tenant.status;
+  const paystackDirty = paystackSecretKey.trim().length >= 10;
 
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white p-4">
@@ -414,6 +421,30 @@ function TenantRow(props: {
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
               Portal: <span className="font-mono">/t/{slug || props.tenant.slug}</span> | Paystack: {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
+            </div>
+          </div>
+          <div className="grid gap-2 sm:col-span-2">
+            <Label>Paystack secret key</Label>
+            <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+              <Input
+                type="password"
+                className="h-10"
+                placeholder="sk_live_..."
+                value={paystackSecretKey}
+                onChange={(event) => setPaystackSecretKey(event.target.value)}
+                disabled={props.disabled}
+              />
+              <Button
+                variant="outline"
+                className="h-10"
+                onClick={() => {
+                  props.onUpdate({ paystackSecretKey: paystackSecretKey.trim() });
+                  setPaystackSecretKey("");
+                }}
+                disabled={props.disabled || !paystackDirty}
+              >
+                Update Paystack key
+              </Button>
             </div>
           </div>
         </div>

@@ -27,6 +27,7 @@ export default async function TenantSetupPage({ params }: Props) {
   const setupComplete = !user.mustChangePassword && !!tenant.paystack_secret_enc && tenant.status === "active";
   if (setupComplete) redirect(`/t/${tenant.slug}/admin`);
   const hasVoucherImport = getStats(tenant.id).some((row) => row.total > 0);
+  const renderedAt = new Date().toLocaleString();
 
   return (
     <div className="app-shell">
@@ -39,6 +40,11 @@ export default async function TenantSetupPage({ params }: Props) {
             <p className="panel-copy mt-3 max-w-2xl">
               Finish security and payment configuration for <span className="font-mono">/t/{tenant.slug}</span>.
             </p>
+            <div className="dashboard-meta">
+              <span>Tenant: {tenant.name}</span>
+              <span>Mode: Setup gate</span>
+              <span>Rendered: {renderedAt}</span>
+            </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <div className="dashboard-kpi"><p className="dashboard-kpi-label">Password hardening</p><p className="dashboard-kpi-value">Required</p></div>
               <div className="dashboard-kpi"><p className="dashboard-kpi-label">Paystack key</p><p className="dashboard-kpi-value">Required</p></div>
@@ -46,7 +52,7 @@ export default async function TenantSetupPage({ params }: Props) {
             </div>
           </section>
 
-          <section className="order-1 lg:order-2">
+          <section className="order-1 grid gap-4 lg:order-2">
             <TenantSetupPanel
               tenantSlug={tenant.slug}
               currentSlug={tenant.slug}
@@ -54,6 +60,12 @@ export default async function TenantSetupPage({ params }: Props) {
               requirePaystackKey={!tenant.paystack_secret_enc}
               requireVoucherImport={!hasVoucherImport}
             />
+            <div className="dashboard-lane">
+              <h3 className="dashboard-lane-title">Setup sequence</h3>
+              <p className="dashboard-lane-copy">1. Set a strong admin password.</p>
+              <p className="dashboard-lane-copy">2. Add Paystack secret key for payments.</p>
+              <p className="dashboard-lane-copy">3. Import voucher inventory to unlock admin tools.</p>
+            </div>
           </section>
         </div>
       </div>

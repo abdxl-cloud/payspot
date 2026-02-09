@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { getSessionUserFromRequest } from "@/lib/auth";
-import { deleteTenant, updateTenant } from "@/lib/store";
+import {
+  deleteTenant,
+  getTenantById,
+  setTenantPaystackSecret,
+  updateTenant,
+} from "@/lib/store";
 
 type Props = {
   params: Promise<{ tenantId: string }>;
@@ -16,6 +21,7 @@ const patchSchema = z.object({
   name: z.string().min(2).max(80).optional(),
   adminEmail: z.string().email().max(120).optional(),
   status: z.string().min(2).max(50).optional(),
+  paystackSecretKey: z.string().min(10).max(200).optional(),
 });
 
 export async function PATCH(request: Request, { params }: Props) {
@@ -54,15 +60,38 @@ export async function PATCH(request: Request, { params }: Props) {
     return Response.json({ error: "That slug is already in use" }, { status: 409 });
   }
 
+  if (parsed.data.paystackSecretKey) {
+    try {
+      const secretResult = setTenantPaystackSecret({
+        tenantId,
+        paystackSecretKey: parsed.data.paystackSecretKey,
+      });
+      if (secretResult.status !== "ok") {
+        return Response.json({ error: "Tenant not found" }, { status: 404 });
+      }
+    } catch (error) {
+      console.error("Paystack key encryption failed", error);
+      return Response.json(
+        { error: "Unable to save Paystack key" },
+        { status: 500 },
+      );
+    }
+  }
+
+  const latestTenant = getTenantById(tenantId);
+  if (!latestTenant) {
+    return Response.json({ error: "Tenant not found" }, { status: 404 });
+  }
+
   return Response.json({
     status: "ok",
     tenant: {
-      id: result.tenant.id,
-      slug: result.tenant.slug,
-      name: result.tenant.name,
-      adminEmail: result.tenant.admin_email,
-      status: result.tenant.status,
-      paystackLast4: result.tenant.paystack_secret_last4,
+      id: latestTenant.id,
+      slug: latestTenant.slug,
+      name: latestTenant.name,
+      adminEmail: latestTenant.admin_email,
+      status: latestTenant.status,
+      paystackLast4: latestTenant.paystack_secret_last4,
     },
   });
 }

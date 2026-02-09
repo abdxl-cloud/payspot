@@ -239,6 +239,10 @@
     @apply space-y-4;
   }
 
+  .workspace-side-sticky {
+    @apply xl:sticky xl:top-6;
+  }
+
   .workspace-rail {
     @apply rounded-2xl border border-slate-200/85 bg-white/80 p-5;
   }
@@ -267,6 +271,14 @@
     @apply mt-2 text-sm text-slate-600 sm:text-base;
   }
 
+  .dashboard-meta {
+    @apply mt-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-3;
+  }
+
+  .dashboard-meta span {
+    @apply rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-2;
+  }
+
   .dashboard-kpi-grid {
     @apply mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4;
   }
@@ -285,6 +297,26 @@
 
   .panel-surface {
     @apply rounded-2xl border border-slate-200/85 bg-white/84 p-4 sm:p-5;
+  }
+
+  .dashboard-lane {
+    @apply grid gap-3 rounded-2xl border border-slate-200/85 bg-white/80 p-4 sm:p-5;
+  }
+
+  .dashboard-lane-title {
+    @apply text-sm font-semibold uppercase tracking-[0.11em] text-slate-500;
+  }
+
+  .dashboard-lane-copy {
+    @apply text-sm leading-relaxed text-slate-600;
+  }
+
+  .dashboard-quick-links {
+    @apply grid gap-2 text-sm text-slate-700;
+  }
+
+  .dashboard-quick-link {
+    @apply inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-medium transition-colors hover:bg-slate-100;
   }
 
   .app-topbar {

@@ -31,6 +31,8 @@ export default async function TenantAdminPage({ params }: Props) {
     redirect(`/t/${tenant.slug}/setup`);
   }
 
+  const renderedAt = new Date().toLocaleString();
+
   return (
     <div className="app-shell">
       <div className="app-container">
@@ -44,6 +46,11 @@ export default async function TenantAdminPage({ params }: Props) {
           <p className="dashboard-subtitle">
             Manage pricing, imports, and inventory for <span className="font-mono">/t/{tenant.slug}</span> with production-safe workflows.
           </p>
+          <div className="dashboard-meta">
+            <span>Tenant: {tenant.name}</span>
+            <span>Route: /t/{tenant.slug}/admin</span>
+            <span>Rendered: {renderedAt}</span>
+          </div>
           <div className="dashboard-kpi-grid">
             <div className="dashboard-kpi"><p className="dashboard-kpi-label">Bulk import</p><p className="dashboard-kpi-value">CSV ingestion</p></div>
             <div className="dashboard-kpi"><p className="dashboard-kpi-label">Pricing</p><p className="dashboard-kpi-value">Plan controls</p></div>
@@ -56,18 +63,20 @@ export default async function TenantAdminPage({ params }: Props) {
           <div className="workspace-main">
             <TenantAdminPanel tenantSlug={tenant.slug} />
           </div>
-          <aside className="workspace-side">
-            <div className="workspace-rail">
-              <h3>Quick actions</h3>
-              <p><a className="underline underline-offset-4" href="#ops-import">Go to import</a></p>
-              <p><a className="underline underline-offset-4" href="#ops-pricing">Go to pricing</a></p>
-              <p><a className="underline underline-offset-4" href="#ops-inventory">Go to inventory</a></p>
+          <aside className="workspace-side workspace-side-sticky">
+            <div className="dashboard-lane">
+              <h3 className="dashboard-lane-title">Navigation</h3>
+              <div className="dashboard-quick-links">
+                <a className="dashboard-quick-link" href="#ops-import">Import vouchers</a>
+                <a className="dashboard-quick-link" href="#ops-pricing">Manage pricing</a>
+                <a className="dashboard-quick-link" href="#ops-inventory">Inventory analytics</a>
+              </div>
             </div>
-            <div className="workspace-rail">
-              <h3>Action checklist</h3>
-              <p>[ ] Import completed</p>
-              <p>[ ] Pricing validated</p>
-              <p>[ ] Cleanup reconciliation done</p>
+            <div className="dashboard-lane">
+              <h3 className="dashboard-lane-title">Runbook checks</h3>
+              <p className="dashboard-lane-copy">Import with clean CSV and valid package mapping.</p>
+              <p className="dashboard-lane-copy">Validate edited prices before publishing sales.</p>
+              <p className="dashboard-lane-copy">Run deletions only after stock reconciliation.</p>
             </div>
           </aside>
         </div>

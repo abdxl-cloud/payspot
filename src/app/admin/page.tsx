@@ -20,6 +20,8 @@ export default async function AdminPage() {
     redirect("/login");
   }
 
+  const renderedAt = new Date().toLocaleString();
+
   return (
     <div className="app-shell">
       <div className="app-container">
@@ -33,6 +35,11 @@ export default async function AdminPage() {
           <p className="dashboard-subtitle">
             Provision tenants, manage credentials, and keep platform rollout health visible from a single control plane.
           </p>
+          <div className="dashboard-meta">
+            <span>Scope: Multi-tenant platform</span>
+            <span>Access: Admin only</span>
+            <span>Rendered: {renderedAt}</span>
+          </div>
           <div className="dashboard-kpi-grid">
             <div className="dashboard-kpi"><p className="dashboard-kpi-label">Tenant lifecycle</p><p className="dashboard-kpi-value">Provisioning</p></div>
             <div className="dashboard-kpi"><p className="dashboard-kpi-label">Credential control</p><p className="dashboard-kpi-value">Account security</p></div>
@@ -45,17 +52,19 @@ export default async function AdminPage() {
           <div className="workspace-main">
             <AdminTenantsPanel />
           </div>
-          <aside className="workspace-side">
-            <div className="workspace-rail">
-              <h3>Quick actions</h3>
-              <p><a className="underline underline-offset-4" href="#tenant-provisioning">Open provisioning</a></p>
-              <p><a className="underline underline-offset-4" href="#tenant-directory">Open tenant directory</a></p>
+          <aside className="workspace-side workspace-side-sticky">
+            <div className="dashboard-lane">
+              <h3 className="dashboard-lane-title">Navigation</h3>
+              <div className="dashboard-quick-links">
+                <a className="dashboard-quick-link" href="#tenant-provisioning">Tenant provisioning</a>
+                <a className="dashboard-quick-link" href="#tenant-directory">Tenant directory</a>
+              </div>
             </div>
-            <div className="workspace-rail">
-              <h3>Readiness checklist</h3>
-              <p>[ ] Slug conventions validated</p>
-              <p>[ ] Admin email ownership confirmed</p>
-              <p>[ ] Credential handover completed</p>
+            <div className="dashboard-lane">
+              <h3 className="dashboard-lane-title">Management checks</h3>
+              <p className="dashboard-lane-copy">Slug naming follows policy and avoids collisions.</p>
+              <p className="dashboard-lane-copy">Primary admin email ownership is verified.</p>
+              <p className="dashboard-lane-copy">Credentials are handed over through secure channels.</p>
             </div>
           </aside>
         </div>
