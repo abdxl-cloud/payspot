@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { readJsonResponse } from "@/lib/http";
 
 type VoucherStat = {
@@ -16,18 +16,8 @@ type VoucherStat = {
   percentageRemaining: number;
 };
 
-type PackageStat = {
-  id: string;
-  code: string;
-  name: string;
-  durationMinutes: number;
-  priceNgn: number;
-  active: number;
-};
-
 type AdminStats = {
   voucherPool: VoucherStat[];
-  packages: PackageStat[];
   transactions: {
     total: number;
     success: number;
@@ -38,43 +28,90 @@ type AdminStats = {
   };
 };
 
+type PlanRow = {
+  id: string;
+  code: string;
+  name: string;
+  durationMinutes: number;
+  priceNgn: number;
+  active: number;
+  totalCount: number;
+  unusedCount: number;
+  assignedCount: number;
+};
+
+type VoucherRow = {
+  id: string;
+  voucherCode: string;
+  status: "UNUSED" | "ASSIGNED";
+  packageId: string;
+  packageCode: string;
+  packageName: string;
+  createdAt: string;
+  assignedAt: string | null;
+  assignedToEmail: string | null;
+  assignedToPhone: string | null;
+};
+
 type Props = {
   tenantSlug: string;
 };
 
-type AdminView = "overview" | "import" | "pricing" | "cleanup" | "inventory";
+const PAGE_SIZE = 20;
+
+function money(value: number) {
+  return `NGN ${Math.round(value || 0).toLocaleString()}`;
+}
+
+function dt(value: string | null) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleString();
+}
 
 export function TenantAdminPanel({ tenantSlug }: Props) {
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
-  const [activeView, setActiveView] = useState<AdminView>("overview");
+  const [plans, setPlans] = useState<PlanRow[]>([]);
+  const [plansError, setPlansError] = useState<string | null>(null);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [planNotice, setPlanNotice] = useState<string | null>(null);
+
+  const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
+  const [vouchersError, setVouchersError] = useState<string | null>(null);
+  const [vouchersLoading, setVouchersLoading] = useState(false);
+  const [voucherNotice, setVoucherNotice] = useState<string | null>(null);
+  const [voucherQuery, setVoucherQuery] = useState("");
+  const [voucherStatus, setVoucherStatus] = useState("all");
+  const [voucherPlan, setVoucherPlan] = useState("all");
+  const [voucherPage, setVoucherPage] = useState(1);
+  const [voucherTotal, setVoucherTotal] = useState(0);
+  const [voucherTotalPages, setVoucherTotalPages] = useState(1);
+  const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
+
+  const [newPlanCode, setNewPlanCode] = useState("");
+  const [newPlanName, setNewPlanName] = useState("");
+  const [newPlanDuration, setNewPlanDuration] = useState("");
+  const [newPlanPrice, setNewPlanPrice] = useState("");
+  const [creatingPlan, setCreatingPlan] = useState(false);
+
+  const [planDrafts, setPlanDrafts] = useState<
+    Record<string, { name: string; code: string; duration: string; price: string; active: boolean }>
+  >({});
+  const [savingPlanIds, setSavingPlanIds] = useState<Record<string, boolean>>({});
+
+  const [newVoucherCode, setNewVoucherCode] = useState("");
+  const [newVoucherPackageId, setNewVoucherPackageId] = useState("");
+  const [creatingVoucher, setCreatingVoucher] = useState(false);
 
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [packageCode, setPackageCode] = useState("");
+  const [importPackageCode, setImportPackageCode] = useState("");
   const [importLoading, setImportLoading] = useState(false);
-  const [importResult, setImportResult] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-
-  const [packageEdits, setPackageEdits] = useState<Record<string, string>>({});
-  const [packageSaving, setPackageSaving] = useState<Record<string, boolean>>({});
-  const [saveAllLoading, setSaveAllLoading] = useState(false);
-  const [pricingSuccess, setPricingSuccess] = useState<string | null>(null);
-  const [packageError, setPackageError] = useState<string | null>(null);
-  const [packageQuery, setPackageQuery] = useState("");
-
-  const [deleteMode, setDeleteMode] = useState<"plan" | "codes" | "status">("plan");
-  const [deleteStatus, setDeleteStatus] = useState("UNUSED");
-  const [deletePackageId, setDeletePackageId] = useState("");
-  const [deleteCodes, setDeleteCodes] = useState("");
-  const [deleteFile, setDeleteFile] = useState<File | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteResult, setDeleteResult] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const [inventoryQuery, setInventoryQuery] = useState("");
+  const [importNotice, setImportNotice] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     setStatsError(null);
@@ -82,263 +119,304 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     try {
       const response = await fetch(`/api/t/${tenantSlug}/admin/stats`);
       const data = await readJsonResponse<{ error?: string; stats?: AdminStats }>(response);
-      if (!response.ok) {
-        throw new Error(data?.error || response.statusText || "Unable to load stats.");
-      }
-      if (!data?.stats) {
-        throw new Error("Unable to load stats.");
-      }
-      setStats(data.stats);
-      setLastRefreshedAt(new Date());
-    } catch (err) {
+      if (!response.ok) throw new Error(data?.error || "Unable to load stats.");
+      setStats(data?.stats ?? null);
+    } catch (error) {
       setStats(null);
-      setStatsError(err instanceof Error ? err.message : "Something went wrong.");
+      setStatsError(error instanceof Error ? error.message : "Unable to load stats.");
     } finally {
       setStatsLoading(false);
     }
   }, [tenantSlug]);
 
+  const loadPlans = useCallback(async () => {
+    setPlansError(null);
+    setPlansLoading(true);
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/plans`);
+      const data = await readJsonResponse<{ error?: string; plans?: PlanRow[] }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to load plans.");
+      setPlans(data?.plans ?? []);
+    } catch (error) {
+      setPlans([]);
+      setPlansError(error instanceof Error ? error.message : "Unable to load plans.");
+    } finally {
+      setPlansLoading(false);
+    }
+  }, [tenantSlug]);
+
+  const loadVouchers = useCallback(async () => {
+    setVouchersError(null);
+    setVouchersLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(voucherPage),
+        pageSize: String(PAGE_SIZE),
+      });
+      if (voucherQuery.trim()) params.set("q", voucherQuery.trim());
+      if (voucherStatus !== "all") params.set("status", voucherStatus);
+      if (voucherPlan !== "all") params.set("packageId", voucherPlan);
+
+      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers?${params.toString()}`);
+      const data = await readJsonResponse<{
+        error?: string;
+        vouchers?: VoucherRow[];
+        pagination?: { total: number; totalPages: number };
+      }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to load vouchers.");
+      setVouchers(data?.vouchers ?? []);
+      setVoucherTotal(data?.pagination?.total ?? 0);
+      setVoucherTotalPages(data?.pagination?.totalPages ?? 1);
+      setSelectedVoucherIds([]);
+    } catch (error) {
+      setVouchers([]);
+      setVouchersError(error instanceof Error ? error.message : "Unable to load vouchers.");
+    } finally {
+      setVouchersLoading(false);
+    }
+  }, [tenantSlug, voucherPage, voucherPlan, voucherQuery, voucherStatus]);
+
   useEffect(() => {
     void loadStats();
-  }, [loadStats]);
-
-  const packages = useMemo(() => stats?.packages ?? [], [stats]);
-  const hasImportedPlans = (stats?.voucherPool ?? []).some((pkg) => pkg.total > 0);
+    void loadPlans();
+  }, [loadPlans, loadStats]);
 
   useEffect(() => {
-    if (!deletePackageId && packages.length > 0) {
-      setDeletePackageId(packages[0].id);
+    void loadVouchers();
+  }, [loadVouchers]);
+
+  useEffect(() => {
+    setVoucherPage(1);
+  }, [voucherQuery, voucherStatus, voucherPlan]);
+
+  useEffect(() => {
+    const drafts: Record<string, { name: string; code: string; duration: string; price: string; active: boolean }> = {};
+    for (const plan of plans) {
+      drafts[plan.id] = {
+        name: plan.name,
+        code: plan.code,
+        duration: String(plan.durationMinutes),
+        price: String(plan.priceNgn),
+        active: plan.active === 1,
+      };
     }
-  }, [packages, deletePackageId]);
+    setPlanDrafts(drafts);
+    if (!newVoucherPackageId && plans.length > 0) setNewVoucherPackageId(plans[0].id);
+  }, [plans, newVoucherPackageId]);
 
-  const filteredPackages = useMemo(() => {
-    const normalized = packageQuery.trim().toLowerCase();
-    if (!normalized) return packages;
-    return packages.filter((pkg) => {
-      return pkg.name.toLowerCase().includes(normalized) || pkg.code.toLowerCase().includes(normalized);
-    });
-  }, [packages, packageQuery]);
+  const voucherTotals = useMemo(() => {
+    return (stats?.voucherPool ?? []).reduce(
+      (acc, item) => {
+        acc.total += item.total;
+        acc.unused += item.unused;
+        acc.assigned += item.assigned;
+        return acc;
+      },
+      { total: 0, unused: 0, assigned: 0 },
+    );
+  }, [stats]);
 
-  const dirtyPackageIds = useMemo(() => {
-    return packages
-      .filter((pkg) => {
-        const raw = packageEdits[pkg.id];
-        if (typeof raw !== "string") return false;
-        const parsed = Number.parseFloat(raw);
-        if (!Number.isFinite(parsed) || parsed < 0) return false;
-        return Math.round(parsed) !== pkg.priceNgn;
-      })
-      .map((pkg) => pkg.id);
-  }, [packages, packageEdits]);
+  async function refreshAll() {
+    await Promise.all([loadStats(), loadPlans(), loadVouchers()]);
+  }
 
-  const filteredInventory = useMemo(() => {
-    const pool = stats?.voucherPool ?? [];
-    const normalized = inventoryQuery.trim().toLowerCase();
-    if (!normalized) return pool;
-    return pool.filter((pkg) => {
-      return pkg.name.toLowerCase().includes(normalized) || pkg.code.toLowerCase().includes(normalized);
-    });
-  }, [stats, inventoryQuery]);
-
-  async function handleImport(event: React.FormEvent) {
+  async function createPlan(event: React.FormEvent) {
     event.preventDefault();
-    if (!csvFile) return;
+    const duration = Number.parseInt(newPlanDuration, 10);
+    const price = Number.parseFloat(newPlanPrice);
+    if (!newPlanCode.trim() || !newPlanName.trim() || !Number.isFinite(duration) || duration <= 0 || !Number.isFinite(price) || price < 0) {
+      setPlansError("Provide valid plan code, name, duration, and price.");
+      return;
+    }
+    setCreatingPlan(true);
+    setPlansError(null);
+    setPlanNotice(null);
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/plans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: newPlanCode.trim(),
+          name: newPlanName.trim(),
+          durationMinutes: duration,
+          priceNgn: Math.round(price),
+        }),
+      });
+      const data = await readJsonResponse<{ error?: string }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to create plan.");
+      setPlanNotice("Plan created.");
+      setNewPlanCode("");
+      setNewPlanName("");
+      setNewPlanDuration("");
+      setNewPlanPrice("");
+      await Promise.all([loadPlans(), loadStats()]);
+    } catch (error) {
+      setPlansError(error instanceof Error ? error.message : "Unable to create plan.");
+    } finally {
+      setCreatingPlan(false);
+    }
+  }
 
-    setImportError(null);
-    setImportResult(null);
+  async function savePlan(plan: PlanRow) {
+    const draft = planDrafts[plan.id];
+    if (!draft) return;
+    const duration = Number.parseInt(draft.duration, 10);
+    const price = Number.parseFloat(draft.price);
+    if (!draft.name.trim() || !draft.code.trim() || !Number.isFinite(duration) || duration <= 0 || !Number.isFinite(price) || price < 0) {
+      setPlansError(`Invalid values for ${plan.name}.`);
+      return;
+    }
+    setSavingPlanIds((prev) => ({ ...prev, [plan.id]: true }));
+    setPlansError(null);
+    setPlanNotice(null);
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/plans`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planId: plan.id,
+          name: draft.name.trim(),
+          code: draft.code.trim(),
+          durationMinutes: duration,
+          priceNgn: Math.round(price),
+          active: draft.active,
+        }),
+      });
+      const data = await readJsonResponse<{ error?: string }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to save plan.");
+      setPlanNotice(`Saved ${draft.name}.`);
+      await Promise.all([loadPlans(), loadStats(), loadVouchers()]);
+    } catch (error) {
+      setPlansError(error instanceof Error ? error.message : "Unable to save plan.");
+    } finally {
+      setSavingPlanIds((prev) => ({ ...prev, [plan.id]: false }));
+    }
+  }
+
+  async function createVoucher(event: React.FormEvent) {
+    event.preventDefault();
+    if (!newVoucherCode.trim() || !newVoucherPackageId) {
+      setVouchersError("Voucher code and plan are required.");
+      return;
+    }
+    setCreatingVoucher(true);
+    setVouchersError(null);
+    setVoucherNotice(null);
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voucherCode: newVoucherCode.trim(),
+          packageId: newVoucherPackageId,
+        }),
+      });
+      const data = await readJsonResponse<{ error?: string }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to create voucher.");
+      setVoucherNotice("Voucher created.");
+      setNewVoucherCode("");
+      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
+    } catch (error) {
+      setVouchersError(error instanceof Error ? error.message : "Unable to create voucher.");
+    } finally {
+      setCreatingVoucher(false);
+    }
+  }
+
+  async function reclaimSelected() {
+    if (selectedVoucherIds.length === 0) return;
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voucherIds: selectedVoucherIds, status: "UNUSED" }),
+      });
+      const data = await readJsonResponse<{ error?: string; updated?: number }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to reclaim vouchers.");
+      setVoucherNotice(`Reclaimed ${data?.updated ?? 0} voucher(s).`);
+      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
+    } catch (error) {
+      setVouchersError(error instanceof Error ? error.message : "Unable to reclaim vouchers.");
+    }
+  }
+
+  async function deleteSelected() {
+    if (selectedVoucherIds.length === 0) return;
+    const ok = window.confirm(`Delete ${selectedVoucherIds.length} selected voucher(s)?`);
+    if (!ok) return;
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voucherIds: selectedVoucherIds }),
+      });
+      const data = await readJsonResponse<{ error?: string; deleted?: number }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to delete vouchers.");
+      setVoucherNotice(`Deleted ${data?.deleted ?? 0} voucher(s).`);
+      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
+    } catch (error) {
+      setVouchersError(error instanceof Error ? error.message : "Unable to delete vouchers.");
+    }
+  }
+
+  async function importCsv(event: React.FormEvent) {
+    event.preventDefault();
+    if (!csvFile) {
+      setImportError("Choose a CSV file.");
+      return;
+    }
     setImportLoading(true);
+    setImportError(null);
+    setImportNotice(null);
     try {
       const form = new FormData();
       form.append("file", csvFile);
-      if (packageCode.trim()) {
-        form.append("packageCode", packageCode.trim());
-      }
-
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers/import`, {
-        method: "POST",
-        body: form,
-      });
-      const data = await readJsonResponse<
-        | {
-            error?: string;
-            imported?: number;
-            duplicates?: number;
-            skipped?: number;
-            expired?: number;
-            inUse?: number;
-            missingPlan?: number;
-            packagesCreated?: number;
-          }
-        | null
-      >(response);
-      if (!response.ok) {
-        throw new Error(data?.error || response.statusText || "Import failed.");
-      }
-      if (!data) {
-        throw new Error("Import failed.");
-      }
-      const parts = [
-        `Imported: ${data.imported ?? 0}`,
-        `Duplicates: ${data.duplicates ?? 0}`,
-        `Skipped: ${data.skipped ?? 0}`,
-      ];
-      if (typeof data.expired === "number") parts.push(`Expired: ${data.expired}`);
-      if (typeof data.inUse === "number") parts.push(`In use: ${data.inUse}`);
-      if (typeof data.missingPlan === "number") parts.push(`Missing plan: ${data.missingPlan}`);
-      if (typeof data.packagesCreated === "number") parts.push(`New plans: ${data.packagesCreated}`);
-
-      setImportResult(parts.join(" | "));
+      if (importPackageCode.trim()) form.append("packageCode", importPackageCode.trim());
+      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers/import`, { method: "POST", body: form });
+      const data = await readJsonResponse<{
+        error?: string;
+        imported?: number;
+        duplicates?: number;
+        skipped?: number;
+        expired?: number;
+        inUse?: number;
+        missingPlan?: number;
+        packagesCreated?: number;
+      }>(response);
+      if (!response.ok) throw new Error(data?.error || "Import failed.");
+      setImportNotice(
+        `Imported ${data?.imported ?? 0} | Duplicates ${data?.duplicates ?? 0} | Skipped ${data?.skipped ?? 0} | Plans created ${data?.packagesCreated ?? 0}`,
+      );
       setCsvFile(null);
-      setPackageCode("");
-      await loadStats();
-      setActiveView("pricing");
-    } catch (err) {
-      setImportError(err instanceof Error ? err.message : "Something went wrong.");
+      setImportPackageCode("");
+      await refreshAll();
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Import failed.");
     } finally {
       setImportLoading(false);
     }
   }
 
-  const canImport = !!csvFile && !importLoading;
-
-  function handlePackagePriceChange(packageId: string, value: string) {
-    setPackageEdits((prev) => ({ ...prev, [packageId]: value }));
-  }
-
-  async function handlePackageSave(packageId: string) {
-    const raw = packageEdits[packageId];
-    const parsed = Number.parseFloat(raw);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      setPackageError("Enter a valid price (0 or higher).");
-      return;
-    }
-    setPackageError(null);
-    setPricingSuccess(null);
-    setPackageSaving((prev) => ({ ...prev, [packageId]: true }));
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/packages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packageId, priceNgn: Math.round(parsed) }),
-      });
-      const data = await readJsonResponse<{ error?: string }>(response);
-      if (!response.ok) {
-        throw new Error(data?.error || response.statusText || "Failed to update price.");
-      }
-      await loadStats();
-      setPricingSuccess("Price updated.");
-    } catch (err) {
-      setPackageError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setPackageSaving((prev) => ({ ...prev, [packageId]: false }));
-    }
-  }
-
-  async function handleSaveAllPrices() {
-    if (dirtyPackageIds.length === 0 || saveAllLoading) return;
-
-    setPricingSuccess(null);
-    setPackageError(null);
-    setSaveAllLoading(true);
-
-    try {
-      for (const packageId of dirtyPackageIds) {
-        const raw = packageEdits[packageId];
-        const parsed = Number.parseFloat(raw);
-        if (!Number.isFinite(parsed) || parsed < 0) {
-          throw new Error("One or more prices are invalid.");
-        }
-        const response = await fetch(`/api/t/${tenantSlug}/admin/packages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ packageId, priceNgn: Math.round(parsed) }),
-        });
-        const data = await readJsonResponse<{ error?: string }>(response);
-        if (!response.ok) {
-          throw new Error(data?.error || response.statusText || "Failed to update prices.");
-        }
-      }
-
-      await loadStats();
-      setPackageEdits({});
-      setPricingSuccess(`Saved ${dirtyPackageIds.length} price update${dirtyPackageIds.length > 1 ? "s" : ""}.`);
-    } catch (err) {
-      setPackageError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setSaveAllLoading(false);
-    }
-  }
-
-  async function handleDelete(event: React.FormEvent) {
-    event.preventDefault();
-    setDeleteError(null);
-    setDeleteResult(null);
-
-    if (deleteMode === "plan" && !deletePackageId) {
-      setDeleteError("Select a plan to delete.");
-      return;
-    }
-
-    if (deleteMode === "codes" && !deleteCodes.trim() && !deleteFile) {
-      setDeleteError("Provide voucher codes or upload a CSV.");
-      return;
-    }
-
-    setDeleteLoading(true);
-    try {
-      const form = new FormData();
-      form.append("mode", deleteMode);
-      form.append("status", deleteStatus);
-      if (deletePackageId) form.append("packageId", deletePackageId);
-      if (deleteCodes.trim()) form.append("codes", deleteCodes.trim());
-      if (deleteFile) form.append("file", deleteFile);
-
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers/delete`, {
-        method: "POST",
-        body: form,
-      });
-      const data = await readJsonResponse<{ error?: string; deleted?: number }>(response);
-      if (!response.ok) {
-        throw new Error(data?.error || response.statusText || "Delete failed.");
-      }
-      setDeleteResult(`Deleted: ${data?.deleted ?? 0}`);
-      setDeleteCodes("");
-      setDeleteFile(null);
-      await loadStats();
-      setActiveView("inventory");
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setDeleteLoading(false);
-    }
-  }
-
-  const transactionStats = stats?.transactions;
-
   return (
     <div className="grid gap-5">
-      <section className="panel-surface">
+      <section id="ops-plans" className="panel-surface">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
           <div>
-            <p className="section-kicker">Operations command</p>
-            <h2 className="section-title mt-1">Manage stock, pricing, and cleanup</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "Syncing data..."}
-            </p>
+            <p className="section-kicker">Executive View</p>
+            <h2 className="section-title mt-1">Org-tier voucher operations dashboard</h2>
+            <p className="mt-2 text-sm text-slate-600">Manage plans, inventory, and code-level operations from one command center.</p>
           </div>
-          <Button variant="outline" onClick={loadStats} disabled={statsLoading} className="h-10" type="button">
-            {statsLoading ? "Refreshing..." : "Refresh data"}
+          <Button type="button" variant="outline" onClick={refreshAll} disabled={statsLoading || plansLoading || vouchersLoading}>
+            Refresh all
           </Button>
         </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <ViewButton label="Overview" view="overview" activeView={activeView} onChange={setActiveView} />
-          <ViewButton label="Import" view="import" activeView={activeView} onChange={setActiveView} />
-          <ViewButton label="Pricing" view="pricing" activeView={activeView} onChange={setActiveView} />
-          <ViewButton label="Cleanup" view="cleanup" activeView={activeView} onChange={setActiveView} />
-          <ViewButton label="Inventory" view="inventory" activeView={activeView} onChange={setActiveView} />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <StatTile label="Revenue" value={money(stats?.transactions.revenueNgn ?? 0)} />
+          <StatTile label="Successful payments" value={String(stats?.transactions.success ?? 0)} />
+          <StatTile label="Total vouchers" value={String(voucherTotals.total)} />
+          <StatTile label="Unused vouchers" value={String(voucherTotals.unused)} />
+          <StatTile label="Assigned vouchers" value={String(voucherTotals.assigned)} />
         </div>
-
         {statsError ? (
           <Alert variant="destructive" className="mt-4">
             <AlertTitle>Stats failed</AlertTitle>
@@ -347,278 +425,245 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         ) : null}
       </section>
 
-      {activeView === "overview" ? (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatTile label="Revenue" value={`NGN ${(transactionStats?.revenueNgn ?? 0).toLocaleString()}`} />
-            <StatTile label="Successful payments" value={String(transactionStats?.success ?? 0)} />
-            <StatTile label="Pending / Processing" value={`${transactionStats?.pending ?? 0} / ${transactionStats?.processing ?? 0}`} />
-            <StatTile label="Failed" value={String(transactionStats?.failed ?? 0)} />
-          </div>
-
-          <section className="panel-surface text-sm text-slate-700">
-            <p className="section-kicker">Readiness checklist</p>
-            <h3 className="section-title mt-1">Before publishing changes</h3>
-            <p className="mt-3">1. Import CSV with correct package mapping.</p>
-            <p>2. Validate plan pricing and active counts.</p>
-            <p>3. Run cleanup only after reconciliation.</p>
-          </section>
-        </>
-      ) : null}
-
-      {activeView === "import" ? (
-        <section id="ops-import" className="panel-surface">
-          <p className="section-kicker">Voucher ingestion</p>
-          <h3 className="section-title mt-1">Upload voucher codes (CSV)</h3>
-
-          <div className="mt-4 grid gap-4">
-            {!hasImportedPlans ? (
-              <Alert>
-                <AlertTitle>Plan management is locked</AlertTitle>
-                <AlertDescription>Import voucher plans to unlock pricing and inventory controls.</AlertDescription>
-              </Alert>
-            ) : null}
-
-            <form className="grid gap-4" onSubmit={handleImport}>
-              <div className="grid gap-2">
-                <Label htmlFor="csv">CSV file</Label>
-                <Input id="csv" type="file" accept=".csv,text/csv" onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)} />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="packageCode">Plan code (optional)</Label>
-                <Input id="packageCode" className="h-11" placeholder="3h" value={packageCode} onChange={(event) => setPackageCode(event.target.value)} />
-                <p className="text-xs text-muted-foreground">Leave blank to use duration data from your CSV.</p>
-              </div>
-
-              <Button type="submit" disabled={!canImport} className="h-11">
-                {importLoading ? "Importing..." : "Import vouchers"}
-              </Button>
-            </form>
-
-            {importError ? (
-              <Alert variant="destructive">
-                <AlertTitle>Import failed</AlertTitle>
-                <AlertDescription>{importError}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {importResult ? (
-              <Alert>
-                <AlertTitle>Import complete</AlertTitle>
-                <AlertDescription>{importResult}</AlertDescription>
-              </Alert>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-
-      {activeView === "pricing" ? (
-        <section id="ops-pricing" className="panel-surface">
-          <p className="section-kicker">Pricing controls</p>
-          <h3 className="section-title mt-1">Edit plan prices</h3>
-
-          <div className="mt-4 grid gap-4">
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-              <Input placeholder="Search plan by name or code" value={packageQuery} onChange={(event) => setPackageQuery(event.target.value)} />
-              <Button
-                type="button"
-                className="h-10"
-                onClick={handleSaveAllPrices}
-                disabled={dirtyPackageIds.length === 0 || saveAllLoading}
-              >
-                {saveAllLoading ? "Saving..." : `Save all (${dirtyPackageIds.length})`}
-              </Button>
+      <section id="ops-vouchers" className="panel-surface">
+        <div className="grid gap-3 lg:grid-cols-[1fr_380px]">
+          <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white">
+            <div className="border-b border-slate-200 bg-slate-50/95 px-4 py-3">
+              <p className="section-kicker">Plan Management</p>
+              <h3 className="section-title mt-1">Plan table</h3>
             </div>
-
-            {packageError ? (
-              <Alert variant="destructive">
-                <AlertTitle>Update failed</AlertTitle>
-                <AlertDescription>{packageError}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {pricingSuccess ? (
-              <Alert>
-                <AlertTitle>Pricing updated</AlertTitle>
-                <AlertDescription>{pricingSuccess}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {filteredPackages.length === 0 ? (
-              <p className="text-sm text-slate-600">No plans match your filter.</p>
-            ) : (
-              <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white">
-                <div className="sticky top-0 z-10 hidden border-b border-slate-200 bg-slate-50/95 px-4 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 md:grid md:grid-cols-[minmax(0,1fr)_180px_100px]">
-                  <span>Plan</span>
-                  <span>Price (NGN)</span>
-                  <span>Action</span>
-                </div>
-                <div className="max-h-[520px] overflow-y-auto">
-                {filteredPackages.map((pkg) => {
-                  const value = packageEdits[pkg.id] ?? (Number.isFinite(pkg.priceNgn) ? String(pkg.priceNgn) : "0");
-                  const parsed = Number.parseFloat(value);
-                  const isDirty = Number.isFinite(parsed) && Math.round(parsed) !== pkg.priceNgn;
-                  return (
-                    <div key={pkg.id} className="border-b border-slate-100 p-4 text-sm last:border-b-0">
-                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_100px] md:items-center">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-900">{pkg.name}</p>
-                          <p className="text-xs text-slate-500">{pkg.code} | {pkg.durationMinutes} mins | {pkg.active} active vouchers</p>
-                        </div>
-                        <div className="grid gap-1">
-                          <Label htmlFor={`price-${pkg.id}`} className="text-xs md:sr-only">Price (NGN)</Label>
-                          <Input
-                            id={`price-${pkg.id}`}
-                            className="h-10"
-                            inputMode="numeric"
-                            value={value}
-                            onChange={(event) => handlePackagePriceChange(pkg.id, event.target.value)}
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {isDirty ? <span className="text-xs font-semibold text-amber-700">Unsaved</span> : null}
-                          <Button className="h-10" type="button" disabled={packageSaving[pkg.id]} onClick={() => handlePackageSave(pkg.id)}>
-                            {packageSaving[pkg.id] ? "Saving..." : "Save"}
-                          </Button>
-                        </div>
+            <div className="max-h-[520px] overflow-y-auto">
+              {plans.map((plan) => {
+                const draft = planDrafts[plan.id];
+                if (!draft) return null;
+                return (
+                  <div key={plan.id} className="border-b border-slate-100 p-4 text-sm last:border-b-0">
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_90px_100px_110px_90px_120px] md:items-center">
+                      <div className="grid gap-1">
+                        <Input value={draft.name} onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], name: event.target.value } }))} />
+                        <Input value={draft.code} onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], code: event.target.value } }))} />
                       </div>
+                      <Input value={draft.duration} inputMode="numeric" onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], duration: event.target.value } }))} />
+                      <Input value={draft.price} inputMode="numeric" onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], price: event.target.value } }))} />
+                      <div className="text-xs text-slate-600">
+                        <p>U {plan.unusedCount}</p>
+                        <p>A {plan.assignedCount}</p>
+                      </div>
+                      <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+                        <input type="checkbox" checked={draft.active} onChange={(event) => setPlanDrafts((prev) => ({ ...prev, [plan.id]: { ...prev[plan.id], active: event.target.checked } }))} />
+                        Active
+                      </label>
+                      <Button type="button" onClick={() => savePlan(plan)} disabled={savingPlanIds[plan.id]}>
+                        {savingPlanIds[plan.id] ? "Saving..." : "Save"}
+                      </Button>
                     </div>
-                  );
-                })}
-                </div>
-              </div>
-            )}
+                  </div>
+                );
+              })}
+              {plans.length === 0 && !plansLoading ? <p className="p-4 text-sm text-slate-600">No plans available.</p> : null}
+            </div>
           </div>
-        </section>
-      ) : null}
 
-      {activeView === "cleanup" ? (
-        <section className="panel-surface border-rose-200/85">
-          <p className="section-kicker text-rose-600">Danger zone</p>
-          <h3 className="section-title mt-1">Delete vouchers</h3>
-
-          <form className="mt-4 grid gap-4" onSubmit={handleDelete}>
+          <form id="ops-plan-create" className="grid gap-3 rounded-xl border border-slate-200/80 bg-white p-4" onSubmit={createPlan}>
+            <p className="section-kicker">Create Plan</p>
+            <h3 className="section-title mt-1">Add new plan</h3>
             <div className="grid gap-2">
-              <Label htmlFor="delete-mode">Delete mode</Label>
-              <select id="delete-mode" className="h-11 w-full" value={deleteMode} onChange={(event) => setDeleteMode(event.target.value as "plan" | "codes" | "status")}> 
-                <option value="plan">Delete by plan</option>
-                <option value="codes">Delete by codes (paste or CSV)</option>
-                <option value="status">Delete by status</option>
-              </select>
+              <Label htmlFor="new-plan-code">Code</Label>
+              <Input id="new-plan-code" value={newPlanCode} onChange={(event) => setNewPlanCode(event.target.value)} placeholder="2gb-3h" />
             </div>
-
             <div className="grid gap-2">
-              <Label htmlFor="delete-status">Status filter</Label>
-              <select id="delete-status" className="h-11 w-full" value={deleteStatus} onChange={(event) => setDeleteStatus(event.target.value)}>
-                <option value="UNUSED">Unused only</option>
-                <option value="ASSIGNED">Assigned only</option>
-                <option value="ALL">All statuses</option>
-              </select>
+              <Label htmlFor="new-plan-name">Name</Label>
+              <Input id="new-plan-name" value={newPlanName} onChange={(event) => setNewPlanName(event.target.value)} placeholder="2 GB / 3 hours" />
             </div>
-
-            {deleteMode === "plan" ? (
+            <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label htmlFor="delete-plan">Plan</Label>
-                <select id="delete-plan" className="h-11 w-full" value={deletePackageId} onChange={(event) => setDeletePackageId(event.target.value)}>
-                  {packages.map((pkg) => (
-                    <option key={pkg.id} value={pkg.id}>{pkg.name} ({pkg.code})</option>
-                  ))}
-                </select>
+                <Label htmlFor="new-plan-duration">Minutes</Label>
+                <Input id="new-plan-duration" value={newPlanDuration} inputMode="numeric" onChange={(event) => setNewPlanDuration(event.target.value)} />
               </div>
-            ) : null}
-
-            {deleteMode === "codes" ? (
-              <>
-                <div className="grid gap-2">
-                  <Label htmlFor="delete-codes">Voucher codes</Label>
-                  <textarea id="delete-codes" className="min-h-[110px]" placeholder="Paste codes separated by commas or new lines" value={deleteCodes} onChange={(event) => setDeleteCodes(event.target.value)} />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="delete-csv">CSV file (optional)</Label>
-                  <Input id="delete-csv" type="file" accept=".csv,text/csv" onChange={(event) => setDeleteFile(event.target.files?.[0] ?? null)} />
-                </div>
-              </>
-            ) : null}
-
-            <Button type="submit" disabled={deleteLoading} className="h-11" variant="destructive">
-              {deleteLoading ? "Deleting..." : "Delete vouchers"}
+              <div className="grid gap-2">
+                <Label htmlFor="new-plan-price">Price (NGN)</Label>
+                <Input id="new-plan-price" value={newPlanPrice} inputMode="numeric" onChange={(event) => setNewPlanPrice(event.target.value)} />
+              </div>
+            </div>
+            <Button type="submit" disabled={creatingPlan}>
+              {creatingPlan ? "Creating..." : "Create plan"}
             </Button>
           </form>
+        </div>
 
-          <div className="mt-4 grid gap-3">
-            {deleteError ? (
-              <Alert variant="destructive">
-                <AlertTitle>Delete failed</AlertTitle>
-                <AlertDescription>{deleteError}</AlertDescription>
-              </Alert>
-            ) : null}
+        {plansError ? (
+          <Alert variant="destructive" className="mt-4">
+            <AlertTitle>Plan action failed</AlertTitle>
+            <AlertDescription>{plansError}</AlertDescription>
+          </Alert>
+        ) : null}
+        {planNotice ? (
+          <Alert className="mt-4">
+            <AlertTitle>Plan update</AlertTitle>
+            <AlertDescription>{planNotice}</AlertDescription>
+          </Alert>
+        ) : null}
+      </section>
 
-            {deleteResult ? (
-              <Alert>
-                <AlertTitle>Delete complete</AlertTitle>
-                <AlertDescription>{deleteResult}</AlertDescription>
-              </Alert>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
+      <section className="panel-surface">
+        <div className="grid gap-3 lg:grid-cols-[1fr_360px]">
+          <div className="grid gap-3">
+            <div className="grid gap-3 sm:grid-cols-[1fr_170px_170px_auto]">
+              <Input placeholder="Search voucher, plan, or email" value={voucherQuery} onChange={(event) => setVoucherQuery(event.target.value)} />
+              <select value={voucherStatus} onChange={(event) => setVoucherStatus(event.target.value)}>
+                <option value="all">All statuses</option>
+                <option value="UNUSED">Unused</option>
+                <option value="ASSIGNED">Assigned</option>
+              </select>
+              <select value={voucherPlan} onChange={(event) => setVoucherPlan(event.target.value)}>
+                <option value="all">All plans</option>
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </option>
+                ))}
+              </select>
+              <Button type="button" variant="outline" onClick={loadVouchers} disabled={vouchersLoading}>
+                {vouchersLoading ? "Loading..." : "Refresh"}
+              </Button>
+            </div>
 
-      {activeView === "inventory" ? (
-        <section id="ops-inventory" className="panel-surface">
-          <p className="section-kicker">Inventory analytics</p>
-          <h3 className="section-title mt-1">Voucher pool</h3>
-
-          <div className="mt-4 grid gap-4">
-            <Input placeholder="Search package by name or code" value={inventoryQuery} onChange={(event) => setInventoryQuery(event.target.value)} />
-
-            {filteredInventory.length === 0 ? (
-              <p className="text-sm text-slate-600">No packages found.</p>
-            ) : (
-              <div className="grid gap-3">
-                {filteredInventory.map((pkg) => (
-                  <div key={pkg.code} className="rounded-xl border border-slate-200/80 bg-white p-4 text-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-900">{pkg.name}</p>
-                        <p className="text-xs text-slate-500">{pkg.code}</p>
+            <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white">
+              <div className="border-b border-slate-200 bg-slate-50/95 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="section-kicker">Voucher Inventory</p>
+                    <h3 className="section-title mt-1">Code management table</h3>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Showing {vouchers.length} / {voucherTotal}
+                  </p>
+                </div>
+              </div>
+              <div className="max-h-[560px] overflow-y-auto">
+                {vouchers.map((row) => (
+                  <div key={row.id} className="border-b border-slate-100 p-4 text-sm last:border-b-0">
+                    <div className="grid gap-2 md:grid-cols-[32px_minmax(0,1fr)_180px_90px_160px] md:items-start">
+                      <input
+                        type="checkbox"
+                        checked={selectedVoucherIds.includes(row.id)}
+                        onChange={(event) =>
+                          setSelectedVoucherIds((prev) =>
+                            event.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
+                          )
+                        }
+                      />
+                      <div>
+                        <p className="font-semibold text-slate-900">{row.voucherCode}</p>
+                        <p className="text-xs text-slate-600">{row.packageName}</p>
+                        <p className="text-xs text-slate-500">{row.packageCode}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-slate-900">{pkg.percentageRemaining}%</p>
-                        <p className="text-xs text-slate-500">remaining</p>
+                      <div className="text-xs text-slate-600">
+                        <p>{row.assignedToEmail || "-"}</p>
+                        <p>{row.assignedToPhone || "-"}</p>
                       </div>
-                    </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-600">
-                      <div className="rounded-lg border border-slate-200/80 bg-slate-50 p-2"><p className="font-semibold text-slate-900">{pkg.total}</p><p>Total</p></div>
-                      <div className="rounded-lg border border-slate-200/80 bg-slate-50 p-2"><p className="font-semibold text-slate-900">{pkg.unused}</p><p>Unused</p></div>
-                      <div className="rounded-lg border border-slate-200/80 bg-slate-50 p-2"><p className="font-semibold text-slate-900">{pkg.assigned}</p><p>Assigned</p></div>
+                      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${row.status === "UNUSED" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                        {row.status}
+                      </span>
+                      <div className="text-xs text-slate-500">
+                        <p>C: {dt(row.createdAt)}</p>
+                        <p>A: {dt(row.assignedAt)}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
+                {vouchers.length === 0 && !vouchersLoading ? <p className="p-4 text-sm text-slate-600">No vouchers found.</p> : null}
               </div>
-            )}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3">
+                <p className="text-xs text-slate-600">Selected {selectedVoucherIds.length}</p>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={reclaimSelected} disabled={selectedVoucherIds.length === 0}>
+                    Reclaim
+                  </Button>
+                  <Button type="button" variant="destructive" onClick={deleteSelected} disabled={selectedVoucherIds.length === 0}>
+                    Delete
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setVoucherPage((prev) => Math.max(1, prev - 1))} disabled={voucherPage <= 1}>
+                    Prev
+                  </Button>
+                  <span className="text-xs text-slate-600">
+                    {voucherPage} / {voucherTotalPages}
+                  </span>
+                  <Button type="button" variant="outline" onClick={() => setVoucherPage((prev) => Math.min(voucherTotalPages, prev + 1))} disabled={voucherPage >= voucherTotalPages}>
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
-        </section>
-      ) : null}
-    </div>
-  );
-}
 
-function ViewButton({
-  label,
-  view,
-  activeView,
-  onChange,
-}: {
-  label: string;
-  view: AdminView;
-  activeView: AdminView;
-  onChange: (view: AdminView) => void;
-}) {
-  return (
-    <Button type="button" variant={activeView === view ? "default" : "outline"} size="sm" onClick={() => onChange(view)}>
-      {label}
-    </Button>
+          <div className="grid gap-4">
+            <form id="ops-voucher-create" className="grid gap-3 rounded-xl border border-slate-200/80 bg-white p-4" onSubmit={createVoucher}>
+              <p className="section-kicker">Quick Add</p>
+              <h3 className="section-title mt-1">Create voucher code</h3>
+              <div className="grid gap-2">
+                <Label htmlFor="new-voucher-code">Voucher code</Label>
+                <Input id="new-voucher-code" value={newVoucherCode} onChange={(event) => setNewVoucherCode(event.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="new-voucher-plan">Plan</Label>
+                <select id="new-voucher-plan" value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
+                  {plans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button type="submit" disabled={creatingVoucher}>
+                {creatingVoucher ? "Adding..." : "Add voucher"}
+              </Button>
+            </form>
+
+            <form id="ops-import" className="grid gap-3 rounded-xl border border-slate-200/80 bg-white p-4" onSubmit={importCsv}>
+              <p className="section-kicker">Bulk Import</p>
+              <h3 className="section-title mt-1">Upload CSV vouchers</h3>
+              <div className="grid gap-2">
+                <Label htmlFor="import-csv">CSV file</Label>
+                <Input id="import-csv" type="file" accept=".csv,text/csv" onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="import-plan">Force plan code (optional)</Label>
+                <Input id="import-plan" value={importPackageCode} onChange={(event) => setImportPackageCode(event.target.value)} />
+              </div>
+              <Button type="submit" disabled={importLoading}>
+                {importLoading ? "Importing..." : "Import vouchers"}
+              </Button>
+            </form>
+          </div>
+        </div>
+
+        {vouchersError ? (
+          <Alert variant="destructive" className="mt-4">
+            <AlertTitle>Voucher action failed</AlertTitle>
+            <AlertDescription>{vouchersError}</AlertDescription>
+          </Alert>
+        ) : null}
+        {voucherNotice ? (
+          <Alert className="mt-4">
+            <AlertTitle>Voucher update</AlertTitle>
+            <AlertDescription>{voucherNotice}</AlertDescription>
+          </Alert>
+        ) : null}
+        {importError ? (
+          <Alert variant="destructive" className="mt-4">
+            <AlertTitle>Import failed</AlertTitle>
+            <AlertDescription>{importError}</AlertDescription>
+          </Alert>
+        ) : null}
+        {importNotice ? (
+          <Alert className="mt-4">
+            <AlertTitle>Import complete</AlertTitle>
+            <AlertDescription>{importNotice}</AlertDescription>
+          </Alert>
+        ) : null}
+      </section>
+    </div>
   );
 }
 

@@ -1,0 +1,247 @@
+import { randomUUID } from "node:crypto";
+import { getSessionUserFromRequest } from "@/lib/auth";
+import { getDb } from "@/lib/db";
+import { getTenantBySlug } from "@/lib/store";
+
+type Props = {
+  params: Promise<{ slug: string }>;
+};
+
+function normalizeTenantAccess(request: Request, tenantId: string) {
+  const user = getSessionUserFromRequest(request);
+  if (!user) return { ok: false as const, status: 401, error: "Unauthorized" };
+  if (user.role === "tenant" && user.tenantId !== tenantId) {
+    return { ok: false as const, status: 403, error: "Forbidden" };
+  }
+  return { ok: true as const };
+}
+
+function parsePositiveInt(value: string | null, fallback: number) {
+  const num = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(num) && num > 0 ? num : fallback;
+}
+
+function buildInClause(count: number) {
+  return Array.from({ length: count }, () => "?").join(", ");
+}
+
+export async function GET(request: Request, { params }: Props) {
+  const { slug } = await params;
+  const tenant = getTenantBySlug(slug);
+  if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
+
+  const access = normalizeTenantAccess(request, tenant.id);
+  if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
+
+  const url = new URL(request.url);
+  const q = url.searchParams.get("q")?.trim() ?? "";
+  const status = (url.searchParams.get("status") ?? "all").toUpperCase();
+  const packageId = url.searchParams.get("packageId")?.trim() ?? "";
+  const page = parsePositiveInt(url.searchParams.get("page"), 1);
+  const pageSize = Math.min(parsePositiveInt(url.searchParams.get("pageSize"), 20), 100);
+  const offset = (page - 1) * pageSize;
+
+  const where: string[] = ["v.tenant_id = ?"];
+  const args: Array<string | number> = [tenant.id];
+
+  if (status === "UNUSED" || status === "ASSIGNED") {
+    where.push("v.status = ?");
+    args.push(status);
+  }
+  if (packageId) {
+    where.push("v.package_id = ?");
+    args.push(packageId);
+  }
+  if (q) {
+    where.push("(v.voucher_code LIKE ? OR p.code LIKE ? OR p.name LIKE ? OR IFNULL(v.assigned_to_email, '') LIKE ?)");
+    const token = `%${q}%`;
+    args.push(token, token, token, token);
+  }
+
+  const whereSql = where.join(" AND ");
+  const db = getDb();
+
+  const totals = db
+    .prepare(
+      `
+      SELECT COUNT(1) as total
+      FROM voucher_pool v
+      JOIN voucher_packages p ON p.id = v.package_id
+      WHERE ${whereSql}
+    `,
+    )
+    .get(...args) as { total: number };
+
+  const vouchers = db
+    .prepare(
+      `
+      SELECT
+        v.id,
+        v.voucher_code as voucherCode,
+        v.status,
+        v.duration_minutes as durationMinutes,
+        v.package_id as packageId,
+        v.created_at as createdAt,
+        v.assigned_at as assignedAt,
+        v.assigned_to_email as assignedToEmail,
+        v.assigned_to_phone as assignedToPhone,
+        v.assigned_to_transaction as assignedToTransaction,
+        p.code as packageCode,
+        p.name as packageName
+      FROM voucher_pool v
+      JOIN voucher_packages p ON p.id = v.package_id
+      WHERE ${whereSql}
+      ORDER BY v.created_at DESC
+      LIMIT ? OFFSET ?
+    `,
+    )
+    .all(...args, pageSize, offset);
+
+  return Response.json({
+    vouchers,
+    pagination: {
+      page,
+      pageSize,
+      total: totals.total ?? 0,
+      totalPages: Math.max(1, Math.ceil((totals.total ?? 0) / pageSize)),
+    },
+  });
+}
+
+export async function POST(request: Request, { params }: Props) {
+  const { slug } = await params;
+  const tenant = getTenantBySlug(slug);
+  if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
+
+  const access = normalizeTenantAccess(request, tenant.id);
+  if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
+
+  const body = (await request.json()) as {
+    voucherCode?: string;
+    packageId?: string;
+  };
+
+  const voucherCode = body.voucherCode?.trim();
+  const packageId = body.packageId?.trim();
+  if (!voucherCode) return Response.json({ error: "voucherCode is required" }, { status: 400 });
+  if (!packageId) return Response.json({ error: "packageId is required" }, { status: 400 });
+
+  const db = getDb();
+  const pkg = db
+    .prepare(
+      "SELECT id, duration_minutes FROM voucher_packages WHERE tenant_id = ? AND id = ?",
+    )
+    .get(tenant.id, packageId) as { id: string; duration_minutes: number } | undefined;
+  if (!pkg) return Response.json({ error: "Invalid packageId" }, { status: 400 });
+
+  try {
+    db.prepare(
+      `
+      INSERT INTO voucher_pool (
+        id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
+      ) VALUES (?, ?, ?, ?, 'UNUSED', ?, ?)
+    `,
+    ).run(
+      randomUUID(),
+      tenant.id,
+      voucherCode,
+      pkg.duration_minutes,
+      packageId,
+      new Date().toISOString(),
+    );
+  } catch {
+    return Response.json({ error: "Voucher code already exists" }, { status: 409 });
+  }
+
+  return Response.json({ ok: true });
+}
+
+export async function PATCH(request: Request, { params }: Props) {
+  const { slug } = await params;
+  const tenant = getTenantBySlug(slug);
+  if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
+
+  const access = normalizeTenantAccess(request, tenant.id);
+  if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
+
+  const body = (await request.json()) as {
+    voucherIds?: string[];
+    status?: string;
+  };
+
+  const voucherIds = (body.voucherIds ?? []).map((id) => id.trim()).filter(Boolean);
+  if (voucherIds.length === 0) {
+    return Response.json({ error: "voucherIds is required" }, { status: 400 });
+  }
+  if ((body.status ?? "").toUpperCase() !== "UNUSED") {
+    return Response.json({ error: "Only status UNUSED is supported" }, { status: 400 });
+  }
+
+  const db = getDb();
+  const chunkSize = 200;
+  let updated = 0;
+
+  const run = db.transaction(() => {
+    for (let i = 0; i < voucherIds.length; i += chunkSize) {
+      const chunk = voucherIds.slice(i, i + chunkSize);
+      const placeholders = buildInClause(chunk.length);
+      const result = db
+        .prepare(
+          `
+          UPDATE voucher_pool
+          SET status = 'UNUSED',
+              assigned_to_transaction = NULL,
+              assigned_to_email = NULL,
+              assigned_to_phone = NULL,
+              assigned_at = NULL
+          WHERE tenant_id = ?
+            AND id IN (${placeholders})
+        `,
+        )
+        .run(tenant.id, ...chunk);
+      updated += result.changes;
+    }
+  });
+  run();
+
+  return Response.json({ updated });
+}
+
+export async function DELETE(request: Request, { params }: Props) {
+  const { slug } = await params;
+  const tenant = getTenantBySlug(slug);
+  if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
+
+  const access = normalizeTenantAccess(request, tenant.id);
+  if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
+
+  const body = (await request.json()) as { voucherIds?: string[] };
+  const voucherIds = (body.voucherIds ?? []).map((id) => id.trim()).filter(Boolean);
+  if (voucherIds.length === 0) {
+    return Response.json({ error: "voucherIds is required" }, { status: 400 });
+  }
+
+  const db = getDb();
+  const chunkSize = 200;
+  let deleted = 0;
+
+  const run = db.transaction(() => {
+    for (let i = 0; i < voucherIds.length; i += chunkSize) {
+      const chunk = voucherIds.slice(i, i + chunkSize);
+      const placeholders = buildInClause(chunk.length);
+      const result = db
+        .prepare(
+          `
+          DELETE FROM voucher_pool
+          WHERE tenant_id = ?
+            AND id IN (${placeholders})
+        `,
+        )
+        .run(tenant.id, ...chunk);
+      deleted += result.changes;
+    }
+  });
+  run();
+
+  return Response.json({ deleted });
+}

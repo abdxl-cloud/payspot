@@ -67,9 +67,9 @@ export default async function TenantAdminPage({ params }: Props) {
             <div className="dashboard-lane">
               <h3 className="dashboard-lane-title">Navigation</h3>
               <div className="dashboard-quick-links">
-                <a className="dashboard-quick-link" href="#ops-import">Import vouchers</a>
-                <a className="dashboard-quick-link" href="#ops-pricing">Manage pricing</a>
-                <a className="dashboard-quick-link" href="#ops-inventory">Inventory analytics</a>
+                <a className="dashboard-quick-link" href="#ops-plans">Plan management</a>
+                <a className="dashboard-quick-link" href="#ops-vouchers">Voucher management</a>
+                <a className="dashboard-quick-link" href="#ops-import">Bulk import</a>
               </div>
             </div>
             <div className="dashboard-lane">
