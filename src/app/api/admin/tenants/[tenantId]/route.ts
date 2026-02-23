@@ -25,7 +25,7 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(request: Request, { params }: Props) {
-  const user = getSessionUserFromRequest(request);
+  const user = await getSessionUserFromRequest(request);
   if (!user || user.role !== "admin") {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -40,7 +40,7 @@ export async function PATCH(request: Request, { params }: Props) {
     );
   }
 
-  const result = updateTenant({
+  const result = await updateTenant({
     tenantId,
     slug: parsed.data.slug,
     name: parsed.data.name,
@@ -62,7 +62,7 @@ export async function PATCH(request: Request, { params }: Props) {
 
   if (parsed.data.paystackSecretKey) {
     try {
-      const secretResult = setTenantPaystackSecret({
+      const secretResult = await setTenantPaystackSecret({
         tenantId,
         paystackSecretKey: parsed.data.paystackSecretKey,
       });
@@ -78,7 +78,7 @@ export async function PATCH(request: Request, { params }: Props) {
     }
   }
 
-  const latestTenant = getTenantById(tenantId);
+  const latestTenant = await getTenantById(tenantId);
   if (!latestTenant) {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
@@ -97,13 +97,13 @@ export async function PATCH(request: Request, { params }: Props) {
 }
 
 export async function DELETE(request: Request, { params }: Props) {
-  const user = getSessionUserFromRequest(request);
+  const user = await getSessionUserFromRequest(request);
   if (!user || user.role !== "admin") {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { tenantId } = await params;
-  const result = deleteTenant(tenantId);
+  const result = await deleteTenant(tenantId);
   if (result.status === "missing") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }

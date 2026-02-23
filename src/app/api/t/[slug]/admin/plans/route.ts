@@ -7,8 +7,8 @@ type Props = {
   params: Promise<{ slug: string }>;
 };
 
-function normalizeTenantAccess(request: Request, tenantId: string) {
-  const user = getSessionUserFromRequest(request);
+async function normalizeTenantAccess(request: Request, tenantId: string) {
+  const user = await getSessionUserFromRequest(request);
   if (!user) return { ok: false as const, status: 401, error: "Unauthorized" };
   if (user.role === "tenant" && user.tenantId !== tenantId) {
     return { ok: false as const, status: 403, error: "Forbidden" };
@@ -18,14 +18,14 @@ function normalizeTenantAccess(request: Request, tenantId: string) {
 
 export async function GET(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
 
-  const access = normalizeTenantAccess(request, tenant.id);
+  const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
 
   const db = getDb();
-  const plans = db
+  const plans = await db
     .prepare(
       `
       SELECT
@@ -56,10 +56,10 @@ export async function GET(request: Request, { params }: Props) {
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
 
-  const access = normalizeTenantAccess(request, tenant.id);
+  const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
 
   const body = (await request.json()) as {
@@ -93,7 +93,7 @@ export async function POST(request: Request, { params }: Props) {
   const db = getDb();
   const now = new Date().toISOString();
   try {
-    db.prepare(
+    await db.prepare(
       `
       INSERT INTO voucher_packages (
         id, tenant_id, code, name, duration_minutes, price_ngn, active, description, created_at, updated_at
@@ -120,10 +120,10 @@ export async function POST(request: Request, { params }: Props) {
 
 export async function PATCH(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
 
-  const access = normalizeTenantAccess(request, tenant.id);
+  const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
 
   const body = (await request.json()) as {
@@ -140,7 +140,7 @@ export async function PATCH(request: Request, { params }: Props) {
   if (!planId) return Response.json({ error: "Missing planId" }, { status: 400 });
 
   const db = getDb();
-  const existing = db
+  const existing = await db
     .prepare("SELECT id FROM voucher_packages WHERE tenant_id = ? AND id = ?")
     .get(tenant.id, planId) as { id: string } | undefined;
   if (!existing) return Response.json({ error: "Plan not found" }, { status: 404 });
@@ -196,7 +196,7 @@ export async function PATCH(request: Request, { params }: Props) {
   args.push(tenant.id, planId);
 
   try {
-    const result = db
+    const result = await db
       .prepare(
         `
         UPDATE voucher_packages

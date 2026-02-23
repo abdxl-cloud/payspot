@@ -7,7 +7,7 @@ type Props = {
 
 export async function GET(_request: Request, { params }: Props) {
   const { token } = await params;
-  const result = denyTenantRequest(token);
+  const result = await denyTenantRequest(token);
 
   if (result.status === "missing_or_reviewed") {
     return new Response("Invalid token or already reviewed.", { status: 404 });

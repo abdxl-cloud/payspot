@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PaymentVerifyRedirect({ params }: Props) {
   const { reference } = await params;
-  const tenant = getTenantForReference(reference);
+  const tenant = await getTenantForReference(reference);
 
   if (!tenant) {
     return (

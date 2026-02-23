@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   }
 
   const { email, password } = parsed.data;
-  const user = getUserByEmail(email);
+  const user = await getUserByEmail(email);
   if (!user) {
     return Response.json({ error: "Invalid credentials" }, { status: 401 });
   }
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
-  const session = createSession({ userId: user.id });
+  const session = await createSession({ userId: user.id });
 
   let redirectTo = "/admin";
   let tenantSlug: string | null = null;
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Tenant user misconfigured" }, { status: 500 });
     }
 
-    const tenant = getTenantById(tenantId);
+    const tenant = await getTenantById(tenantId);
     if (!tenant) {
       return Response.json({ error: "Tenant not found" }, { status: 404 });
     }

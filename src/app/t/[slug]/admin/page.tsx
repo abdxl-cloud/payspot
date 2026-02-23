@@ -16,10 +16,10 @@ export default async function TenantAdminPage({ params }: Props) {
   const { slug } = await params;
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
-  const user = token ? getSessionUser(token) : null;
+  const user = token ? await getSessionUser(token) : null;
   if (!user) redirect("/login");
 
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
 
   if (user.role === "tenant" && user.tenantId !== tenant.id) {

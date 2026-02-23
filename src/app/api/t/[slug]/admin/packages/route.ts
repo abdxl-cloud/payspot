@@ -7,12 +7,12 @@ type Props = {
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
 
-  const user = getSessionUserFromRequest(request);
+  const user = await getSessionUserFromRequest(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   if (user.role === "tenant") {
@@ -50,7 +50,7 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Price must be >= 0" }, { status: 400 });
   }
 
-  const updated = updatePackagePrice({
+  const updated = await updatePackagePrice({
     tenantId: tenant.id,
     packageId,
     priceNgn: Math.round(priceNgn),

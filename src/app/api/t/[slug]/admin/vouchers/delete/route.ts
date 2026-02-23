@@ -80,12 +80,12 @@ function buildStatusClause(status: string) {
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
 
-  const user = getSessionUserFromRequest(request);
+  const user = await getSessionUserFromRequest(request);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   if (user.role === "tenant") {
@@ -119,7 +119,7 @@ export async function POST(request: Request, { params }: Props) {
     if (!packageId) {
       return Response.json({ error: "Missing package" }, { status: 400 });
     }
-    const result = db
+    const result = await db
       .prepare(
         `
         DELETE FROM voucher_pool
@@ -132,7 +132,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   if (mode === "status") {
-    const result = db
+    const result = await db
       .prepare(
         `
         DELETE FROM voucher_pool
@@ -171,18 +171,18 @@ export async function POST(request: Request, { params }: Props) {
 
     const chunkSize = 200;
     let deleted = 0;
-    const run = db.transaction(() => {
+    const run = db.transaction(async () => {
       for (let i = 0; i < deduped.length; i += chunkSize) {
         const chunk = deduped.slice(i, i + chunkSize);
         const placeholders = chunk.map(() => "?").join(", ");
         const stmt = db.prepare(
           `${deleteStatementBase}${placeholders}${deleteStatementSuffix}`,
         );
-        const result = stmt.run(tenant.id, ...chunk);
+        const result = await stmt.run(tenant.id, ...chunk);
         deleted += result.changes;
       }
     });
-    run();
+    await run();
 
     return Response.json({ deleted });
   }

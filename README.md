@@ -6,7 +6,7 @@ Each tenant gets:
 - Isolated vouchers and sales
 - Their own Paystack secret key for separate payouts
 
-Voucher codes are generated in Omada, exported as CSV, imported into a SQLite voucher pool, and
+Voucher codes are generated in Omada, exported as CSV, imported into a PostgreSQL voucher pool, and
 assigned to customers only after successful payment verification.
 
 ## Core Flow
@@ -31,7 +31,7 @@ assigned to customers only after successful payment verification.
 - After login:
   - Admin users go to `/admin`
   - Tenant users go to `/t/<slug>/admin` (or `/t/<slug>/setup` if setup isn't complete)
-- Sessions use an HttpOnly cookie named `vs_session` stored in SQLite.
+- Sessions use an HttpOnly cookie named `vs_session` stored in PostgreSQL.
 
 ## Tenant Onboarding (Request -> Approve -> Login -> Setup)
 1. Request: submit the form on `/` (or `POST /api/tenants/request`).
@@ -65,10 +65,10 @@ node scripts/import-vouchers.mjs path/to/vouchers.csv --tenant <slug> --package 
 The importer normalizes headers and supports `Code`, `Voucher Code`, or `csvCode` columns.
 
 ## Environment Variables
-Create `.env.local` based on `.env.example`:
+Create `.env` based on `.env.example`:
 
 ```env
-DATABASE_URL=file:./data/dev.db
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/payspot
 APP_URL=http://localhost:3000
 ADMIN_API_KEY=change-this
 TERMII_API_KEY=termii_xxx
@@ -85,6 +85,8 @@ SMTP_FROM="PaySpot <no-reply@your-domain.com>"
 ```
 
 Notes:
+- When running the app inside Docker Compose, use `postgres` as the DB host in `DATABASE_URL`.
+- When running the app directly on your host machine, switch DB host to `localhost`.
 - `TENANT_SECRETS_KEY` must be 32 bytes (base64). Example:
   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
 - `ADMIN_API_KEY` is optional (used for programmatic access to `GET /api/admin/stats`).
@@ -96,6 +98,12 @@ Created on first database init:
 - Tenant: `walstreet@example.com` / `Pathfinder07!` (slug: `walstreet`)
 
 ## Local Development
+Start Postgres and app with Docker (recommended):
+```bash
+make bootstrap
+```
+
+Run app directly on host (requires Postgres running separately):
 ```bash
 npm install
 npm run dev
@@ -135,5 +143,5 @@ Tenant stats are available in the tenant dashboard (`/t/<slug>/admin`) after log
 ## Deployment Notes (Quick)
 - Set `APP_URL` to your public HTTPS domain.
 - Configure each tenant's Paystack webhook URL: `https://your-domain.com/api/t/<slug>/payments/webhook`
-- Ensure the SQLite database path is writable (`DATABASE_URL=file:./data/dev.db`).
-- For production, consider moving to Postgres and a managed process manager.
+- Ensure PostgreSQL is reachable from the app (`DATABASE_URL=postgresql://...`).
+- Use a managed PostgreSQL instance and a production process manager/orchestrator.

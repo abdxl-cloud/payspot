@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
-  const user = token ? getSessionUser(token) : null;
+  const user = token ? await getSessionUser(token) : null;
   if (user) {
     if (user.role === "admin") redirect("/admin");
     if (user.tenantSlug) redirect(`/t/${user.tenantSlug}/admin`);

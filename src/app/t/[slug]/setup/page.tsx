@@ -15,18 +15,18 @@ export default async function TenantSetupPage({ params }: Props) {
   const { slug } = await params;
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
-  const user = token ? getSessionUser(token) : null;
+  const user = token ? await getSessionUser(token) : null;
 
   if (!user) redirect("/login");
   if (user.role !== "tenant") redirect("/admin");
   if (user.tenantSlug !== slug) redirect(`/t/${user.tenantSlug}/setup`);
 
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
 
   const setupComplete = !user.mustChangePassword && !!tenant.paystack_secret_enc && tenant.status === "active";
   if (setupComplete) redirect(`/t/${tenant.slug}/admin`);
-  const hasVoucherImport = getStats(tenant.id).some((row) => row.total > 0);
+  const hasVoucherImport = (await getStats(tenant.id)).some((row) => row.total > 0);
   const renderedAt = new Date().toLocaleString();
 
   return (

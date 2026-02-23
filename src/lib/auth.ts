@@ -1,9 +1,8 @@
 import { getCookieValue, SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
 import { getSessionUser, type SessionUser } from "@/lib/store";
 
-export function getSessionUserFromRequest(request: Request): SessionUser | null {
+export async function getSessionUserFromRequest(request: Request): Promise<SessionUser | null> {
   const token = getCookieValue(request.headers.get("cookie"), SESSION_COOKIE_NAME);
   if (!token) return null;
-  return getSessionUser(token);
+  return await getSessionUser(token);
 }
-

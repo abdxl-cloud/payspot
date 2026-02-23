@@ -7,8 +7,8 @@ type Props = {
   params: Promise<{ slug: string }>;
 };
 
-function normalizeTenantAccess(request: Request, tenantId: string) {
-  const user = getSessionUserFromRequest(request);
+async function normalizeTenantAccess(request: Request, tenantId: string) {
+  const user = await getSessionUserFromRequest(request);
   if (!user) return { ok: false as const, status: 401, error: "Unauthorized" };
   if (user.role === "tenant" && user.tenantId !== tenantId) {
     return { ok: false as const, status: 403, error: "Forbidden" };
@@ -27,10 +27,10 @@ function buildInClause(count: number) {
 
 export async function GET(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
 
-  const access = normalizeTenantAccess(request, tenant.id);
+  const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
 
   const url = new URL(request.url);
@@ -53,7 +53,7 @@ export async function GET(request: Request, { params }: Props) {
     args.push(packageId);
   }
   if (q) {
-    where.push("(v.voucher_code LIKE ? OR p.code LIKE ? OR p.name LIKE ? OR IFNULL(v.assigned_to_email, '') LIKE ?)");
+    where.push("(v.voucher_code LIKE ? OR p.code LIKE ? OR p.name LIKE ? OR COALESCE(v.assigned_to_email, '') LIKE ?)");
     const token = `%${q}%`;
     args.push(token, token, token, token);
   }
@@ -61,7 +61,7 @@ export async function GET(request: Request, { params }: Props) {
   const whereSql = where.join(" AND ");
   const db = getDb();
 
-  const totals = db
+  const totals = await db
     .prepare(
       `
       SELECT COUNT(1) as total
@@ -72,7 +72,7 @@ export async function GET(request: Request, { params }: Props) {
     )
     .get(...args) as { total: number };
 
-  const vouchers = db
+  const vouchers = await db
     .prepare(
       `
       SELECT
@@ -110,10 +110,10 @@ export async function GET(request: Request, { params }: Props) {
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
 
-  const access = normalizeTenantAccess(request, tenant.id);
+  const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
 
   const body = (await request.json()) as {
@@ -127,7 +127,7 @@ export async function POST(request: Request, { params }: Props) {
   if (!packageId) return Response.json({ error: "packageId is required" }, { status: 400 });
 
   const db = getDb();
-  const pkg = db
+  const pkg = await db
     .prepare(
       "SELECT id, duration_minutes FROM voucher_packages WHERE tenant_id = ? AND id = ?",
     )
@@ -135,7 +135,7 @@ export async function POST(request: Request, { params }: Props) {
   if (!pkg) return Response.json({ error: "Invalid packageId" }, { status: 400 });
 
   try {
-    db.prepare(
+    await db.prepare(
       `
       INSERT INTO voucher_pool (
         id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
@@ -158,10 +158,10 @@ export async function POST(request: Request, { params }: Props) {
 
 export async function PATCH(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
 
-  const access = normalizeTenantAccess(request, tenant.id);
+  const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
 
   const body = (await request.json()) as {
@@ -181,11 +181,11 @@ export async function PATCH(request: Request, { params }: Props) {
   const chunkSize = 200;
   let updated = 0;
 
-  const run = db.transaction(() => {
+  const run = db.transaction(async () => {
     for (let i = 0; i < voucherIds.length; i += chunkSize) {
       const chunk = voucherIds.slice(i, i + chunkSize);
       const placeholders = buildInClause(chunk.length);
-      const result = db
+      const result = await db
         .prepare(
           `
           UPDATE voucher_pool
@@ -202,17 +202,17 @@ export async function PATCH(request: Request, { params }: Props) {
       updated += result.changes;
     }
   });
-  run();
+  await run();
 
   return Response.json({ updated });
 }
 
 export async function DELETE(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) return Response.json({ error: "Tenant not found" }, { status: 404 });
 
-  const access = normalizeTenantAccess(request, tenant.id);
+  const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
 
   const body = (await request.json()) as { voucherIds?: string[] };
@@ -225,11 +225,11 @@ export async function DELETE(request: Request, { params }: Props) {
   const chunkSize = 200;
   let deleted = 0;
 
-  const run = db.transaction(() => {
+  const run = db.transaction(async () => {
     for (let i = 0; i < voucherIds.length; i += chunkSize) {
       const chunk = voucherIds.slice(i, i + chunkSize);
       const placeholders = buildInClause(chunk.length);
-      const result = db
+      const result = await db
         .prepare(
           `
           DELETE FROM voucher_pool
@@ -241,7 +241,7 @@ export async function DELETE(request: Request, { params }: Props) {
       deleted += result.changes;
     }
   });
-  run();
+  await run();
 
   return Response.json({ deleted });
 }

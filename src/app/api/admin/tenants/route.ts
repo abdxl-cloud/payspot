@@ -23,12 +23,13 @@ const createSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const user = getSessionUserFromRequest(request);
+  const user = await getSessionUserFromRequest(request);
   if (!user || user.role !== "admin") {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tenants = listTenants().map((t) => ({
+  const tenantRows = await listTenants();
+  const tenants = tenantRows.map((t) => ({
     id: t.id,
     slug: t.slug,
     name: t.name,
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const user = getSessionUserFromRequest(request);
+  const user = await getSessionUserFromRequest(request);
   if (!user || user.role !== "admin") {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -58,14 +59,14 @@ export async function POST(request: Request) {
   }
 
   const { slug, name, adminEmail, username, password } = parsed.data;
-  if (!isTenantSlugAvailable(slug)) {
+  if (!await isTenantSlugAvailable(slug)) {
     return Response.json(
       { error: "That tenant slug is not available" },
       { status: 409 },
     );
   }
 
-  const tenantResult = createTenant({
+  const tenantResult = await createTenant({
     slug,
     name,
     adminEmail,
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
   }
 
   const tempPassword = password ?? `Temp-${generateToken(9)}`;
-  const userResult = createUser({
+  const userResult = await createUser({
     email: adminEmail,
     username: username ?? slug,
     role: "tenant",

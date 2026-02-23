@@ -1,16 +1,47 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: payspot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-payspot}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-payspot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   payspot:
     build: .
     container_name: payspot
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
-      NODE_ENV: production
-    env_file:
-      - .env.local
-    volumes:
-      - payspot_data:/app/data
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/payspot}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-this}
+      TERMII_API_KEY: ${TERMII_API_KEY:-termii_xxx}
+      TERMII_SENDER_ID: ${TERMII_SENDER_ID:-WiFi}
+      RESUME_TTL_MINUTES: ${RESUME_TTL_MINUTES:-60}
+      TENANT_SECRETS_KEY: ${TENANT_SECRETS_KEY:-base64-32-bytes-here}
+      OWNER_EMAIL: ${OWNER_EMAIL:-owner@example.com}
+      SMTP_HOST: ${SMTP_HOST:-mail.abdxl.cloud}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-postmaster@your-domain.com}
+      SMTP_PASS: ${SMTP_PASS:-change-this}
+      SMTP_FROM: ${SMTP_FROM:-PaySpot <no-reply@your-domain.com>}
 
 volumes:
-  payspot_data:
+  postgres_data:

@@ -15,10 +15,10 @@ export const dynamic = "force-dynamic";
 
 export default async function TenantPaymentVerifyPage({ params }: Props) {
   const { slug, reference } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
 
-  const transaction = getTransaction(tenant.id, reference);
+  const transaction = await getTransaction(tenant.id, reference);
 
   if (!transaction) {
     return (
@@ -38,7 +38,7 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
   if (transaction.payment_status !== "success") {
     let paystackSecretKey: string;
     try {
-      paystackSecretKey = requireTenantPaystackSecretKey(tenant.id);
+      paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
     } catch {
       return (
         <div className="app-shell">
@@ -59,8 +59,8 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
     });
   }
 
-  const updated = getTransaction(tenant.id, reference);
-  const pkg = updated ? getPackageById(tenant.id, updated.package_id) : null;
+  const updated = await getTransaction(tenant.id, reference);
+  const pkg = updated ? await getPackageById(tenant.id, updated.package_id) : null;
 
   if (updated?.payment_status === "success" && updated.voucher_code) {
     return (

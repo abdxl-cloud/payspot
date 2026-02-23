@@ -7,7 +7,7 @@ export async function GET(request: Request) {
     return Response.json({ user: null });
   }
 
-  const user = getSessionUser(token);
+  const user = await getSessionUser(token);
   if (!user) {
     return Response.json({ user: null });
   }

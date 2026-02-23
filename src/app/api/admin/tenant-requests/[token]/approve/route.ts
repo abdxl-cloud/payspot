@@ -15,7 +15,7 @@ type Props = {
 
 export async function GET(_request: Request, { params }: Props) {
   const { token } = await params;
-  const result = approveTenantRequest(token);
+  const result = await approveTenantRequest(token);
 
   if (result.status === "missing") {
     return new Response("Invalid request token.", { status: 404 });
@@ -41,7 +41,7 @@ export async function GET(_request: Request, { params }: Props) {
       return new Response("Request already reviewed.", { status: 409 });
     }
 
-    const tenant = getTenantById(tenantId);
+    const tenant = await getTenantById(tenantId);
     if (!tenant) {
       return new Response("Request already reviewed.", { status: 409 });
     }
@@ -49,14 +49,14 @@ export async function GET(_request: Request, { params }: Props) {
     const { APP_URL } = getAppEnv();
     const loginUrl = new URL("/login", APP_URL).toString();
 
-    const tenantUser = getTenantPrimaryUser(tenant.id);
+    const tenantUser = await getTenantPrimaryUser(tenant.id);
     if (!tenantUser) {
       return new Response("Tenant user missing.", { status: 500 });
     }
 
     const temporaryPassword = `Temp-${generateToken(9)}`;
-    updateUserPassword({ userId: tenantUser.id, password: temporaryPassword });
-    setUserMustChangePassword({
+    await updateUserPassword({ userId: tenantUser.id, password: temporaryPassword });
+    await setUserMustChangePassword({
       userId: tenantUser.id,
       mustChangePassword: true,
     });

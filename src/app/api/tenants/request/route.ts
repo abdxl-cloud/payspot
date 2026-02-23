@@ -42,14 +42,14 @@ export async function POST(request: Request) {
 
   const { name, email } = parsed.data;
   let provisionalSlug = makeProvisionalSlug(name);
-  for (let i = 0; i < 5 && !isTenantSlugAvailable(provisionalSlug); i += 1) {
+  for (let i = 0; i < 5 && !await isTenantSlugAvailable(provisionalSlug); i += 1) {
     provisionalSlug = makeProvisionalSlug(name);
   }
-  if (!isTenantSlugAvailable(provisionalSlug)) {
+  if (!await isTenantSlugAvailable(provisionalSlug)) {
     return Response.json({ error: "Unable to allocate tenant id" }, { status: 500 });
   }
 
-  const { reviewToken } = createTenantRequest({
+  const { reviewToken } = await createTenantRequest({
     requestedSlug: provisionalSlug,
     requestedName: name,
     requestedEmail: email,

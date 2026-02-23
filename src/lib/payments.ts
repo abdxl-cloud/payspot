@@ -12,7 +12,7 @@ export async function handleSuccessfulPayment(params: {
   tenantId: string;
   reference: string;
 }) {
-  const transaction = getTransaction(params.tenantId, params.reference);
+  const transaction = await getTransaction(params.tenantId, params.reference);
   if (!transaction) {
     return { status: "missing" as const };
   }
@@ -23,7 +23,7 @@ export async function handleSuccessfulPayment(params: {
     };
   }
 
-  const result = transactionAssignVoucher({
+  const result = await transactionAssignVoucher({
     tenantId: params.tenantId,
     reference: params.reference,
     email: transaction.email,
@@ -32,7 +32,7 @@ export async function handleSuccessfulPayment(params: {
   });
 
   if (result.status === "assigned" || result.status === "already") {
-    const pkg = getPackageById(params.tenantId, transaction.package_id);
+    const pkg = await getPackageById(params.tenantId, transaction.package_id);
     if (pkg) {
       const message = [
         "Payment confirmed!",
@@ -67,7 +67,7 @@ export async function verifyAndProcess(params: {
     reference: params.reference,
   });
   if (verification.status !== "success") {
-    markTransactionFailed({
+    await markTransactionFailed({
       tenantId: params.tenantId,
       reference: params.reference,
       status: "paystack_failed",
@@ -77,7 +77,7 @@ export async function verifyAndProcess(params: {
 
   const amountNgn = Math.round(verification.amount / 100);
   if (amountNgn !== params.expectedAmountNgn) {
-    markTransactionFailed({
+    await markTransactionFailed({
       tenantId: params.tenantId,
       reference: params.reference,
       status: "amount_mismatch",
@@ -86,7 +86,7 @@ export async function verifyAndProcess(params: {
   }
 
   if (verification.currency !== "NGN") {
-    markTransactionFailed({
+    await markTransactionFailed({
       tenantId: params.tenantId,
       reference: params.reference,
       status: "currency_mismatch",

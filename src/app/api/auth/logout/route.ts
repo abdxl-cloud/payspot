@@ -4,7 +4,7 @@ import { deleteSession } from "@/lib/store";
 export async function POST(request: Request) {
   const token = getCookieValue(request.headers.get("cookie"), SESSION_COOKIE_NAME);
   if (token) {
-    deleteSession(token);
+    await deleteSession(token);
   }
 
   return Response.json(

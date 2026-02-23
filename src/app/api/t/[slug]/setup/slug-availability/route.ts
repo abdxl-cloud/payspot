@@ -16,13 +16,13 @@ const schema = z.object({
 });
 
 export async function GET(request: Request, { params }: Props) {
-  const sessionUser = getSessionUserFromRequest(request);
+  const sessionUser = await getSessionUserFromRequest(request);
   if (!sessionUser) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
@@ -39,6 +39,6 @@ export async function GET(request: Request, { params }: Props) {
   }
 
   const candidate = parsed.data.slug.toLowerCase();
-  const available = candidate === tenant.slug || isTenantSlugAvailable(candidate);
+  const available = candidate === tenant.slug || await isTenantSlugAvailable(candidate);
   return Response.json({ available, normalizedSlug: candidate });
 }

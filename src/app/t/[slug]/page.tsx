@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TenantPurchasePage({ params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
 
   if (tenant.status !== "active") {
@@ -28,7 +28,7 @@ export default async function TenantPurchasePage({ params }: Props) {
     );
   }
 
-  const packages = getPackagesWithAvailability(tenant.id)
+  const packages = (await getPackagesWithAvailability(tenant.id))
     .filter((pkg) => pkg.price_ngn > 0 && pkg.total_count > 0)
     .map((pkg) => ({
       code: pkg.code,

@@ -192,7 +192,7 @@ function isInUseRow(normalized: NormalizedRow) {
   return false;
 }
 
-function ensurePackage(params: {
+async function ensurePackage(params: {
   db: ReturnType<typeof getDb>;
   tenantId: string;
   packagesByCode: Map<string, PackageLite>;
@@ -203,7 +203,7 @@ function ensurePackage(params: {
   if (existing) return { pkg: existing, created: false };
   const now = new Date().toISOString();
   const id = randomUUID();
-  db.prepare(
+  await db.prepare(
     `
     INSERT INTO voucher_packages (
       id, tenant_id, code, name, duration_minutes, price_ngn, active, description, created_at, updated_at
@@ -233,12 +233,12 @@ function ensurePackage(params: {
 export async function POST(request: Request, { params }: Props) {
   try {
     const { slug } = await params;
-    const tenant = getTenantBySlug(slug);
+    const tenant = await getTenantBySlug(slug);
     if (!tenant) {
       return Response.json({ error: "Tenant not found" }, { status: 404 });
     }
 
-    const user = getSessionUserFromRequest(request);
+    const user = await getSessionUserFromRequest(request);
     if (!user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -269,7 +269,7 @@ export async function POST(request: Request, { params }: Props) {
     }) as Array<Record<string, unknown>>;
 
     const db = getDb();
-    const packages = db
+    const packages = await db
       .prepare(
         "SELECT id, code, duration_minutes FROM voucher_packages WHERE tenant_id = ?",
       )
@@ -291,7 +291,7 @@ export async function POST(request: Request, { params }: Props) {
     let missingPlan = 0;
     let packagesCreated = 0;
 
-    const run = db.transaction(() => {
+    const run = db.transaction(async () => {
       for (const row of rows) {
         const normalized = normalizeRow(row);
         if (!normalized.code) {
@@ -317,7 +317,7 @@ export async function POST(request: Request, { params }: Props) {
               missingPlan += 1;
               continue;
             }
-            const created = ensurePackage({
+            const created = await ensurePackage({
               db,
               tenantId: tenant.id,
               packagesByCode,
@@ -332,7 +332,7 @@ export async function POST(request: Request, { params }: Props) {
             missingPlan += 1;
             continue;
           }
-          const created = ensurePackage({
+          const created = await ensurePackage({
             db,
             tenantId: tenant.id,
             packagesByCode,
@@ -342,7 +342,7 @@ export async function POST(request: Request, { params }: Props) {
           if (created.created) packagesCreated += 1;
         }
 
-        const exists = db
+        const exists = await db
           .prepare(
             "SELECT 1 FROM voucher_pool WHERE tenant_id = ? AND voucher_code = ?",
           )
@@ -352,7 +352,7 @@ export async function POST(request: Request, { params }: Props) {
           continue;
         }
 
-        insert.run(
+        await insert.run(
           randomUUID(),
           tenant.id,
           normalized.code,
@@ -365,7 +365,7 @@ export async function POST(request: Request, { params }: Props) {
       }
     });
 
-    run();
+    await run();
 
     return Response.json({
       imported,

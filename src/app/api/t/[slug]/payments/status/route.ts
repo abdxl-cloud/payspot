@@ -13,7 +13,7 @@ const schema = z.object({
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant || tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const { reference, phone } = parsed.data;
-  const transaction = getTransactionByReferencePhone(tenant.id, reference, phone);
+  const transaction = await getTransactionByReferencePhone(tenant.id, reference, phone);
 
   if (!transaction) {
     return Response.json({ error: "Transaction not found" }, { status: 404 });

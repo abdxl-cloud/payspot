@@ -25,7 +25,7 @@ function isExpired(expiresAt: string | null) {
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant || tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
@@ -43,7 +43,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const { reference, phone } = parsed.data;
-  const transaction = getTransactionByReferencePhone(tenant.id, reference, phone);
+  const transaction = await getTransactionByReferencePhone(tenant.id, reference, phone);
 
   if (!transaction) {
     return Response.json({ error: "Transaction not found" }, { status: 404 });
@@ -59,7 +59,7 @@ export async function POST(request: Request, { params }: Props) {
   if (transaction.payment_status === "pending") {
     let paystackSecretKey: string;
     try {
-      paystackSecretKey = requireTenantPaystackSecretKey(tenant.id);
+      paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
     } catch {
       return Response.json(
         { error: "Tenant payments are not configured" },
@@ -78,7 +78,7 @@ export async function POST(request: Request, { params }: Props) {
     }
   }
 
-  const refreshed = getTransaction(tenant.id, reference) ?? transaction;
+  const refreshed = await getTransaction(tenant.id, reference) ?? transaction;
 
   if (refreshed.payment_status === "success" && refreshed.voucher_code) {
     return Response.json({

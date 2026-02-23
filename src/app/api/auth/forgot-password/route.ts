@@ -25,10 +25,10 @@ export async function POST(request: Request) {
   }
 
   const email = parsed.data.email.trim().toLowerCase();
-  const user = getUserByEmail(email);
+  const user = await getUserByEmail(email);
 
   if (user) {
-    const { token } = createPasswordResetToken({ userId: user.id, ttlMinutes: 60 });
+    const { token } = await createPasswordResetToken({ userId: user.id, ttlMinutes: 60 });
     const { APP_URL } = getAppEnv();
     const resetUrl = new URL(`/reset-password/${token}`, APP_URL).toString();
 

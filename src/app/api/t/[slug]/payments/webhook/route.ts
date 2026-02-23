@@ -12,14 +12,14 @@ type Props = {
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant || tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
 
   let paystackSecretKey: string;
   try {
-    paystackSecretKey = requireTenantPaystackSecretKey(tenant.id);
+    paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
   } catch {
     return Response.json(
       { error: "Tenant payments are not configured" },
@@ -60,7 +60,7 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Missing reference" }, { status: 400 });
   }
 
-  const transaction = getTransaction(tenant.id, reference);
+  const transaction = await getTransaction(tenant.id, reference);
   if (!transaction) {
     return Response.json({ error: "Unknown transaction" }, { status: 404 });
   }

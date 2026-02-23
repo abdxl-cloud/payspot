@@ -14,25 +14,25 @@ type Props = {
 };
 
 export async function POST(request: Request, { params }: Props) {
-  const user = getSessionUserFromRequest(request);
+  const user = await getSessionUserFromRequest(request);
   if (!user || user.role !== "admin") {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { tenantId } = await params;
-  const tenant = getTenantById(tenantId);
+  const tenant = await getTenantById(tenantId);
   if (!tenant) {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
 
-  const tenantUser = getTenantPrimaryUser(tenantId);
+  const tenantUser = await getTenantPrimaryUser(tenantId);
   if (!tenantUser) {
     return Response.json({ error: "Tenant user not found" }, { status: 404 });
   }
 
   const temporaryPassword = `Temp-${generateToken(9)}`;
-  updateUserPassword({ userId: tenantUser.id, password: temporaryPassword });
-  setUserMustChangePassword({ userId: tenantUser.id, mustChangePassword: true });
+  await updateUserPassword({ userId: tenantUser.id, password: temporaryPassword });
+  await setUserMustChangePassword({ userId: tenantUser.id, mustChangePassword: true });
 
   const { APP_URL } = getAppEnv();
   const loginUrl = new URL("/login", APP_URL).toString();

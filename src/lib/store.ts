@@ -115,28 +115,28 @@ function normalizePhoneForLookup(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
-export function getUserByUsername(username: string) {
+export async function getUserByUsername(username: string) {
   const db = getDb();
-  return db
+  return await db
     .prepare("SELECT * FROM users WHERE username = ?")
     .get(normalizeUsername(username)) as UserRow | undefined;
 }
 
-export function getUserByEmail(email: string) {
+export async function getUserByEmail(email: string) {
   const db = getDb();
-  return db
+  return await db
     .prepare("SELECT * FROM users WHERE email = ?")
     .get(normalizeEmail(email)) as UserRow | undefined;
 }
 
-export function getUserById(userId: string) {
+export async function getUserById(userId: string) {
   const db = getDb();
-  return db
+  return await db
     .prepare("SELECT * FROM users WHERE id = ?")
     .get(userId) as UserRow | undefined;
 }
 
-export function createUser(params: {
+export async function createUser(params: {
   email: string;
   username: string;
   role: UserRole;
@@ -150,14 +150,14 @@ export function createUser(params: {
   const username = normalizeUsername(params.username);
   const email = normalizeEmail(params.email);
 
-  const existing = db
+  const existing = await db
     .prepare("SELECT * FROM users WHERE username = ? OR email = ?")
     .get(username, email) as UserRow | undefined;
   if (existing) return { status: "exists" as const, user: existing };
 
   const passwordHash = hashPassword(params.password);
 
-  db.prepare(
+  await db.prepare(
     `
       INSERT INTO users (
         id, email, username, role, tenant_id, password_hash, must_change_password, created_at, updated_at
@@ -175,14 +175,14 @@ export function createUser(params: {
     now,
   );
 
-  return { status: "created" as const, user: getUserById(id)! };
+  return { status: "created" as const, user: (await getUserById(id))! };
 }
 
-export function updateUserPassword(params: { userId: string; password: string }) {
+export async function updateUserPassword(params: { userId: string; password: string }) {
   const db = getDb();
   const now = nowIso();
   const passwordHash = hashPassword(params.password);
-  db.prepare(
+  await db.prepare(
     `
       UPDATE users
       SET password_hash = ?, updated_at = ?
@@ -191,13 +191,13 @@ export function updateUserPassword(params: { userId: string; password: string })
   ).run(passwordHash, now, params.userId);
 }
 
-export function setUserMustChangePassword(params: {
+export async function setUserMustChangePassword(params: {
   userId: string;
   mustChangePassword: boolean;
 }) {
   const db = getDb();
   const now = nowIso();
-  db.prepare(
+  await db.prepare(
     `
       UPDATE users
       SET must_change_password = ?, updated_at = ?
@@ -206,7 +206,7 @@ export function setUserMustChangePassword(params: {
   ).run(params.mustChangePassword ? 1 : 0, now, params.userId);
 }
 
-export function createSession(params: { userId: string; ttlDays?: number }) {
+export async function createSession(params: { userId: string; ttlDays?: number }) {
   const db = getDb();
   const now = nowIso();
   const ttlDays = params.ttlDays ?? 30;
@@ -214,7 +214,7 @@ export function createSession(params: { userId: string; ttlDays?: number }) {
   const token = `vs_${generateToken(32)}`;
   const tokenHash = hashToken(token);
 
-  db.prepare(
+  await db.prepare(
     `
       INSERT INTO sessions (
         id, user_id, token_hash, expires_at, created_at
@@ -225,11 +225,11 @@ export function createSession(params: { userId: string; ttlDays?: number }) {
   return { token, expiresAt };
 }
 
-export function revokeSession(sessionToken: string) {
+export async function revokeSession(sessionToken: string) {
   const db = getDb();
   const tokenHash = hashToken(sessionToken);
   const now = nowIso();
-  db.prepare(
+  await db.prepare(
     `
       UPDATE sessions
       SET revoked_at = ?
@@ -238,10 +238,10 @@ export function revokeSession(sessionToken: string) {
   ).run(now, tokenHash);
 }
 
-export function revokeAllSessionsForUser(userId: string) {
+export async function revokeAllSessionsForUser(userId: string) {
   const db = getDb();
   const now = nowIso();
-  db.prepare(
+  await db.prepare(
     `
       UPDATE sessions
       SET revoked_at = ?
@@ -250,13 +250,13 @@ export function revokeAllSessionsForUser(userId: string) {
   ).run(now, userId);
 }
 
-export function deleteSession(sessionToken: string) {
+export async function deleteSession(sessionToken: string) {
   const db = getDb();
   const tokenHash = hashToken(sessionToken);
-  db.prepare("DELETE FROM sessions WHERE token_hash = ?").run(tokenHash);
+  await db.prepare("DELETE FROM sessions WHERE token_hash = ?").run(tokenHash);
 }
 
-export function createPasswordResetToken(params: {
+export async function createPasswordResetToken(params: {
   userId: string;
   ttlMinutes?: number;
 }) {
@@ -267,12 +267,12 @@ export function createPasswordResetToken(params: {
   const token = `vs_pr_${generateToken(32)}`;
   const tokenHash = hashToken(token);
 
-  const run = db.transaction(() => {
-    db.prepare(
+  const run = db.transaction(async () => {
+    await db.prepare(
       "DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL",
     ).run(params.userId);
 
-    db.prepare(
+    await db.prepare(
       `
         INSERT INTO password_reset_tokens (
           id, user_id, token_hash, expires_at, created_at
@@ -281,17 +281,17 @@ export function createPasswordResetToken(params: {
     ).run(randomUUID(), params.userId, tokenHash, expiresAt, now);
   });
 
-  run();
+  await run();
   return { token, expiresAt };
 }
 
-export function consumePasswordResetToken(token: string) {
+export async function consumePasswordResetToken(token: string) {
   const db = getDb();
   const tokenHash = hashToken(token);
   const now = nowIso();
 
-  const run = db.transaction(() => {
-    const row = db
+  const run = db.transaction(async () => {
+    const row = await db
       .prepare("SELECT * FROM password_reset_tokens WHERE token_hash = ?")
       .get(tokenHash) as
       | {
@@ -308,7 +308,7 @@ export function consumePasswordResetToken(token: string) {
       return { status: "expired" as const };
     }
 
-    db.prepare(
+    await db.prepare(
       "UPDATE password_reset_tokens SET used_at = ? WHERE id = ?",
     ).run(now, row.id);
 
@@ -318,10 +318,10 @@ export function consumePasswordResetToken(token: string) {
   return run();
 }
 
-export function getSessionUser(sessionToken: string) {
+export async function getSessionUser(sessionToken: string) {
   const db = getDb();
   const tokenHash = hashToken(sessionToken);
-  const row = db
+  const row = await db
     .prepare(
       `
       SELECT
@@ -359,7 +359,7 @@ export function getSessionUser(sessionToken: string) {
   if (!row) return null;
   if (row.revoked_at) return null;
   if (new Date(row.expires_at).getTime() < Date.now()) {
-    deleteSession(sessionToken);
+    await deleteSession(sessionToken);
     return null;
   }
 
@@ -375,37 +375,37 @@ export function getSessionUser(sessionToken: string) {
   } satisfies SessionUser;
 }
 
-export function getTenantBySlug(slug: string) {
+export async function getTenantBySlug(slug: string) {
   const db = getDb();
-  return db
+  return await db
     .prepare("SELECT * FROM tenants WHERE slug = ?")
     .get(slug) as TenantRow | undefined;
 }
 
-export function getTenantById(tenantId: string) {
+export async function getTenantById(tenantId: string) {
   const db = getDb();
-  return db
+  return await db
     .prepare("SELECT * FROM tenants WHERE id = ?")
     .get(tenantId) as TenantRow | undefined;
 }
 
-export function getTenantPrimaryUser(tenantId: string) {
+export async function getTenantPrimaryUser(tenantId: string) {
   const db = getDb();
-  return db
+  return await db
     .prepare(
       "SELECT * FROM users WHERE tenant_id = ? AND role = 'tenant' ORDER BY created_at ASC LIMIT 1",
     )
     .get(tenantId) as UserRow | undefined;
 }
 
-export function listTenants() {
+export async function listTenants() {
   const db = getDb();
-  return db
+  return await db
     .prepare("SELECT * FROM tenants ORDER BY created_at DESC")
     .all() as TenantRow[];
 }
 
-export function createTenant(params: {
+export async function createTenant(params: {
   slug: string;
   name: string;
   adminEmail: string;
@@ -415,13 +415,13 @@ export function createTenant(params: {
   const now = nowIso();
   const slug = params.slug.trim().toLowerCase();
 
-  const existing = db
+  const existing = await db
     .prepare("SELECT * FROM tenants WHERE slug = ?")
     .get(slug) as TenantRow | undefined;
   if (existing) return { status: "exists" as const, tenant: existing };
 
   const id = randomUUID();
-  db.prepare(
+  await db.prepare(
     `
       INSERT INTO tenants (
         id, slug, name, admin_email, status, created_at, updated_at
@@ -437,10 +437,10 @@ export function createTenant(params: {
     now,
   );
 
-  return { status: "created" as const, tenant: getTenantById(id)! };
+  return { status: "created" as const, tenant: (await getTenantById(id))! };
 }
 
-export function updateTenant(params: {
+export async function updateTenant(params: {
   tenantId: string;
   slug?: string;
   name?: string;
@@ -449,7 +449,7 @@ export function updateTenant(params: {
 }) {
   const db = getDb();
   const now = nowIso();
-  const existing = getTenantById(params.tenantId);
+  const existing = await getTenantById(params.tenantId);
   if (!existing) return { status: "missing" as const };
 
   const slug = params.slug ? params.slug.trim().toLowerCase() : existing.slug;
@@ -460,9 +460,9 @@ export function updateTenant(params: {
   const nextUserEmail = params.adminEmail ? normalizeEmail(params.adminEmail) : null;
   const slugChanged = slug !== existing.slug;
 
-  const run = db.transaction(() => {
+  const run = db.transaction(async () => {
     if (slugChanged) {
-      const slugConflict = db
+      const slugConflict = await db
         .prepare(
           `
             SELECT 1
@@ -477,7 +477,7 @@ export function updateTenant(params: {
     }
 
     if (nextUserEmail) {
-      const conflict = db
+      const conflict = await db
         .prepare(
           `
             SELECT 1
@@ -492,7 +492,7 @@ export function updateTenant(params: {
       }
     }
 
-    db.prepare(
+    await db.prepare(
       `
         UPDATE tenants
         SET slug = ?, name = ?, admin_email = ?, status = ?, updated_at = ?
@@ -501,7 +501,7 @@ export function updateTenant(params: {
     ).run(slug, name, adminEmail, status, now, params.tenantId);
 
     if (nextUserEmail) {
-      db.prepare(
+      await db.prepare(
         `
           UPDATE users
           SET email = ?, updated_at = ?
@@ -510,44 +510,44 @@ export function updateTenant(params: {
       ).run(nextUserEmail, now, params.tenantId);
     }
 
-    return { status: "ok" as const, tenant: getTenantById(params.tenantId)! };
+    return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
   });
 
   return run();
 }
 
-export function deleteTenant(tenantId: string) {
+export async function deleteTenant(tenantId: string) {
   const db = getDb();
 
-  const existing = getTenantById(tenantId);
+  const existing = await getTenantById(tenantId);
   if (!existing) return { status: "missing" as const };
 
-  const run = db.transaction(() => {
+  const run = db.transaction(async () => {
     // Delete sessions for tenant users.
-    const userIds = db
+    const userIds = await db
       .prepare("SELECT id FROM users WHERE tenant_id = ?")
       .all(tenantId) as Array<{ id: string }>;
 
     for (const user of userIds) {
-      db.prepare("DELETE FROM sessions WHERE user_id = ?").run(user.id);
+      await db.prepare("DELETE FROM sessions WHERE user_id = ?").run(user.id);
     }
 
-    db.prepare("DELETE FROM users WHERE tenant_id = ?").run(tenantId);
-    db.prepare("DELETE FROM voucher_pool WHERE tenant_id = ?").run(tenantId);
-    db.prepare("DELETE FROM transactions WHERE tenant_id = ?").run(tenantId);
-    db.prepare("DELETE FROM voucher_packages WHERE tenant_id = ?").run(tenantId);
-    db.prepare("DELETE FROM tenant_requests WHERE tenant_id = ?").run(tenantId);
-    db.prepare("DELETE FROM tenant_setup_tokens WHERE tenant_id = ?").run(tenantId);
-    db.prepare("DELETE FROM tenants WHERE id = ?").run(tenantId);
+    await db.prepare("DELETE FROM users WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM voucher_pool WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM transactions WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM voucher_packages WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM tenant_requests WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM tenant_setup_tokens WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM tenants WHERE id = ?").run(tenantId);
   });
 
-  run();
+  await run();
   return { status: "deleted" as const };
 }
 
-export function getTenantForReference(reference: string) {
+export async function getTenantForReference(reference: string) {
   const db = getDb();
-  return db
+  return await db
     .prepare(
       `
       SELECT t.*, tx.reference as reference
@@ -559,14 +559,14 @@ export function getTenantForReference(reference: string) {
     .get(reference) as (TenantRow & { reference: string }) | undefined;
 }
 
-export function isTenantSlugAvailable(slug: string) {
+export async function isTenantSlugAvailable(slug: string) {
   const db = getDb();
-  const existingTenant = db
+  const existingTenant = await db
     .prepare("SELECT 1 FROM tenants WHERE slug = ?")
     .get(slug);
   if (existingTenant) return false;
 
-  const pendingRequest = db
+  const pendingRequest = await db
     .prepare(
       "SELECT 1 FROM tenant_requests WHERE requested_slug = ? AND status = 'pending'",
     )
@@ -574,7 +574,7 @@ export function isTenantSlugAvailable(slug: string) {
   return !pendingRequest;
 }
 
-export function createTenantRequest(params: {
+export async function createTenantRequest(params: {
   requestedSlug: string;
   requestedName: string;
   requestedEmail: string;
@@ -585,7 +585,7 @@ export function createTenantRequest(params: {
   const id = randomUUID();
   const now = nowIso();
 
-  db.prepare(
+  await db.prepare(
     `
       INSERT INTO tenant_requests (
         id, requested_slug, requested_name, requested_email,
@@ -605,12 +605,12 @@ export function createTenantRequest(params: {
   return { id, reviewToken: token };
 }
 
-export function denyTenantRequest(reviewToken: string) {
+export async function denyTenantRequest(reviewToken: string) {
   const db = getDb();
   const tokenHash = hashToken(reviewToken);
   const now = nowIso();
 
-  const changes = db
+  const result = await db
     .prepare(
       `
       UPDATE tenant_requests
@@ -618,28 +618,29 @@ export function denyTenantRequest(reviewToken: string) {
       WHERE review_token_hash = ? AND status = 'pending'
     `,
     )
-    .run(now, tokenHash).changes;
+    .run(now, tokenHash);
+  const changes = result.changes;
 
   if (changes === 0) {
-    const existing = db
+    const existing = await db
       .prepare("SELECT * FROM tenant_requests WHERE review_token_hash = ?")
       .get(tokenHash) as TenantRequestRow | undefined;
     return { status: "missing_or_reviewed" as const, request: existing };
   }
 
-  const request = db
+  const request = await db
     .prepare("SELECT * FROM tenant_requests WHERE review_token_hash = ?")
     .get(tokenHash) as TenantRequestRow | undefined;
 
   return { status: "denied" as const, request };
 }
 
-export function approveTenantRequest(reviewToken: string) {
+export async function approveTenantRequest(reviewToken: string) {
   const db = getDb();
   const tokenHash = hashToken(reviewToken);
 
-  const run = db.transaction(() => {
-    const request = db
+  const run = db.transaction(async () => {
+    const request = await db
       .prepare("SELECT * FROM tenant_requests WHERE review_token_hash = ?")
       .get(tokenHash) as TenantRequestRow | undefined;
 
@@ -650,11 +651,11 @@ export function approveTenantRequest(reviewToken: string) {
       return { status: "already_reviewed" as const, request };
     }
 
-    const tenantExists = db
+    const tenantExists = await db
       .prepare("SELECT 1 FROM tenants WHERE slug = ?")
       .get(request.requested_slug);
     if (tenantExists) {
-      db.prepare(
+      await db.prepare(
         `
           UPDATE tenant_requests
           SET status = 'denied', reviewed_at = ?
@@ -667,11 +668,11 @@ export function approveTenantRequest(reviewToken: string) {
     const normalizedUsername = normalizeUsername(request.requested_slug);
     const normalizedEmail = normalizeEmail(request.requested_email);
 
-    const userConflict = db
+    const userConflict = await db
       .prepare("SELECT 1 FROM users WHERE username = ? OR email = ?")
       .get(normalizedUsername, normalizedEmail);
     if (userConflict) {
-      db.prepare(
+      await db.prepare(
         `
           UPDATE tenant_requests
           SET status = 'denied', reviewed_at = ?
@@ -683,7 +684,7 @@ export function approveTenantRequest(reviewToken: string) {
 
     const tenantId = randomUUID();
     const now = nowIso();
-    db.prepare(
+    await db.prepare(
       `
         INSERT INTO tenants (
           id, slug, name, admin_email, status, created_at, updated_at
@@ -700,7 +701,7 @@ export function approveTenantRequest(reviewToken: string) {
     );
 
     const temporaryPassword = `Temp-${generateToken(9)}`;
-    const created = createUser({
+    const created = await createUser({
       email: normalizedEmail,
       username: normalizedUsername,
       role: "tenant",
@@ -713,7 +714,7 @@ export function approveTenantRequest(reviewToken: string) {
       return { status: "user_conflict" as const };
     }
 
-    db.prepare(
+    await db.prepare(
       `
         UPDATE tenant_requests
         SET status = 'approved', reviewed_at = ?, tenant_id = ?
@@ -721,7 +722,7 @@ export function approveTenantRequest(reviewToken: string) {
       `,
     ).run(now, tenantId, request.id);
 
-    const tenant = db
+    const tenant = await db
       .prepare("SELECT * FROM tenants WHERE id = ?")
       .get(tenantId) as TenantRow;
 
@@ -737,8 +738,8 @@ export function approveTenantRequest(reviewToken: string) {
   return run();
 }
 
-export function requireTenantPaystackSecretKey(tenantId: string) {
-  const tenant = getTenantById(tenantId);
+export async function requireTenantPaystackSecretKey(tenantId: string) {
+  const tenant = await getTenantById(tenantId);
   if (!tenant) throw new Error("Tenant not found");
   if (!tenant.paystack_secret_enc) {
     throw new Error("Tenant Paystack key not configured");
@@ -746,19 +747,19 @@ export function requireTenantPaystackSecretKey(tenantId: string) {
   return decryptSecret(tenant.paystack_secret_enc);
 }
 
-export function setTenantPaystackSecret(params: {
+export async function setTenantPaystackSecret(params: {
   tenantId: string;
   paystackSecretKey: string;
 }) {
   const db = getDb();
-  const tenant = getTenantById(params.tenantId);
+  const tenant = await getTenantById(params.tenantId);
   if (!tenant) return { status: "missing" as const };
 
   const enc = encryptSecret(params.paystackSecretKey.trim());
   const last4 = params.paystackSecretKey.trim().slice(-4);
   const now = nowIso();
 
-  db.prepare(
+  await db.prepare(
     `
       UPDATE tenants
       SET paystack_secret_enc = ?, paystack_secret_last4 = ?, status = 'active', updated_at = ?
@@ -766,11 +767,11 @@ export function setTenantPaystackSecret(params: {
     `,
   ).run(enc, last4, now, params.tenantId);
 
-  return { status: "ok" as const, tenant: getTenantById(params.tenantId)! };
+  return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
 }
 
-function seedDefaultPackagesForTenant(db: ReturnType<typeof getDb>, tenantId: string) {
-  const count = db
+async function seedDefaultPackagesForTenant(db: ReturnType<typeof getDb>, tenantId: string) {
+  const count = await db
     .prepare("SELECT COUNT(1) as count FROM voucher_packages WHERE tenant_id = ?")
     .get(tenantId) as { count: number };
   if (count.count > 0) return;
@@ -806,9 +807,9 @@ function seedDefaultPackagesForTenant(db: ReturnType<typeof getDb>, tenantId: st
     },
   ];
 
-  const insertMany = db.transaction(() => {
+  const insertMany = db.transaction(async () => {
     for (const pkg of defaults) {
-      insert.run(
+      await insert.run(
         randomUUID(),
         tenantId,
         pkg.code,
@@ -823,17 +824,17 @@ function seedDefaultPackagesForTenant(db: ReturnType<typeof getDb>, tenantId: st
     }
   });
 
-  insertMany();
+  await insertMany();
 }
 
-export function seedDefaultPackagesForTenantId(tenantId: string) {
+export async function seedDefaultPackagesForTenantId(tenantId: string) {
   const db = getDb();
-  seedDefaultPackagesForTenant(db, tenantId);
+  await seedDefaultPackagesForTenant(db, tenantId);
 }
 
-export function getPackagesWithAvailability(tenantId: string) {
+export async function getPackagesWithAvailability(tenantId: string) {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .prepare(
       `
       SELECT p.*, (
@@ -855,25 +856,25 @@ export function getPackagesWithAvailability(tenantId: string) {
   return rows as Array<PackageRow & { available_count: number; total_count: number }>;
 }
 
-export function getPackageByCode(tenantId: string, code: string) {
+export async function getPackageByCode(tenantId: string, code: string) {
   const db = getDb();
-  return db
+  return await db
     .prepare(
       "SELECT * FROM voucher_packages WHERE tenant_id = ? AND code = ? AND active = 1",
     )
     .get(tenantId, code) as PackageRow | undefined;
 }
 
-export function getPackageById(tenantId: string, id: string) {
+export async function getPackageById(tenantId: string, id: string) {
   const db = getDb();
-  return db
+  return await db
     .prepare("SELECT * FROM voucher_packages WHERE tenant_id = ? AND id = ?")
     .get(tenantId, id) as PackageRow | undefined;
 }
 
-export function getTenantPackages(tenantId: string) {
+export async function getTenantPackages(tenantId: string) {
   const db = getDb();
-  const rows = db
+  const rows = await db
     .prepare(
       `
       SELECT *
@@ -886,14 +887,14 @@ export function getTenantPackages(tenantId: string) {
   return rows as PackageRow[];
 }
 
-export function updatePackagePrice(params: {
+export async function updatePackagePrice(params: {
   tenantId: string;
   packageId: string;
   priceNgn: number;
 }) {
   const db = getDb();
   const now = nowIso();
-  const result = db
+  const result = await db
     .prepare(
       `
       UPDATE voucher_packages
@@ -905,9 +906,9 @@ export function updatePackagePrice(params: {
   return result.changes > 0;
 }
 
-export function getAvailableCount(tenantId: string, packageId: string) {
+export async function getAvailableCount(tenantId: string, packageId: string) {
   const db = getDb();
-  const row = db
+  const row = await db
     .prepare(
       `
       SELECT COUNT(1) as count
@@ -919,7 +920,7 @@ export function getAvailableCount(tenantId: string, packageId: string) {
   return row?.count ?? 0;
 }
 
-export function createTransaction(params: {
+export async function createTransaction(params: {
   tenantId: string;
   reference: string;
   email: string;
@@ -933,7 +934,7 @@ export function createTransaction(params: {
   const now = nowIso();
   const id = randomUUID();
   const email = normalizeEmail(params.email);
-  db.prepare(
+  await db.prepare(
     `
       INSERT INTO transactions (
         id, tenant_id, reference, email, phone, amount_ngn, package_id, authorization_url,
@@ -956,34 +957,34 @@ export function createTransaction(params: {
   return id;
 }
 
-export function getTransaction(tenantId: string, reference: string) {
+export async function getTransaction(tenantId: string, reference: string) {
   const db = getDb();
-  return db
+  return await db
     .prepare("SELECT * FROM transactions WHERE tenant_id = ? AND reference = ?")
     .get(tenantId, reference) as TransactionRow | undefined;
 }
 
-export function getTransactionByReferenceEmail(
+export async function getTransactionByReferenceEmail(
   tenantId: string,
   reference: string,
   email: string,
 ) {
   const db = getDb();
   const normalizedEmail = normalizeEmail(email);
-  return db
+  return await db
     .prepare(
       "SELECT * FROM transactions WHERE tenant_id = ? AND reference = ? AND lower(email) = ?",
     )
     .get(tenantId, reference, normalizedEmail) as TransactionRow | undefined;
 }
 
-export function getTransactionByReferencePhone(
+export async function getTransactionByReferencePhone(
   tenantId: string,
   reference: string,
   phone: string,
 ) {
   const db = getDb();
-  const transaction = db
+  const transaction = await db
     .prepare(
       "SELECT * FROM transactions WHERE tenant_id = ? AND reference = ? ORDER BY created_at DESC LIMIT 1",
     )
@@ -996,14 +997,14 @@ export function getTransactionByReferencePhone(
   return normalizedInput === normalizedStored ? transaction : undefined;
 }
 
-export function updateTransactionAuthUrl(params: {
+export async function updateTransactionAuthUrl(params: {
   tenantId: string;
   reference: string;
   authorizationUrl: string;
   expiresAt: string | null;
 }) {
   const db = getDb();
-  return db
+  const result = await db
     .prepare(
       `
       UPDATE transactions
@@ -1016,15 +1017,16 @@ export function updateTransactionAuthUrl(params: {
       params.expiresAt,
       params.tenantId,
       params.reference,
-    ).changes;
+    );
+  return result.changes;
 }
 
-export function markTransactionProcessing(params: {
+export async function markTransactionProcessing(params: {
   tenantId: string;
   reference: string;
 }) {
   const db = getDb();
-  return db
+  const result = await db
     .prepare(
       `
       UPDATE transactions
@@ -1032,16 +1034,17 @@ export function markTransactionProcessing(params: {
       WHERE tenant_id = ? AND reference = ? AND payment_status = 'pending'
     `,
     )
-    .run(params.tenantId, params.reference).changes;
+    .run(params.tenantId, params.reference);
+  return result.changes;
 }
 
-export function markTransactionFailed(params: {
+export async function markTransactionFailed(params: {
   tenantId: string;
   reference: string;
   status: string;
 }) {
   const db = getDb();
-  return db
+  const result = await db
     .prepare(
       `
       UPDATE transactions
@@ -1049,17 +1052,18 @@ export function markTransactionFailed(params: {
       WHERE tenant_id = ? AND reference = ?
     `,
     )
-    .run(params.status, params.tenantId, params.reference).changes;
+    .run(params.status, params.tenantId, params.reference);
+  return result.changes;
 }
 
-export function completeTransaction(params: {
+export async function completeTransaction(params: {
   tenantId: string;
   reference: string;
   voucherCode: string;
   paidAt: string;
 }) {
   const db = getDb();
-  return db
+  const result = await db
     .prepare(
       `
       UPDATE transactions
@@ -1067,11 +1071,11 @@ export function completeTransaction(params: {
       WHERE tenant_id = ? AND reference = ?
     `,
     )
-    .run(params.voucherCode, params.paidAt, params.tenantId, params.reference)
-    .changes;
+    .run(params.voucherCode, params.paidAt, params.tenantId, params.reference);
+  return result.changes;
 }
 
-export function assignVoucher(params: {
+export async function assignVoucher(params: {
   tenantId: string;
   reference: string;
   email: string;
@@ -1083,7 +1087,7 @@ export function assignVoucher(params: {
   // voucher. We retry a few times to reduce false "no voucher" outcomes.
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const now = nowIso();
-    const voucher = db
+    const voucher = await db
       .prepare(
         `
         SELECT * FROM voucher_pool
@@ -1098,7 +1102,7 @@ export function assignVoucher(params: {
 
     if (!voucher) return null;
 
-    const updated = db
+    const updated = await db
       .prepare(
         `
         UPDATE voucher_pool
@@ -1127,7 +1131,7 @@ export function assignVoucher(params: {
   return null;
 }
 
-export function transactionAssignVoucher(params: {
+export async function transactionAssignVoucher(params: {
   tenantId: string;
   reference: string;
   email: string;
@@ -1135,13 +1139,13 @@ export function transactionAssignVoucher(params: {
   packageId: string;
 }) {
   const db = getDb();
-  const run = db.transaction(() => {
-    const processing = markTransactionProcessing({
+  const run = db.transaction(async () => {
+    const processing = await markTransactionProcessing({
       tenantId: params.tenantId,
       reference: params.reference,
     });
     if (processing === 0) {
-      const existing = getTransaction(params.tenantId, params.reference);
+      const existing = await getTransaction(params.tenantId, params.reference);
       if (existing?.payment_status === "success" && existing.voucher_code) {
         return {
           status: "already",
@@ -1151,9 +1155,9 @@ export function transactionAssignVoucher(params: {
       return { status: "skipped" };
     }
 
-    const voucher = assignVoucher(params);
+    const voucher = await assignVoucher(params);
     if (!voucher) {
-      markTransactionFailed({
+      await markTransactionFailed({
         tenantId: params.tenantId,
         reference: params.reference,
         status: "voucher_unavailable",
@@ -1161,7 +1165,7 @@ export function transactionAssignVoucher(params: {
       return { status: "no_voucher" };
     }
 
-    completeTransaction({
+    await completeTransaction({
       tenantId: params.tenantId,
       reference: params.reference,
       voucherCode: voucher.voucherCode,
@@ -1174,16 +1178,17 @@ export function transactionAssignVoucher(params: {
   return run();
 }
 
-export function getStats(tenantId: string) {
+export async function getStats(tenantId: string) {
   const db = getDb();
-  const packages = db
+  const packages = await db
     .prepare(
       "SELECT * FROM voucher_packages WHERE tenant_id = ? ORDER BY duration_minutes ASC",
     )
     .all(tenantId) as PackageRow[];
 
-  return packages.map((pkg) => {
-    const totals = db
+  return Promise.all(
+    packages.map(async (pkg) => {
+      const totals = await db
       .prepare(
         `
         SELECT
@@ -1194,31 +1199,32 @@ export function getStats(tenantId: string) {
         WHERE tenant_id = ? AND package_id = ?
       `,
       )
-      .get(tenantId, pkg.id) as {
-      total: number;
-      unused: number;
-      assigned: number;
-    };
+        .get(tenantId, pkg.id) as {
+        total: number;
+        unused: number;
+        assigned: number;
+      };
 
-    return {
-      code: pkg.code,
-      name: pkg.name,
-      total: totals.total ?? 0,
-      unused: totals.unused ?? 0,
-      assigned: totals.assigned ?? 0,
-      percentageRemaining:
-        totals.total > 0
-          ? Math.round(((totals.unused ?? 0) / totals.total) * 10000) / 100
-          : 0,
-    };
-  });
+      return {
+        code: pkg.code,
+        name: pkg.name,
+        total: totals.total ?? 0,
+        unused: totals.unused ?? 0,
+        assigned: totals.assigned ?? 0,
+        percentageRemaining:
+          totals.total > 0
+            ? Math.round(((totals.unused ?? 0) / totals.total) * 10000) / 100
+            : 0,
+      };
+    }),
+  );
 }
 
-export function getTenantAdminStats(tenantId: string) {
+export async function getTenantAdminStats(tenantId: string) {
   const db = getDb();
-  const voucherPool = getStats(tenantId);
+  const voucherPool = await getStats(tenantId);
   const voucherCodes = new Set(voucherPool.map((pkg) => pkg.code));
-  const packages = getTenantPackages(tenantId)
+  const packages = (await getTenantPackages(tenantId))
     .filter((pkg) => voucherCodes.has(pkg.code))
     .map((pkg) => ({
       id: pkg.id,
@@ -1228,7 +1234,7 @@ export function getTenantAdminStats(tenantId: string) {
       priceNgn: pkg.price_ngn,
       active: pkg.active,
     }));
-  const tx = db
+  const tx = await db
     .prepare(
       `
       SELECT

@@ -35,13 +35,13 @@ function validatePassword(pw: string) {
 }
 
 export async function POST(request: Request, { params }: Props) {
-  const sessionUser = getSessionUserFromRequest(request);
+  const sessionUser = await getSessionUserFromRequest(request);
   if (!sessionUser) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant) {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
@@ -50,7 +50,7 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const userRow = getUserById(sessionUser.id);
+  const userRow = await getUserById(sessionUser.id);
   if (!userRow) {
     return Response.json({ error: "User not found" }, { status: 404 });
   }
@@ -82,7 +82,7 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Paystack secret key is required" }, { status: 400 });
   }
 
-  if (requestedSlug !== tenant.slug && !isTenantSlugAvailable(requestedSlug)) {
+  if (requestedSlug !== tenant.slug && !await isTenantSlugAvailable(requestedSlug)) {
     return Response.json({ error: "That link name is not available" }, { status: 409 });
   }
 
@@ -91,13 +91,13 @@ export async function POST(request: Request, { params }: Props) {
     if (message) {
       return Response.json({ error: message }, { status: 400 });
     }
-    updateUserPassword({ userId: userRow.id, password: parsed.data.newPassword });
-    setUserMustChangePassword({ userId: userRow.id, mustChangePassword: false });
+    await updateUserPassword({ userId: userRow.id, password: parsed.data.newPassword });
+    await setUserMustChangePassword({ userId: userRow.id, mustChangePassword: false });
   }
 
   if (parsed.data.paystackSecretKey) {
     try {
-      const res = setTenantPaystackSecret({
+      const res = await setTenantPaystackSecret({
         tenantId: tenant.id,
         paystackSecretKey: parsed.data.paystackSecretKey,
       });
@@ -117,7 +117,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   if (requestedSlug !== tenant.slug) {
-    const updated = updateTenant({
+    const updated = await updateTenant({
       tenantId: tenant.id,
       slug: requestedSlug,
     });
@@ -129,7 +129,7 @@ export async function POST(request: Request, { params }: Props) {
     }
   }
 
-  const latest = getTenantBySlug(requestedSlug) ?? tenant;
+  const latest = await getTenantBySlug(requestedSlug) ?? tenant;
 
   return Response.json({
     status: "ok",

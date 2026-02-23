@@ -6,12 +6,12 @@ type Props = {
 
 export async function GET(_request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant || tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
 
-  const packages = getPackagesWithAvailability(tenant.id)
+  const packages = (await getPackagesWithAvailability(tenant.id))
     .filter((pkg) => pkg.price_ngn > 0 && pkg.total_count > 0)
     .map((pkg) => ({
       code: pkg.code,

@@ -29,14 +29,14 @@ function buildCheckoutEmailFromPhone(phone: string) {
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = getTenantBySlug(slug);
+  const tenant = await getTenantBySlug(slug);
   if (!tenant || tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
 
   let paystackSecretKey: string;
   try {
-    paystackSecretKey = requireTenantPaystackSecretKey(tenant.id);
+    paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
   } catch {
     return Response.json(
       { error: "Tenant payments are not configured" },
@@ -55,12 +55,12 @@ export async function POST(request: Request, { params }: Props) {
 
   const { phone, packageCode } = parsed.data;
   const email = buildCheckoutEmailFromPhone(phone);
-  const pkg = getPackageByCode(tenant.id, packageCode);
+  const pkg = await getPackageByCode(tenant.id, packageCode);
   if (!pkg) {
     return Response.json({ error: "Package not found" }, { status: 404 });
   }
 
-  const available = getAvailableCount(tenant.id, pkg.id);
+  const available = await getAvailableCount(tenant.id, pkg.id);
   if (available <= 0) {
     return Response.json(
       { error: "No vouchers available for this package" },
@@ -72,7 +72,7 @@ export async function POST(request: Request, { params }: Props) {
   try {
     reference = `WIFI-${randomUUID().split("-")[0].toUpperCase()}`;
     const expiresAt = new Date(Date.now() + getResumeTtlMs()).toISOString();
-    createTransaction({
+    await createTransaction({
       tenantId: tenant.id,
       reference,
       email,
@@ -96,7 +96,7 @@ export async function POST(request: Request, { params }: Props) {
         phone,
       },
     });
-    updateTransactionAuthUrl({
+    await updateTransactionAuthUrl({
       tenantId: tenant.id,
       reference,
       authorizationUrl: init.authorization_url,
@@ -114,7 +114,7 @@ export async function POST(request: Request, { params }: Props) {
       error instanceof Error ? error.message : "Unknown initialization error";
     if (reference) {
       try {
-        markTransactionFailed({
+        await markTransactionFailed({
           tenantId: tenant.id,
           reference,
           status: "init_failed",

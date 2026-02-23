@@ -33,19 +33,19 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: message }, { status: 400 });
   }
 
-  const consumed = consumePasswordResetToken(token);
+  const consumed = await consumePasswordResetToken(token);
   if (consumed.status !== "ok") {
     return Response.json({ error: "Invalid or expired reset link" }, { status: 400 });
   }
 
-  const user = getUserById(consumed.userId);
+  const user = await getUserById(consumed.userId);
   if (!user) {
     return Response.json({ error: "User not found" }, { status: 404 });
   }
 
-  updateUserPassword({ userId: user.id, password: parsed.data.newPassword });
-  setUserMustChangePassword({ userId: user.id, mustChangePassword: false });
-  revokeAllSessionsForUser(user.id);
+  await updateUserPassword({ userId: user.id, password: parsed.data.newPassword });
+  await setUserMustChangePassword({ userId: user.id, mustChangePassword: false });
+  await revokeAllSessionsForUser(user.id);
 
   return Response.json({ status: "ok" });
 }
