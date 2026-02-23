@@ -68,9 +68,13 @@ The importer normalizes headers and supports `Code`, `Voucher Code`, or `csvCode
 Create `.env` based on `.env.example`:
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/payspot
+DATABASE_URL=postgresql://postgres:change-this-strong-password@postgres:5432/payspot
+POSTGRES_DB=payspot
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=change-this-strong-password
+POSTGRES_HOST_PORT=5433
 APP_URL=http://localhost:3000
-ADMIN_API_KEY=change-this
+ADMIN_API_KEY=change-this-strong-key
 TERMII_API_KEY=termii_xxx
 TERMII_SENDER_ID=WiFi
 RESUME_TTL_MINUTES=60
@@ -80,13 +84,14 @@ SMTP_HOST=mail.abdxl.cloud
 SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=postmaster@your-domain.com
-SMTP_PASS=change-this
+SMTP_PASS=change-this-strong-password
 SMTP_FROM="PaySpot <no-reply@your-domain.com>"
 ```
 
 Notes:
 - When running the app inside Docker Compose, use `postgres` as the DB host in `DATABASE_URL`.
-- When running the app directly on your host machine, switch DB host to `localhost`.
+- Docker publishes Postgres on `POSTGRES_HOST_PORT` (default `5433`) to avoid conflicts with other stacks.
+- When running the app directly on your host machine, switch DB host to `localhost` and port to `POSTGRES_HOST_PORT`.
 - `TENANT_SECRETS_KEY` must be 32 bytes (base64). Example:
   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
 - `ADMIN_API_KEY` is optional (used for programmatic access to `GET /api/admin/stats`).

@@ -20,7 +20,7 @@ help:
 	@printf "  version              Show Node and npm versions\n\n"
 	@printf "Setup\n"
 	@printf "  install              Install Node dependencies\n"
-	@printf "  env-setup            Create .env from .env.example if missing\n"
+	@printf "  env-setup            Create .env (with strong generated secrets) if missing\n"
 	@printf "  setup                env-setup + install + build\n"
 	@printf "  bootstrap            Start stack, wait for readiness, run migrate+seed\n\n"
 	@printf "Docker\n"
@@ -67,6 +67,15 @@ install:
 env-setup:
 	@if [ ! -f $(ENV_FILE) ]; then \
 		cp .env.example $(ENV_FILE); \
+		if command -v openssl >/dev/null 2>&1; then \
+			pg_pass=$$(openssl rand -hex 24); \
+			admin_key=$$(openssl rand -hex 24); \
+			tenant_key=$$(openssl rand -base64 32 | tr -d '\n'); \
+			perl -pi -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$$pg_pass|; s|^ADMIN_API_KEY=.*|ADMIN_API_KEY=$$admin_key|; s|^TENANT_SECRETS_KEY=.*|TENANT_SECRETS_KEY=$$tenant_key|; s|^DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:$$pg_pass\@postgres:5432/payspot|;" $(ENV_FILE); \
+			echo "Generated strong POSTGRES_PASSWORD, ADMIN_API_KEY, and TENANT_SECRETS_KEY"; \
+		else \
+			echo "openssl not found; update secrets in $(ENV_FILE) manually"; \
+		fi; \
 		echo "Created $(ENV_FILE) from .env.example"; \
 	else \
 		echo "$(ENV_FILE) already exists"; \
@@ -120,7 +129,7 @@ health:
 
 urls:
 	@echo "App: http://localhost:3000"
-	@echo "Postgres: postgresql://$${POSTGRES_USER:-postgres}:$${POSTGRES_PASSWORD:-postgres}@localhost:5432/$${POSTGRES_DB:-payspot}"
+	@echo "Postgres: postgresql://$${POSTGRES_USER:-postgres}:$${POSTGRES_PASSWORD:-change-this-strong-password}@localhost:$${POSTGRES_HOST_PORT:-5433}/$${POSTGRES_DB:-payspot}"
 
 db-migrate:
 	@echo "Initializing schema via application startup path..."
