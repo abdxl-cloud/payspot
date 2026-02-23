@@ -8,7 +8,7 @@ DB_SERVICE := postgres
 BACKUP_DIR := backups
 ENV_FILE := .env
 
-.PHONY: help info version install env-setup setup bootstrap up down restart start stop ps logs logs-app logs-db build rebuild wait-for-services health urls db-migrate db-seed db-shell db-reset db-reset-force db-backup db-restore shell-app shell-db clean prune
+.PHONY: help info version install env-setup setup bootstrap up down restart start stop ps logs logs-app logs-db build rebuild wait-for-services health urls db-migrate db-seed seed-admin-reset db-shell db-reset db-reset-force db-backup db-restore shell-app shell-db clean prune
 
 help:
 	@printf "\n"
@@ -38,6 +38,7 @@ help:
 	@printf "Database\n"
 	@printf "  db-migrate           Ensure schema is initialized\n"
 	@printf "  db-seed              Ensure seed data exists\n"
+	@printf "  seed-admin-reset     Reset seeded admin login (set SEED_ADMIN_PASSWORD=...)\n"
 	@printf "  db-shell             Open PostgreSQL shell\n"
 	@printf "  db-reset             Reset database volume (with prompt)\n"
 	@printf "  db-reset-force       Reset database volume without prompt\n"
@@ -138,6 +139,9 @@ db-migrate:
 db-seed:
 	@echo "Seed data is idempotent and runs during db-migrate"
 	@$(MAKE) db-migrate
+
+seed-admin-reset:
+	@$(COMPOSE) exec -T $(APP_SERVICE) node scripts/reset-seed-admin.mjs "$${SEED_ADMIN_PASSWORD:-Passw0rdA1}"
 
 db-shell:
 	$(COMPOSE) exec $(DB_SERVICE) psql -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-payspot}

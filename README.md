@@ -102,6 +102,11 @@ Created on first database init:
 - Admin: `seeduser@example.com` / `Passw0rdA1`
 - Tenant: `walstreet@example.com` / `Pathfinder07!` (slug: `walstreet`)
 
+If seeded admin login fails on an existing DB, you can reset it:
+```bash
+make seed-admin-reset SEED_ADMIN_PASSWORD='Use-A-Strong-Password-Here'
+```
+
 ## Local Development
 Start Postgres and app with Docker (recommended):
 ```bash
