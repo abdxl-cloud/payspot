@@ -97,6 +97,7 @@ Notes:
 - `SESSION_COOKIE_SECURE` controls the auth cookie `Secure` flag.
 - Use `false` for plain HTTP deployments, `true` for HTTPS. If unset, app infers from `APP_URL`.
 - `FORCE_HTTPS=true` enables app-level redirects from HTTP to HTTPS (recommended in production).
+- If `FORCE_HTTPS` is unset, app also enforces HTTPS automatically when `APP_URL` starts with `https://`.
 - `TENANT_SECRETS_KEY` must be 32 bytes (base64). Example:
   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
 - `ADMIN_API_KEY` is optional (used for programmatic access to `GET /api/admin/stats`).

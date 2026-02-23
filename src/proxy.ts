@@ -9,7 +9,19 @@ function parseBooleanEnv(value: string | undefined) {
 }
 
 function shouldForceHttps() {
-  return parseBooleanEnv(process.env.FORCE_HTTPS) === true;
+  const forced = parseBooleanEnv(process.env.FORCE_HTTPS);
+  if (forced !== null) return forced;
+
+  const appUrl = process.env.APP_URL?.trim();
+  if (appUrl) {
+    try {
+      return new URL(appUrl).protocol === "https:";
+    } catch {
+      // Ignore invalid APP_URL and fall back.
+    }
+  }
+
+  return false;
 }
 
 export function proxy(request: NextRequest) {
@@ -22,7 +34,24 @@ export function proxy(request: NextRequest) {
   }
 
   const forwardedProto = request.headers.get("x-forwarded-proto");
-  if (forwardedProto && forwardedProto.split(",")[0]?.trim().toLowerCase() === "https") {
+  const forwardedProtocol = request.headers.get("x-forwarded-protocol");
+  const forwardedSsl = request.headers.get("x-forwarded-ssl");
+  const frontEndHttps = request.headers.get("front-end-https");
+  const cfVisitor = request.headers.get("cf-visitor");
+
+  const forwardedValues = [forwardedProto, forwardedProtocol]
+    .filter((value): value is string => Boolean(value))
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  const alreadySecure =
+    forwardedValues.includes("https") ||
+    forwardedSsl?.trim().toLowerCase() === "on" ||
+    frontEndHttps?.trim().toLowerCase() === "on" ||
+    (cfVisitor?.toLowerCase().includes('"scheme":"https"') ?? false);
+
+  if (alreadySecure) {
     return NextResponse.next();
   }
 
