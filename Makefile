@@ -87,7 +87,7 @@ setup: env-setup install build
 bootstrap: up wait-for-services db-migrate db-seed info
 
 up:
-	$(COMPOSE) up -d
+	$(COMPOSE) up -d --build
 
 down:
 	$(COMPOSE) down
