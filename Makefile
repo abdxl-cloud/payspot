@@ -8,7 +8,7 @@ DB_SERVICE := postgres
 BACKUP_DIR := backups
 ENV_FILE := .env
 
-.PHONY: help info version install env-setup setup bootstrap up down restart start stop ps logs logs-app logs-db build rebuild wait-for-services health urls db-migrate db-seed seed-admin-reset db-shell db-reset db-reset-force db-backup db-restore shell-app shell-db clean prune
+.PHONY: help info version install env-setup ssl-env setup bootstrap up down restart start stop ps logs logs-app logs-db build rebuild wait-for-services health urls db-migrate db-seed seed-admin-reset db-shell db-reset db-reset-force db-backup db-restore shell-app shell-db clean prune
 
 help:
 	@printf "\n"
@@ -21,6 +21,7 @@ help:
 	@printf "Setup\n"
 	@printf "  install              Install Node dependencies\n"
 	@printf "  env-setup            Create .env (with strong generated secrets) if missing\n"
+	@printf "  ssl-env              Configure .env for HTTPS (usage: make ssl-env DOMAIN=your-domain)\n"
 	@printf "  setup                env-setup + install + build\n"
 	@printf "  bootstrap            Start stack, wait for readiness, run migrate+seed\n\n"
 	@printf "Docker\n"
@@ -82,6 +83,19 @@ env-setup:
 		echo "$(ENV_FILE) already exists"; \
 	fi
 
+ssl-env:
+	@if [ -z "$(DOMAIN)" ]; then \
+		echo "Usage: make ssl-env DOMAIN=payspot.abdxl.cloud"; \
+		exit 1; \
+	fi
+	@if [ ! -f $(ENV_FILE) ]; then \
+		echo "$(ENV_FILE) missing. Run: make env-setup"; \
+		exit 1; \
+	fi
+	@perl -pi -e "s|^APP_URL=.*|APP_URL=https://$(DOMAIN)|; s|^SESSION_COOKIE_SECURE=.*|SESSION_COOKIE_SECURE=true|; s|^FORCE_HTTPS=.*|FORCE_HTTPS=true|;" $(ENV_FILE)
+	@grep -q '^FORCE_HTTPS=' $(ENV_FILE) || echo 'FORCE_HTTPS=true' >> $(ENV_FILE)
+	@echo "Updated $(ENV_FILE) for HTTPS domain: $(DOMAIN)"
+
 setup: env-setup install build
 
 bootstrap: up wait-for-services db-migrate db-seed info
@@ -141,7 +155,12 @@ db-seed:
 	@$(MAKE) db-migrate
 
 seed-admin-reset:
-	@$(COMPOSE) exec -T $(APP_SERVICE) node scripts/reset-seed-admin.mjs "$${SEED_ADMIN_PASSWORD:-Passw0rdA1}"
+	@if [ -z "$$SEED_ADMIN_PASSWORD" ]; then \
+		echo "Set SEED_ADMIN_PASSWORD (min 12 chars), example:"; \
+		echo "  make seed-admin-reset SEED_ADMIN_PASSWORD='Use-A-Strong-Password-Here'"; \
+		exit 1; \
+	fi
+	@$(COMPOSE) exec -T $(APP_SERVICE) node scripts/reset-seed-admin.mjs "$$SEED_ADMIN_PASSWORD"
 
 db-shell:
 	$(COMPOSE) exec $(DB_SERVICE) psql -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-payspot}

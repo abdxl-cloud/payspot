@@ -3,15 +3,15 @@ import { Pool } from "pg";
 
 const email = (process.env.SEED_ADMIN_EMAIL || "seeduser@example.com").trim().toLowerCase();
 const username = (process.env.SEED_ADMIN_USERNAME || "seeduser").trim().toLowerCase();
-const password = process.env.SEED_ADMIN_PASSWORD || process.argv[2] || "Passw0rdA1";
+const password = process.env.SEED_ADMIN_PASSWORD || process.argv[2] || "";
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is required");
   process.exit(1);
 }
 
-if (!password || password.length < 8) {
-  console.error("SEED_ADMIN_PASSWORD must be at least 8 characters");
+if (!password || password.length < 12) {
+  console.error("Provide SEED_ADMIN_PASSWORD (or argv[2]) with at least 12 characters");
   process.exit(1);
 }
 
@@ -105,4 +105,3 @@ try {
 } finally {
   await pool.end();
 }
-

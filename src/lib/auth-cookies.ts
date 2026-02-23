@@ -1,5 +1,29 @@
 export const SESSION_COOKIE_NAME = "vs_session";
 
+function parseBooleanEnv(value: string | undefined) {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
+  if (normalized === "false" || normalized === "0" || normalized === "no") return false;
+  return null;
+}
+
+function shouldUseSecureCookie() {
+  const forced = parseBooleanEnv(process.env.SESSION_COOKIE_SECURE);
+  if (forced !== null) return forced;
+
+  const appUrl = process.env.APP_URL?.trim();
+  if (appUrl) {
+    try {
+      return new URL(appUrl).protocol === "https:";
+    } catch {
+      // Fall through to NODE_ENV heuristic.
+    }
+  }
+
+  return process.env.NODE_ENV === "production";
+}
+
 export function getCookieValue(cookieHeader: string | null, name: string) {
   if (!cookieHeader) return null;
   const parts = cookieHeader.split(";");
@@ -19,7 +43,7 @@ export function buildSessionCookie(params: {
 }) {
   const expires = new Date(params.expiresAt);
   const maxAge = Math.max(0, Math.floor((expires.getTime() - Date.now()) / 1000));
-  const secure = process.env.NODE_ENV === "production";
+  const secure = shouldUseSecureCookie();
   return [
     `${SESSION_COOKIE_NAME}=${params.token}`,
     "Path=/",
@@ -34,7 +58,7 @@ export function buildSessionCookie(params: {
 }
 
 export function buildClearSessionCookie() {
-  const secure = process.env.NODE_ENV === "production";
+  const secure = shouldUseSecureCookie();
   return [
     `${SESSION_COOKIE_NAME}=`,
     "Path=/",
@@ -47,4 +71,3 @@ export function buildClearSessionCookie() {
     .filter(Boolean)
     .join("; ");
 }
-

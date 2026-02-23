@@ -74,6 +74,8 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=change-this-strong-password
 POSTGRES_HOST_PORT=5433
 APP_URL=http://localhost:3000
+SESSION_COOKIE_SECURE=false
+FORCE_HTTPS=false
 ADMIN_API_KEY=change-this-strong-key
 TERMII_API_KEY=termii_xxx
 TERMII_SENDER_ID=WiFi
@@ -92,6 +94,9 @@ Notes:
 - When running the app inside Docker Compose, use `postgres` as the DB host in `DATABASE_URL`.
 - Docker publishes Postgres on `POSTGRES_HOST_PORT` (default `5433`) to avoid conflicts with other stacks.
 - When running the app directly on your host machine, switch DB host to `localhost` and port to `POSTGRES_HOST_PORT`.
+- `SESSION_COOKIE_SECURE` controls the auth cookie `Secure` flag.
+- Use `false` for plain HTTP deployments, `true` for HTTPS. If unset, app infers from `APP_URL`.
+- `FORCE_HTTPS=true` enables app-level redirects from HTTP to HTTPS (recommended in production).
 - `TENANT_SECRETS_KEY` must be 32 bytes (base64). Example:
   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
 - `ADMIN_API_KEY` is optional (used for programmatic access to `GET /api/admin/stats`).
@@ -155,3 +160,22 @@ Tenant stats are available in the tenant dashboard (`/t/<slug>/admin`) after log
 - Configure each tenant's Paystack webhook URL: `https://your-domain.com/api/t/<slug>/payments/webhook`
 - Ensure PostgreSQL is reachable from the app (`DATABASE_URL=postgresql://...`).
 - Use a managed PostgreSQL instance and a production process manager/orchestrator.
+
+## SSL Setup (Nginx Proxy Manager)
+If your domain is `payspot.abdxl.cloud` on server `109.205.181.4`:
+1. Ensure DNS `A` record points `payspot.abdxl.cloud` -> `109.205.181.4`.
+2. Configure app env for HTTPS:
+   ```bash
+   make ssl-env DOMAIN=payspot.abdxl.cloud
+   make up
+   ```
+3. In Nginx Proxy Manager:
+   - Proxy Host: `payspot.abdxl.cloud`
+   - Forward Host/IP: `109.205.181.4`
+   - Forward Port: `3000`
+   - Scheme: `http`
+4. In NPM SSL tab:
+   - Request a Let's Encrypt certificate
+   - Enable `Force SSL`
+   - Enable `HTTP/2`
+   - Enable `HSTS`

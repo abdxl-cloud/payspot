@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { Pool, types, type PoolClient } from "pg";
 import { hashPassword } from "@/lib/password";
 
-const DEFAULT_DB_URL = "postgresql://postgres:postgres@localhost:5432/payspot";
+const DEFAULT_DB_URL = "postgresql://postgres:postgres@localhost:5433/payspot";
 
 type QueryArg = string | number | boolean | null;
 
