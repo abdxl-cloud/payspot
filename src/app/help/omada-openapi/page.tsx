@@ -1,6 +1,15 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Lora, Public_Sans } from "next/font/google";
+import {
+  ArrowUpRight,
+  CircleCheckBig,
+  KeyRound,
+  ListChecks,
+  Route,
+  ShieldCheck,
+  Wifi,
+} from "lucide-react";
 import { AppTopbar } from "@/components/app-topbar";
 
 const display = Lora({
@@ -54,6 +63,62 @@ const quickChecks = [
   "You can pass the PaySpot ‘Test Omada connection’ button",
 ] as const;
 
+const prerequisites = [
+  "You can log in to Omada Controller with admin privileges.",
+  "You know which Omada site is your live hotspot site.",
+  "You can open PaySpot tenant admin at /t/<slug>/admin.",
+] as const;
+
+const stepByStep = [
+  {
+    title: "Open OpenAPI settings in Omada",
+    body: "In Omada Global View, go to Settings > Platform Integration > Open API.",
+  },
+  {
+    title: "Create a new OpenAPI app",
+    body: "Click Add New App, select Client mode, assign permissions for hotspot/voucher actions, and include the correct site privilege.",
+  },
+  {
+    title: "Copy credentials immediately",
+    body: "Save the generated Client ID and Client Secret. Treat Client Secret like a password and share it securely only.",
+  },
+  {
+    title: "Paste values into PaySpot architecture",
+    body: "In PaySpot tenant admin, open Configure architecture and set Voucher source = omada_openapi.",
+  },
+  {
+    title: "Run connection test before going live",
+    body: "Click Test Omada connection. If it passes, save settings and perform one real test purchase.",
+  },
+] as const;
+
+const fieldMapping = [
+  { omada: "Northbound URL", payspot: "API Base URL" },
+  { omada: "Omada controller identifier", payspot: "Omada ID" },
+  { omada: "Target hotspot site identifier", payspot: "Site ID" },
+  { omada: "OpenAPI App Client ID", payspot: "Client ID" },
+  { omada: "OpenAPI App Client Secret", payspot: "Client Secret" },
+] as const;
+
+const commonErrors = [
+  {
+    error: "Missing required Omada fields",
+    fix: "Fill all five required fields in Configure architecture and save again.",
+  },
+  {
+    error: "Omada connection test failed: client credentials",
+    fix: "Regenerate Client Secret in Omada and paste the new value in PaySpot.",
+  },
+  {
+    error: "Omada connection test failed: site",
+    fix: "Confirm Site ID is correct and that your OpenAPI app has access to that site.",
+  },
+  {
+    error: "Payment succeeds but voucher unavailable",
+    fix: "Run Test Omada connection again and verify hotspot/voucher permissions are still active.",
+  },
+] as const;
+
 const referenceShots = [
   {
     src: "/help/omada/omada-openapi-1.png",
@@ -90,28 +155,60 @@ export default function OmadaOpenApiHelpPage() {
           }
         />
 
-        <main className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <main className="mt-6 grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
           <section
             className="rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-[var(--shadow-md)] sm:p-8"
             style={{ fontFamily: "var(--font-omada-body), sans-serif" }}
           >
-            <p className="section-kicker">Omada OpenAPI Setup</p>
-            <h1
-              className="mt-2 text-balance text-[clamp(2rem,5vw,3.4rem)] leading-[1.02] text-slate-950"
-              style={{ fontFamily: "var(--font-omada-display), serif" }}
-            >
-              Send this page to any client and let them self-onboard.
-            </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-700 sm:text-base">
-              As of February 24, 2026, menu labels may vary slightly by controller version,
-              but the OpenAPI flow is the same: create an app in Omada, copy the five fields,
-              paste into PaySpot Architecture settings, then run connection test.
-            </p>
+            <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-900 p-5 text-white sm:p-7">
+              <div className="pointer-events-none absolute -right-8 -top-10 size-40 rounded-full bg-cyan-300/20 blur-2xl" />
+              <div className="pointer-events-none absolute -bottom-14 left-24 size-44 rounded-full bg-sky-400/20 blur-2xl" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-200">
+                Omada OpenAPI Setup
+              </p>
+              <h1
+                className="mt-2 text-balance text-[clamp(1.9rem,4.8vw,3.1rem)] leading-[1.03] text-white"
+                style={{ fontFamily: "var(--font-omada-display), serif" }}
+              >
+                Client self-setup playbook
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-200 sm:text-base">
+                Fast path: create OpenAPI app, collect 5 fields, paste in PaySpot, run the health test.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2.5 py-1">
+                  <ListChecks className="size-3.5" />
+                  5 required fields
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2.5 py-1">
+                  <ShieldCheck className="size-3.5" />
+                  Save blocked if incomplete
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2.5 py-1">
+                  <Wifi className="size-3.5" />
+                  Test before go-live
+                </span>
+              </div>
+            </div>
 
             <div className="mt-6 rounded-2xl border border-sky-200 bg-sky-50/70 p-4 text-sm text-sky-950">
               In Omada: <strong>Global View</strong> → <strong>Settings</strong> →{" "}
               <strong>Platform Integration</strong> → <strong>Open API</strong> →{" "}
               <strong>Add New App</strong> (choose <strong>Client mode</strong>).
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Before You Start
+              </p>
+              <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                {prerequisites.map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <CircleCheckBig className="mt-0.5 size-4 shrink-0 text-emerald-700" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className="mt-6">
@@ -122,7 +219,7 @@ export default function OmadaOpenApiHelpPage() {
                 {referenceShots.map((shot) => (
                   <article
                     key={shot.src}
-                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[var(--shadow-sm)]"
                   >
                     <Image
                       src={shot.src}
@@ -139,7 +236,7 @@ export default function OmadaOpenApiHelpPage() {
                         target="_blank"
                         rel="noreferrer"
                       >
-                        Source image
+                        Source image <ArrowUpRight className="mb-0.5 ml-1 inline size-3.5" />
                       </a>
                     </div>
                   </article>
@@ -149,8 +246,9 @@ export default function OmadaOpenApiHelpPage() {
 
             <div className="mt-6 grid gap-3">
               {fieldGuide.map((field) => (
-                <article key={field.key} className="rounded-2xl border border-slate-200 bg-slate-50/55 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                <article key={field.key} className="rounded-2xl border border-slate-200 bg-slate-50/55 p-4 shadow-[var(--shadow-sm)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 inline-flex items-center gap-1.5">
+                    <KeyRound className="size-3.5" />
                     {field.label}
                   </p>
                   <p className="mt-1 break-all text-sm font-semibold text-slate-900">{field.value}</p>
@@ -161,20 +259,34 @@ export default function OmadaOpenApiHelpPage() {
           </section>
 
           <section
-            className="space-y-6 rounded-3xl border border-slate-900/15 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 p-6 text-slate-100 shadow-[var(--shadow-md)] sm:p-8"
+            className="space-y-6 rounded-3xl border border-slate-900/15 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 p-6 text-slate-100 shadow-[var(--shadow-md)] sm:p-8 lg:sticky lg:top-6 lg:self-start"
             style={{ fontFamily: "var(--font-omada-body), sans-serif" }}
           >
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-200">
-                What Clients Should Do
+              <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-200">
+                <Route className="size-3.5" />
+                Step-by-Step
               </p>
               <ol className="mt-3 space-y-2 text-sm leading-relaxed text-slate-200 sm:text-base">
-                <li>1. Create OpenAPI app in Client mode and save Client ID + Client Secret.</li>
-                <li>2. Confirm site privileges are granted to the target hotspot site.</li>
-                <li>3. Share API Base URL, Omada ID, Site ID, Client ID, Client Secret securely.</li>
-                <li>4. In PaySpot tenant admin, set Voucher source to <code>omada_openapi</code>.</li>
-                <li>5. Click <strong>Test Omada connection</strong>. Only go live after it passes.</li>
+                {stepByStep.map((step, index) => (
+                  <li key={step.title} className="rounded-xl border border-white/15 bg-white/5 p-3">
+                    <strong className="text-white">{index + 1}. {step.title}:</strong> {step.body}
+                  </li>
+                ))}
               </ol>
+            </div>
+
+            <div className="rounded-2xl border border-white/20 bg-white/8 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300">
+                Omada To PaySpot Field Mapping
+              </p>
+              <ul className="mt-2 space-y-2 text-sm text-slate-100">
+                {fieldMapping.map((item) => (
+                  <li key={item.omada}>
+                    <strong>{item.omada}</strong> → {item.payspot}
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className="rounded-2xl border border-white/20 bg-white/8 p-4">
@@ -189,8 +301,16 @@ export default function OmadaOpenApiHelpPage() {
             </div>
 
             <div className="rounded-2xl border border-amber-300/35 bg-amber-300/10 p-4 text-sm text-amber-100">
-              If test fails with client/secret error, regenerate the OpenAPI app secret and paste it
-              again. If site errors persist, re-check site privileges in Omada app settings.
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-50">
+                Common Errors And Fixes
+              </p>
+              <ul className="mt-2 space-y-2">
+                {commonErrors.map((item) => (
+                  <li key={item.error}>
+                    <strong>{item.error}:</strong> {item.fix}
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className="text-xs leading-relaxed text-slate-300">
