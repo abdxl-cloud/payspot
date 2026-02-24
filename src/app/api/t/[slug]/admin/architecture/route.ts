@@ -102,6 +102,15 @@ export async function PATCH(request: Request, { params }: Props) {
     if (result.status === "missing") {
       return Response.json({ error: "Tenant not found" }, { status: 404 });
     }
+    if (result.status === "incomplete_omada_openapi") {
+      return Response.json(
+        {
+          error: `Cannot set voucher source to omada_openapi. Missing required Omada fields: ${result.missing.join(", ")}`,
+          missing: result.missing,
+        },
+        { status: 400 },
+      );
+    }
   } catch (error) {
     console.error("Failed to update architecture", error);
     return Response.json(

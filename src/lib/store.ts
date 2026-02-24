@@ -916,6 +916,22 @@ export async function setTenantArchitecture(params: {
     }
   }
 
+  if (voucherSourceMode === "omada_openapi") {
+    const missing: Array<"apiBaseUrl" | "omadacId" | "siteId" | "clientId" | "clientSecret"> = [];
+    if (!apiBaseUrl) missing.push("apiBaseUrl");
+    if (!omadacId) missing.push("omadacId");
+    if (!siteId) missing.push("siteId");
+    if (!clientId) missing.push("clientId");
+    if (!omadaClientSecretEnc) missing.push("clientSecret");
+
+    if (missing.length > 0) {
+      return {
+        status: "incomplete_omada_openapi" as const,
+        missing,
+      };
+    }
+  }
+
   await db
     .prepare(
       `

@@ -65,7 +65,8 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const available = await getAvailableCount(tenant.id, pkg.id);
-  if (available <= 0) {
+  const isOmadaOpenApiMode = tenant.voucher_source_mode === "omada_openapi";
+  if (!isOmadaOpenApiMode && available <= 0) {
     return Response.json(
       { error: "No vouchers available for this package" },
       { status: 409 },
