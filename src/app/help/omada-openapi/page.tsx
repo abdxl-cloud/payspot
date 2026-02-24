@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Lora, Public_Sans } from "next/font/google";
 import { AppTopbar } from "@/components/app-topbar";
@@ -53,6 +54,27 @@ const quickChecks = [
   "You can pass the PaySpot ‘Test Omada connection’ button",
 ] as const;
 
+const referenceShots = [
+  {
+    src: "/help/omada/omada-openapi-1.png",
+    alt: "Omada Open API menu showing where to create an app",
+    caption: "Open API menu and app creation entry point.",
+    source: "https://static-community.tp-link.com/other/21/11/2025/ab482cfe0951404cbfd59c5496977e1c.png",
+  },
+  {
+    src: "/help/omada/omada-openapi-2.png",
+    alt: "Omada create app screen with Client mode and permissions",
+    caption: "Create app form where Client mode and permissions are set.",
+    source: "https://static-community.tp-link.com/other/21/11/2025/efea719bdd604ff1b62c55332ecfcdb6.png",
+  },
+  {
+    src: "/help/omada/omada-openapi-4.png",
+    alt: "Omada app detail showing generated credentials and identifiers",
+    caption: "App details page where Client ID and other fields are copied.",
+    source: "https://static-community.tp-link.com/other/21/11/2025/3fed6b16e9dd4b24b704a3fdae28511f.png",
+  },
+] as const;
+
 export default function OmadaOpenApiHelpPage() {
   return (
     <div className={`${display.variable} ${body.variable} app-shell`}>
@@ -90,6 +112,39 @@ export default function OmadaOpenApiHelpPage() {
               In Omada: <strong>Global View</strong> → <strong>Settings</strong> →{" "}
               <strong>Platform Integration</strong> → <strong>Open API</strong> →{" "}
               <strong>Add New App</strong> (choose <strong>Client mode</strong>).
+            </div>
+
+            <div className="mt-6">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Visual Walkthrough
+              </p>
+              <div className="mt-3 grid gap-3">
+                {referenceShots.map((shot) => (
+                  <article
+                    key={shot.src}
+                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+                  >
+                    <Image
+                      src={shot.src}
+                      alt={shot.alt}
+                      width={831}
+                      height={573}
+                      className="h-auto w-full"
+                    />
+                    <div className="border-t border-slate-200 p-3">
+                      <p className="text-sm text-slate-700">{shot.caption}</p>
+                      <a
+                        className="mt-1 inline-block text-xs text-slate-500 underline underline-offset-2 hover:text-slate-900"
+                        href={shot.source}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Source image
+                      </a>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
 
             <div className="mt-6 grid gap-3">
