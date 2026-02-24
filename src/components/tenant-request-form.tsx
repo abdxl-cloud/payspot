@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { Building2, Mail, ShieldCheck, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,7 @@ export function TenantRequestForm() {
       if (!response.ok) {
         throw new Error(data?.error || "Unable to submit request.");
       }
-      setSuccess("Thanks! We'll email you with next steps.");
+      setSuccess("Request submitted. We will email onboarding approval details shortly.");
       setBusinessName("");
       setEmail("");
     } catch (err) {
@@ -51,16 +52,16 @@ export function TenantRequestForm() {
   }
 
   return (
-    <Card className="border-slate-200/80 bg-white/85">
-      <CardHeader className="space-y-1">
-        <p className="section-kicker">New tenant onboarding</p>
-        <CardTitle className="section-title">Request your Wi-Fi sales portal</CardTitle>
+    <Card className="border-slate-200/85 bg-white/92">
+      <CardHeader className="space-y-2">
+        <p className="section-kicker">Operator onboarding</p>
+        <CardTitle className="section-title">Request your PaySpot tenant</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-xs text-slate-600">
-          <p>1. Submit business and admin details.</p>
-          <p>2. Pick your portal link during setup with live availability check.</p>
-          <p>3. Import voucher CSV before entering dashboard.</p>
+        <div className="grid gap-2 rounded-xl border border-slate-200/85 bg-slate-50/80 p-3 text-xs text-slate-700">
+          <p className="inline-flex items-center gap-2"><Building2 className="size-3.5" /> Submit business and admin email.</p>
+          <p className="inline-flex items-center gap-2"><Wifi className="size-3.5" /> Configure slug and voucher source after approval.</p>
+          <p className="inline-flex items-center gap-2"><ShieldCheck className="size-3.5" /> Activate payments and start selling vouchers.</p>
         </div>
 
         {error ? (
@@ -79,11 +80,11 @@ export function TenantRequestForm() {
 
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <Label htmlFor="businessName">Business name</Label>
+            <Label htmlFor="businessName">Business or venue name</Label>
             <Input
               id="businessName"
               className="h-11"
-              placeholder="Acme Cafe"
+              placeholder="Walstreet Lounge"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               required
@@ -92,15 +93,18 @@ export function TenantRequestForm() {
 
           <div className="grid gap-2">
             <Label htmlFor="email">Admin email</Label>
-            <Input
-              id="email"
-              type="email"
-              className="h-11"
-              placeholder="you@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="email"
+                type="email"
+                className="h-11 pl-9"
+                placeholder="ops@venue.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           <Button type="submit" className="h-12" disabled={!canSubmit || loading}>

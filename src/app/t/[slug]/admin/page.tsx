@@ -37,19 +37,23 @@ export default async function TenantAdminPage({ params }: Props) {
   return (
     <div className="app-shell">
       <div className="app-container">
-        <AppTopbar breadcrumb={`Tenant Admin / ${tenant.slug}`} environment="Production" accountLabel={tenant.name} action={<LogoutButton />} />
+        <AppTopbar
+          breadcrumb={`Tenant Admin / ${tenant.slug}`}
+          environment="Production"
+          accountLabel={tenant.name}
+          action={<LogoutButton />}
+        />
 
         <header className="dashboard-header">
-          <h1 className="dashboard-title">Voucher Operations Dashboard</h1>
+          <h1 className="dashboard-title">Voucher Commerce Operations</h1>
           <p className="dashboard-subtitle">
-            Manage plans, voucher codes, and imports.
-            {" "}
-            Tenant link:
-            {" "}
-            <span className="font-mono">
-              {tenantPortalUrl}
-            </span>
+            Control plans, voucher inventory, import pipelines, and architecture mode from one console.
           </p>
+          <div className="dashboard-meta">
+            <span>Portal: {tenantPortalUrl}</span>
+            <span>Tenant: {tenant.name}</span>
+            <span>Status: {tenant.status}</span>
+          </div>
         </header>
 
         <TenantAdminPanel tenantSlug={tenant.slug} />

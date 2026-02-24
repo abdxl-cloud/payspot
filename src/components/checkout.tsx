@@ -4,17 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   CircleAlert,
+  Clock3,
   Lock,
   MessageSquareText,
   RefreshCcw,
+  Search,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -52,39 +50,57 @@ function formatDuration(minutes: number) {
   return `${minutes} minutes`;
 }
 
+function formatPriceCompact(value: number) {
+  if (value >= 1_000_000_000_000) {
+    return `${(value / 1_000_000_000_000).toFixed(1).replace(/\.0$/, "")}T`;
+  }
+  if (value >= 1_000_000_000) {
+    return `${(value / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  }
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  return value.toLocaleString();
+}
+
 function Stepper({ step }: { step: 1 | 2 | 3 }) {
   const steps = [
-    { id: 1, label: "Plan" },
-    { id: 2, label: "Details" },
-    { id: 3, label: "Pay" },
+    { id: 1, label: "Select Plan" },
+    { id: 2, label: "Phone Number" },
+    { id: 3, label: "Pay Securely" },
   ] as const;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-500 sm:gap-2">
-      {steps.map((s, idx) => {
-        const state =
-          s.id < step ? "complete" : s.id === step ? "active" : "upcoming";
-
+    <div aria-label="Checkout progress" className="grid gap-2 sm:grid-cols-3">
+      {steps.map((item) => {
+        const state = item.id < step ? "done" : item.id === step ? "active" : "todo";
         return (
-          <div key={s.id} className="flex items-center gap-2">
-            <div
-              className={[
-                "flex size-6 items-center justify-center rounded-full border text-[10px] sm:size-7 sm:text-[11px]",
-                state === "active"
-                  ? "border-slate-900 bg-slate-900 text-white"
-                  : state === "complete"
-                    ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-300/80 bg-white/80 text-slate-500",
-              ].join(" ")}
-            >
-              {state === "complete" ? <Check className="size-4" /> : s.id}
-            </div>
-            <span className={state === "active" ? "text-slate-900" : ""}>
-              {s.label}
+          <div
+            key={item.id}
+            className={[
+              "rounded-xl border px-3 py-2 text-xs font-semibold transition",
+              state === "active"
+                ? "border-sky-300 bg-sky-50 text-sky-800"
+                : state === "done"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-slate-200 bg-white text-slate-500",
+            ].join(" ")}
+          >
+            <span className="inline-flex items-center gap-2">
+              <span
+                className={[
+                  "inline-flex size-5 items-center justify-center rounded-full text-[11px]",
+                  state === "active"
+                    ? "bg-sky-700 text-white"
+                    : state === "done"
+                      ? "bg-emerald-700 text-white"
+                      : "bg-slate-100 text-slate-600",
+                ].join(" ")}
+              >
+                {state === "done" ? <Check className="size-3" /> : item.id}
+              </span>
+              {item.label}
             </span>
-            {idx < steps.length - 1 ? (
-              <div className="mx-1 hidden h-px w-8 bg-slate-200 sm:block" />
-            ) : null}
           </div>
         );
       })}
@@ -151,35 +167,15 @@ export function Checkout({ tenantSlug, packages }: Props) {
   const bestValueCode = useMemo(() => {
     const available = packages.filter((pkg) => pkg.availableCount > 0);
     if (available.length === 0) return null;
-    const sorted = [...available].sort(
-      (a, b) => b.durationMinutes - a.durationMinutes,
-    );
+    const sorted = [...available].sort((a, b) => b.durationMinutes - a.durationMinutes);
     return sorted[0]?.code ?? null;
   }, [packages]);
 
   const step: 1 | 2 | 3 = allSoldOut ? 1 : loading ? 3 : selected ? 2 : 1;
 
   const canSubmit = useMemo(() => {
-    return (
-      !!selected &&
-      selected.availableCount > 0 &&
-      phone.length > 6 &&
-      !loading
-    );
+    return !!selected && selected.availableCount > 0 && phone.length > 6 && !loading;
   }, [selected, phone, loading]);
-
-  const formatPriceCompact = (value: number) => {
-    if (value >= 1_000_000_000_000) {
-      return `${(value / 1_000_000_000_000).toFixed(1).replace(/\.0$/, "")}T`;
-    }
-    if (value >= 1_000_000_000) {
-      return `${(value / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
-    }
-    if (value >= 1_000_000) {
-      return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-    }
-    return value.toLocaleString();
-  };
 
   function redirectToPaystack(url: string, newTab = false) {
     if (newTab) {
@@ -258,13 +254,12 @@ export function Checkout({ tenantSlug, packages }: Props) {
       setResumePhone(phone.trim());
       setTimeout(() => {
         redirectToPaystack(data.authorizationUrl!);
-      }, 400);
+      }, 350);
       setTimeout(() => {
         redirectToPaystack(data.authorizationUrl!);
       }, 5000);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong.";
+      const message = err instanceof Error ? err.message : "Something went wrong.";
       setError(message);
       setLoading(false);
     }
@@ -301,8 +296,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
       }
       setResumeMessage("Payment cannot be resumed.");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong.";
+      const message = err instanceof Error ? err.message : "Something went wrong.";
       setResumeMessage(message);
     } finally {
       setResumeLoading(false);
@@ -311,29 +305,25 @@ export function Checkout({ tenantSlug, packages }: Props) {
 
   return (
     <div className="grid gap-5 sm:gap-6">
-      <div className="space-y-1.5 sm:space-y-2">
-        <Stepper step={step} />
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-1">
-            <p className="section-kicker">Purchase flow</p>
-            <h2 className="text-lg font-semibold tracking-tight text-slate-900">
-              Buy Wi-Fi access
-            </h2>
+      <Card className="border-slate-200/80 bg-white/90">
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="section-kicker">Purchase flow</p>
+              <CardTitle className="section-title">Buy Wi-Fi Access Voucher</CardTitle>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
+                <ShieldCheck className="size-3.5" /> Secure checkout
+              </Badge>
+              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                <Clock3 className="size-3.5" /> Instant SMS delivery
+              </Badge>
+            </div>
           </div>
-          {selected ? (
-            <Badge
-              variant="outline"
-              className="self-start whitespace-nowrap sm:self-auto"
-            >
-              Selected: {formatDuration(selected.durationMinutes)}
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="self-start sm:self-auto">
-              Select a plan to continue
-            </Badge>
-          )}
-        </div>
-      </div>
+          <Stepper step={step} />
+        </CardHeader>
+      </Card>
 
       {packages.length === 0 ? (
         <Alert>
@@ -347,9 +337,9 @@ export function Checkout({ tenantSlug, packages }: Props) {
       {allSoldOut ? (
         <Alert>
           <CircleAlert className="size-4" />
-          <AlertTitle>All plans currently unavailable</AlertTitle>
+          <AlertTitle>All plans are temporarily unavailable</AlertTitle>
           <AlertDescription>
-            Import more vouchers or try again in a few minutes.
+            Voucher inventory is currently empty. Please refresh and try again.
             <div className="mt-3">
               <Button
                 type="button"
@@ -372,180 +362,176 @@ export function Checkout({ tenantSlug, packages }: Props) {
         </Alert>
       ) : null}
 
-      {isLongPlanList ? (
-        <div className="grid gap-2 rounded-xl border border-slate-200/80 bg-white/70 p-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center sm:p-4">
-          <div className="text-xs text-slate-600 sm:text-sm">
-            {filteredPackages.length} plan{filteredPackages.length === 1 ? "" : "s"} available
+      <Card className="border-slate-200/80 bg-white/90">
+        <CardHeader className="space-y-3 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
+              1. Choose a plan
+            </CardTitle>
+            {selected ? (
+              <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700">
+                Selected: {selected.name}
+              </Badge>
+            ) : (
+              <Badge variant="secondary">Select a plan to continue</Badge>
+            )}
           </div>
-          <Input
-            value={planQuery}
-            onChange={(event) => {
-              setPlanQuery(event.target.value);
-              setVisiblePlanCount(8);
-            }}
-            placeholder="Search plan name, code, or duration"
-            className="h-10"
-            aria-label="Search plans"
-          />
-        </div>
-      ) : null}
 
-      <div
-        className={[
-          "grid gap-3",
-          displayedPackages.length <= 1
-            ? "grid-cols-1"
-            : displayedPackages.length === 2
-              ? "sm:grid-cols-2"
-              : "sm:grid-cols-2 xl:grid-cols-3",
-        ].join(" ")}
-      >
-        {displayedPackages.map((pkg) => {
-          const isSoldOut = pkg.availableCount <= 0;
-          const isSelected = selected?.code === pkg.code;
-          const isBestValue = bestValueCode === pkg.code && !isSoldOut;
+          {isLongPlanList ? (
+            <div className="grid gap-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 sm:grid-cols-[1fr_260px] sm:items-center">
+              <p className="text-xs text-slate-600 sm:text-sm">
+                {filteredPackages.length} plans available
+              </p>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={planQuery}
+                  onChange={(event) => {
+                    setPlanQuery(event.target.value);
+                    setVisiblePlanCount(8);
+                  }}
+                  placeholder="Search by plan, code, or duration"
+                  className="h-10 pl-9"
+                  aria-label="Search plans"
+                />
+              </div>
+            </div>
+          ) : null}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div
+            className={[
+              "grid gap-3",
+              displayedPackages.length <= 1
+                ? "grid-cols-1"
+                : displayedPackages.length === 2
+                  ? "sm:grid-cols-2"
+                  : "sm:grid-cols-2 xl:grid-cols-3",
+            ].join(" ")}
+          >
+            {displayedPackages.map((pkg) => {
+              const isSoldOut = pkg.availableCount <= 0;
+              const isSelected = selected?.code === pkg.code;
+              const isBestValue = bestValueCode === pkg.code && !isSoldOut;
 
-          return (
-            <Card
-              key={pkg.code}
-              role="button"
-              tabIndex={isSoldOut ? -1 : 0}
-              aria-disabled={isSoldOut}
-              aria-pressed={isSelected}
-              onClick={() => {
-                if (!isSoldOut) setSelected(pkg);
-              }}
-              onKeyDown={(event) => {
-                if (isSoldOut) return;
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  setSelected(pkg);
-                }
-              }}
-              className={[
-                "select-none gap-0 border-slate-200/80 bg-white/88 py-0 shadow-sm transition",
-                !isSoldOut ? "hover:-translate-y-0.5 hover:bg-white/94 hover:shadow-md" : "",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20",
-                isSelected ? "ring-2 ring-slate-900/15 bg-white/90" : "",
-                displayedPackages.length === 1 ? "mx-auto w-full max-w-xl" : "",
-                isSoldOut ? "cursor-not-allowed opacity-60" : "cursor-pointer",
-              ].join(" ")}
-            >
-              <CardContent className="p-4 sm:p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className="text-sm font-semibold text-slate-900 [overflow-wrap:anywhere]"
-                      title={pkg.name}
-                    >
-                      {pkg.name}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {formatDuration(pkg.durationMinutes)}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    {isBestValue ? (
-                      <Badge
-                        variant="outline"
-                        className="border-amber-200 bg-amber-50 text-amber-700"
-                      >
-                        Best value
-                      </Badge>
-                    ) : null}
-                    {isSoldOut ? (
-                      <Badge
-                        variant="outline"
-                        className="border-rose-200 bg-rose-50 text-rose-700"
-                      >
-                        Sold out
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">{pkg.availableCount} left</Badge>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-5 flex items-end justify-between sm:mt-6">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      NGN
-                    </p>
-                    <p
-                      className="font-display text-[clamp(1.5rem,5.2vw,2.1rem)] font-semibold tracking-tight leading-none text-slate-900 [overflow-wrap:anywhere]"
-                      title={pkg.priceNgn.toLocaleString()}
-                    >
-                      <span className="sm:hidden">{formatPriceCompact(pkg.priceNgn)}</span>
-                      <span className="hidden sm:inline">{pkg.priceNgn.toLocaleString()}</span>
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      Code: <span className="font-medium [overflow-wrap:anywhere]">{pkg.code}</span>
-                    </p>
-                  </div>
-                  {isSelected ? (
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white">
-                      <Check className="size-4" />
+              return (
+                <Card
+                  key={pkg.code}
+                  role="button"
+                  tabIndex={isSoldOut ? -1 : 0}
+                  aria-disabled={isSoldOut}
+                  aria-pressed={isSelected}
+                  onClick={() => {
+                    if (!isSoldOut) setSelected(pkg);
+                  }}
+                  onKeyDown={(event) => {
+                    if (isSoldOut) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelected(pkg);
+                    }
+                  }}
+                  className={[
+                    "gap-0 border-slate-200/90 bg-white py-0 transition",
+                    !isSoldOut ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-md" : "cursor-not-allowed opacity-60",
+                    isSelected ? "ring-2 ring-sky-300" : "",
+                    displayedPackages.length === 1 ? "mx-auto w-full max-w-xl" : "",
+                  ].join(" ")}
+                >
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-900" title={pkg.name}>
+                          {pkg.name}
+                        </p>
+                        <p className="text-xs text-slate-500">{formatDuration(pkg.durationMinutes)}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        {isBestValue ? (
+                          <Badge className="bg-sky-700 text-white">Best Value</Badge>
+                        ) : null}
+                        {isSoldOut ? (
+                          <Badge variant="outline" className="border-rose-200 bg-rose-50 text-rose-700">
+                            Sold out
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                            {pkg.availableCount} left
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                  ) : null}
-                </div>
 
-                <p className="mt-3 text-xs leading-relaxed text-slate-600 sm:mt-4 [overflow-wrap:anywhere]">
-                  {pkg.description || "Instant access voucher for your WiFi network."}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                    <div className="mt-5 flex items-end justify-between">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">NGN</p>
+                        <p
+                          className="font-display text-[clamp(1.5rem,5.2vw,2.1rem)] font-semibold leading-none tracking-tight text-slate-900"
+                          title={pkg.priceNgn.toLocaleString()}
+                        >
+                          <span className="sm:hidden">{formatPriceCompact(pkg.priceNgn)}</span>
+                          <span className="hidden sm:inline">{pkg.priceNgn.toLocaleString()}</span>
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-500">Code: {pkg.code}</p>
+                      </div>
+                      {isSelected ? (
+                        <span className="inline-flex size-9 items-center justify-center rounded-full bg-sky-700 text-white">
+                          <Check className="size-4" />
+                        </span>
+                      ) : null}
+                    </div>
 
-      {isLongPlanList && filteredPackages.length === 0 ? (
-        <Alert>
-          <AlertTitle>No plans match your search</AlertTitle>
-          <AlertDescription>Try a different name, code, or duration.</AlertDescription>
-        </Alert>
-      ) : null}
+                    <p className="mt-3 text-xs leading-relaxed text-slate-600">
+                      {pkg.description || "Instant access voucher for your Wi-Fi network."}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
 
-      {hasHiddenPlans ? (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setVisiblePlanCount((count) => count + 8)}
-          >
-            Show more plans
-          </Button>
-          <span className="text-xs text-slate-600">
-            Showing {displayedPackages.length} of {filteredPackages.length}
-          </span>
-        </div>
-      ) : null}
+          {isLongPlanList && filteredPackages.length === 0 ? (
+            <Alert>
+              <AlertTitle>No plans match your search</AlertTitle>
+              <AlertDescription>Try another name, code, or duration.</AlertDescription>
+            </Alert>
+          ) : null}
 
-      {isLongPlanList && filteredPackages.length > 8 && !hasHiddenPlans ? (
-        <div className="flex justify-center">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setVisiblePlanCount(8)}
-          >
-            Collapse list
-          </Button>
-        </div>
-      ) : null}
+          {hasHiddenPlans ? (
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setVisiblePlanCount((count) => count + 8)}
+              >
+                Show more plans
+              </Button>
+              <span className="text-xs text-slate-600">
+                Showing {displayedPackages.length} of {filteredPackages.length}
+              </span>
+            </div>
+          ) : null}
 
-      <Separator />
+          {isLongPlanList && filteredPackages.length > 8 && !hasHiddenPlans ? (
+            <div className="flex justify-center">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setVisiblePlanCount(8)}>
+                Collapse list
+              </Button>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white/75 px-3 py-2">
-        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+      <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-2">
+        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
           <button
             type="button"
             onClick={() => setFlowMode("purchase")}
             className={[
-              "rounded-md px-3 py-1.5 text-xs font-semibold transition",
-              flowMode === "purchase"
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:bg-slate-100",
+              "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+              flowMode === "purchase" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
             ].join(" ")}
+            aria-pressed={flowMode === "purchase"}
           >
             New purchase
           </button>
@@ -553,57 +539,35 @@ export function Checkout({ tenantSlug, packages }: Props) {
             type="button"
             onClick={() => setFlowMode("resume")}
             className={[
-              "rounded-md px-3 py-1.5 text-xs font-semibold transition",
-              flowMode === "resume"
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:bg-slate-100",
+              "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+              flowMode === "resume" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
             ].join(" ")}
+            aria-pressed={flowMode === "resume"}
           >
             Resume payment
           </button>
         </div>
-        {flowMode === "purchase" ? (
-          <button
-            type="button"
-            onClick={() => setFlowMode("resume")}
-            className="text-xs font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900"
-          >
-            Have a reference? Resume instead
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setFlowMode("purchase")}
-            className="text-xs font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900"
-          >
-            Continue to purchase
-          </button>
-        )}
       </div>
 
       {!allSoldOut && flowMode === "purchase" ? (
-        <Card className="max-w-4xl border-slate-200/80 bg-white/85">
-          <CardHeader className="space-y-1 pb-2">
+        <Card className="max-w-4xl border-slate-200/80 bg-white/90">
+          <CardHeader className="space-y-2 pb-2">
             <p className="section-kicker">Customer details</p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="section-title">Where should we send the voucher?</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
+                2. Enter phone number
+              </CardTitle>
               {selected ? (
-                <Badge
-                  variant="outline"
-                  className="max-w-full self-start sm:max-w-[340px] sm:self-auto"
-                  title={`${selected.name} - NGN ${selected.priceNgn.toLocaleString()}`}
-                >
-                  <span className="truncate">
-                    {selected.name} - NGN {selected.priceNgn.toLocaleString()}
-                  </span>
+                <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
+                  {selected.name} • NGN {selected.priceNgn.toLocaleString()}
                 </Badge>
               ) : null}
             </div>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px] md:items-end" onSubmit={handleSubmit}>
+            <form className="grid gap-4 md:grid-cols-[minmax(0,1fr)_230px] md:items-end" onSubmit={handleSubmit}>
               <div className="grid gap-2">
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone">Phone number</Label>
                 <Input
                   id="phone"
                   type="tel"
@@ -614,27 +578,23 @@ export function Checkout({ tenantSlug, packages }: Props) {
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  Nigeria (+234). We&apos;ll format your number automatically.
+                  Nigeria format (e.g. 080...). Voucher delivery and payment checks use this number.
                 </p>
               </div>
 
-              <Button
-                type="submit"
-                disabled={!canSubmit}
-                className="h-11 md:mb-[22px]"
-              >
+              <Button type="submit" disabled={!canSubmit} className="h-11 md:mb-[22px]">
                 {loading
-                  ? "Processing..."
+                  ? "Preparing payment..."
                   : selected
                     ? `Pay NGN ${selected.priceNgn.toLocaleString()}`
                     : "Select a plan"}
               </Button>
 
               {paymentReference ? (
-                <Alert className="border-emerald-200 bg-emerald-50/80 md:col-span-2">
-                  <AlertTitle>Payment reference: {paymentReference}</AlertTitle>
+                <Alert className="border-emerald-200 bg-emerald-50/90 md:col-span-2">
+                  <AlertTitle>Reference saved: {paymentReference}</AlertTitle>
                   <AlertDescription className="space-y-2">
-                    <p>Save this code now. You can use it to resume payment.</p>
+                    <p>Keep this reference. You can resume payment with it if interrupted.</p>
                     <div className="flex flex-wrap gap-2">
                       <Button
                         type="button"
@@ -663,23 +623,19 @@ export function Checkout({ tenantSlug, packages }: Props) {
                           Open in browser
                         </Button>
                       ) : null}
-                      <span className="self-center text-xs text-slate-600">
-                        Redirecting to Paystack...
-                      </span>
                     </div>
-                    {copyMessage ? (
-                      <p className="text-xs text-slate-600">{copyMessage}</p>
-                    ) : null}
+                    <p className="text-xs text-slate-600">Redirecting to Paystack automatically...</p>
+                    {copyMessage ? <p className="text-xs text-slate-600">{copyMessage}</p> : null}
                   </AlertDescription>
                 </Alert>
               ) : null}
 
               <div className="grid gap-2 text-xs text-slate-600 md:col-span-2 sm:grid-cols-2">
-                <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                   <Lock className="size-4 text-slate-500" />
                   Secured by Paystack
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                   <MessageSquareText className="size-4 text-slate-500" />
                   Voucher delivered via SMS in seconds
                 </div>
@@ -690,50 +646,54 @@ export function Checkout({ tenantSlug, packages }: Props) {
       ) : null}
 
       {flowMode === "resume" ? (
-        <Card className="max-w-3xl border-slate-200/80 bg-white/85">
-          <CardHeader className="space-y-1 pb-2">
-            <p className="section-kicker">Resume flow</p>
-            <CardTitle className="section-title">Resume a payment</CardTitle>
+        <Card className="max-w-3xl border-slate-200/80 bg-white/90">
+          <CardHeader className="space-y-2 pb-2">
+            <p className="section-kicker">Recover interrupted checkout</p>
+            <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
+              Resume a payment
+            </CardTitle>
           </CardHeader>
           <CardContent>
-          <form className="grid gap-3 sm:grid-cols-2" onSubmit={handleResume}>
-            {resumeMessage ? (
-              <Alert className="sm:col-span-2">
-                <AlertTitle>Resume status</AlertTitle>
-                <AlertDescription>{resumeMessage}</AlertDescription>
-              </Alert>
-            ) : null}
-            <div className="grid gap-2">
-              <Label htmlFor="resume-reference">Payment reference</Label>
-              <Input
-                id="resume-reference"
-                type="text"
-                className="h-11"
-                placeholder="WIFI-ABC123"
-                value={resumeReference}
-                onChange={(event) => setResumeReference(event.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="resume-phone">Phone used</Label>
-              <Input
-                id="resume-phone"
-                type="tel"
-                className="h-11"
-                placeholder="08012345678"
-                value={resumePhone}
-                onChange={(event) => setResumePhone(event.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" variant="outline" disabled={resumeLoading} className="sm:col-span-2">
-              {resumeLoading ? "Checking..." : "Resume payment"}
-            </Button>
-          </form>
+            <form className="grid gap-3 sm:grid-cols-2" onSubmit={handleResume}>
+              {resumeMessage ? (
+                <Alert className="sm:col-span-2">
+                  <AlertTitle>Resume status</AlertTitle>
+                  <AlertDescription>{resumeMessage}</AlertDescription>
+                </Alert>
+              ) : null}
+              <div className="grid gap-2">
+                <Label htmlFor="resume-reference">Payment reference</Label>
+                <Input
+                  id="resume-reference"
+                  type="text"
+                  className="h-11"
+                  placeholder="WIFI-ABC123"
+                  value={resumeReference}
+                  onChange={(event) => setResumeReference(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="resume-phone">Phone used</Label>
+                <Input
+                  id="resume-phone"
+                  type="tel"
+                  className="h-11"
+                  placeholder="08012345678"
+                  value={resumePhone}
+                  onChange={(event) => setResumePhone(event.target.value)}
+                  required
+                />
+              </div>
+              <Button type="submit" variant="outline" disabled={resumeLoading} className="sm:col-span-2">
+                {resumeLoading ? "Checking status..." : "Resume payment"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
       ) : null}
+
+      <Separator />
     </div>
   );
 }

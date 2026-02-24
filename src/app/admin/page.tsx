@@ -23,12 +23,17 @@ export default async function AdminPage() {
   return (
     <div className="app-shell">
       <div className="app-container">
-        <AppTopbar breadcrumb="Admin / Tenants" environment="Production" accountLabel="Platform Admin" action={<LogoutButton />} />
+        <AppTopbar
+          breadcrumb="Admin / Tenants"
+          environment="Production"
+          accountLabel="Platform Admin"
+          action={<LogoutButton />}
+        />
 
         <header className="dashboard-header">
-          <h1 className="dashboard-title">Tenant Operations Dashboard</h1>
+          <h1 className="dashboard-title">Platform Tenant Operations</h1>
           <p className="dashboard-subtitle">
-            Provision and manage tenants from one platform console.
+            Create and govern tenant workspaces, control access lifecycle, and verify payment readiness.
           </p>
         </header>
 

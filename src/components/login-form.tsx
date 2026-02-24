@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { KeyRound, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,10 +47,10 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="border-slate-200/80 bg-white/85">
-      <CardHeader className="space-y-1">
+    <Card className="border-slate-200/85 bg-white/92">
+      <CardHeader className="space-y-2">
         <p className="section-kicker">Authentication</p>
-        <CardTitle className="section-title">Sign in</CardTitle>
+        <CardTitle className="section-title">Sign in to PaySpot</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         {error ? (
@@ -62,28 +63,34 @@ export function LoginForm() {
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              className="h-11"
-              placeholder="seeduser@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="email"
+                type="email"
+                className="h-11 pl-9"
+                placeholder="seeduser@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              className="h-11"
-              placeholder="********"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div className="relative">
+              <KeyRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="password"
+                type="password"
+                className="h-11 pl-9"
+                placeholder="********"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           <Button type="submit" className="h-12" disabled={!canSubmit}>

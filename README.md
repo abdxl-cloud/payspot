@@ -52,6 +52,33 @@ In `/admin` you can:
 ## Voucher Import
 Tenant admins can import Omada CSV vouchers from `/t/<slug>/admin`.
 
+You can also auto-generate vouchers in `/t/<slug>/admin`:
+- Add one code manually, or
+- Generate a batch with optional prefix and code length.
+
+Important for Omada deployments: locally generated codes only work if the same codes also exist in Omada. For true Omada-backed access, keep importing Omada-generated vouchers (or add an Omada API sync flow).
+
+## Architecture Modes
+Tenant admins can set architecture options in `/t/<slug>/admin`:
+- `Voucher source`:
+  - `import_csv` (default, safest)
+  - `omada_openapi` (generate in Omada via OpenAPI and mirror into local pool)
+- `Portal auth architecture`:
+  - `omada_builtin`
+  - `external_portal_api`
+  - `external_radius_portal`
+
+When `omada_openapi` is enabled, voucher generation in admin uses Omada OpenAPI:
+- `POST /openapi/authorize/token?grant_type=client_credentials`
+- `POST /openapi/v1/{omadacId}/sites/{siteId}/hotspot/voucher-groups`
+- `GET /openapi/v1/{omadacId}/sites/{siteId}/hotspot/voucher-groups/{groupId}`
+
+Those routes are from Omada’s official OpenAPI document (`/v3/api-docs`) and access guide.
+
+The admin Architecture section also includes a `Test Omada connection` action, which validates:
+- access token retrieval
+- tenant site API reachability (`GET /openapi/v1/{omadacId}/sites/{siteId}/hotspot/voucher-groups?page=1&pageSize=1`)
+
 CLI importer:
 ```bash
 node scripts/import-vouchers.mjs path/to/vouchers.csv --tenant <slug>

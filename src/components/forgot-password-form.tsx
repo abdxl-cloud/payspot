@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { Mail } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,10 +47,10 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <Card className="border-slate-200/80 bg-white/85">
-      <CardHeader className="space-y-1">
-        <p className="section-kicker">Reset link</p>
-        <CardTitle className="section-title">Send recovery email</CardTitle>
+    <Card className="border-slate-200/85 bg-white/92">
+      <CardHeader className="space-y-2">
+        <p className="section-kicker">Account recovery</p>
+        <CardTitle className="section-title">Send password reset link</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         {error ? (
@@ -69,15 +70,18 @@ export function ForgotPasswordForm() {
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              className="h-11"
-              placeholder="you@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="email"
+                type="email"
+                className="h-11 pl-9"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           <Button type="submit" className="h-12" disabled={!canSubmit}>
@@ -94,4 +98,3 @@ export function ForgotPasswordForm() {
     </Card>
   );
 }
-

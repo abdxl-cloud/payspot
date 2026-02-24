@@ -31,14 +31,18 @@ export default async function TenantSetupPage({ params }: Props) {
 
   return (
     <div className="app-shell">
-      <div className="app-container max-w-5xl">
-        <AppTopbar breadcrumb={`Setup / ${tenant.slug}`} environment="Setup" accountLabel={tenant.name} />
+      <div className="app-container max-w-6xl">
+        <AppTopbar
+          breadcrumb={`Setup / ${tenant.slug}`}
+          environment="Setup"
+          accountLabel={tenant.name}
+        />
         <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1fr_380px]">
           <section className="order-2 panel-surface lg:order-1">
             <p className="section-kicker">Launch checklist</p>
             <h1 className="panel-title mt-1">Complete setup before going live</h1>
             <p className="panel-copy mt-3 max-w-2xl">
-              Finish security and payment configuration for <span className="font-mono">/t/{tenant.slug}</span>.
+              Finish security, payment, and voucher inventory setup for <span className="font-mono">/t/{tenant.slug}</span>.
             </p>
             <div className="dashboard-meta">
               <span>Tenant: {tenant.name}</span>
@@ -64,7 +68,7 @@ export default async function TenantSetupPage({ params }: Props) {
               <h3 className="dashboard-lane-title">Setup sequence</h3>
               <p className="dashboard-lane-copy">1. Set a strong admin password.</p>
               <p className="dashboard-lane-copy">2. Add Paystack secret key for payments.</p>
-              <p className="dashboard-lane-copy">3. Import voucher inventory to unlock admin tools.</p>
+              <p className="dashboard-lane-copy">3. Import voucher inventory from Omada CSV.</p>
             </div>
           </section>
         </div>

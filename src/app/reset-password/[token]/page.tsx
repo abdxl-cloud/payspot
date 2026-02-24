@@ -11,10 +11,25 @@ export default async function ResetPasswordPage({ params }: Props) {
   const { token } = await params;
   return (
     <div className="app-shell">
-      <div className="app-container max-w-4xl">
-        <AppTopbar breadcrumb="Authentication / Set new password" environment="Public" accountLabel="Guest" />
-        <div className="mx-auto w-full max-w-xl">
-          <ResetPasswordForm token={token} />
+      <div className="auth-container">
+        <div className="w-full">
+          <AppTopbar
+            breadcrumb="Authentication / Set new password"
+            environment="Public"
+            accountLabel="Guest"
+          />
+          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+            <section className="panel-surface space-y-4">
+              <p className="section-kicker">Credential reset</p>
+              <h1 className="panel-title">Create a new secure password</h1>
+              <p className="panel-copy max-w-xl">
+                Use a strong password to protect tenant operations and payment configurations.
+              </p>
+            </section>
+            <div className="mx-auto w-full max-w-xl">
+              <ResetPasswordForm token={token} />
+            </div>
+          </div>
         </div>
       </div>
     </div>

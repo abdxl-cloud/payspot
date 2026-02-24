@@ -1,7 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { getSessionUserFromRequest } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { getTenantBySlug } from "@/lib/store";
+import { provisionOmadaVouchers } from "@/lib/omada";
+import { getTenantBySlug, resolveTenantOmadaOpenApiConfig } from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -23,6 +24,21 @@ function parsePositiveInt(value: string | null, fallback: number) {
 
 function buildInClause(count: number) {
   return Array.from({ length: count }, () => "?").join(", ");
+}
+
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const MIN_CODE_LENGTH = 6;
+const MAX_CODE_LENGTH = 24;
+const MAX_GENERATE_COUNT = 500;
+const MAX_PREFIX_LENGTH = 16;
+
+function randomCode(length: number) {
+  const bytes = randomBytes(length);
+  let code = "";
+  for (let i = 0; i < length; i += 1) {
+    code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  }
+  return code;
 }
 
 export async function GET(request: Request, { params }: Props) {
@@ -119,12 +135,32 @@ export async function POST(request: Request, { params }: Props) {
   const body = (await request.json()) as {
     voucherCode?: string;
     packageId?: string;
+    generateCount?: number;
+    prefix?: string;
+    codeLength?: number;
   };
 
-  const voucherCode = body.voucherCode?.trim();
+  const voucherCode = body.voucherCode?.trim() ?? "";
   const packageId = body.packageId?.trim();
-  if (!voucherCode) return Response.json({ error: "voucherCode is required" }, { status: 400 });
   if (!packageId) return Response.json({ error: "packageId is required" }, { status: 400 });
+
+  const parsedGenerateCount = Number.parseInt(String(body.generateCount ?? "0"), 10);
+  const generateCount = Number.isFinite(parsedGenerateCount) ? parsedGenerateCount : 0;
+  const useManualCode = voucherCode.length > 0;
+  const useAutoGenerate = generateCount > 0;
+
+  if (!useManualCode && !useAutoGenerate) {
+    return Response.json(
+      { error: "Provide voucherCode or a positive generateCount" },
+      { status: 400 },
+    );
+  }
+  if (useManualCode && useAutoGenerate) {
+    return Response.json(
+      { error: "Provide voucherCode or generateCount, not both" },
+      { status: 400 },
+    );
+  }
 
   const db = getDb();
   const pkg = await db
@@ -134,26 +170,205 @@ export async function POST(request: Request, { params }: Props) {
     .get(tenant.id, packageId) as { id: string; duration_minutes: number } | undefined;
   if (!pkg) return Response.json({ error: "Invalid packageId" }, { status: 400 });
 
-  try {
-    await db.prepare(
-      `
+  if (useManualCode) {
+    const result = await db
+      .prepare(
+        `
       INSERT INTO voucher_pool (
         id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
       ) VALUES (?, ?, ?, ?, 'UNUSED', ?, ?)
+      ON CONFLICT (tenant_id, voucher_code) DO NOTHING
     `,
-    ).run(
-      randomUUID(),
-      tenant.id,
-      voucherCode,
-      pkg.duration_minutes,
-      packageId,
-      new Date().toISOString(),
-    );
-  } catch {
-    return Response.json({ error: "Voucher code already exists" }, { status: 409 });
+      )
+      .run(
+        randomUUID(),
+        tenant.id,
+        voucherCode,
+        pkg.duration_minutes,
+        packageId,
+        new Date().toISOString(),
+      );
+
+    if (result.changes === 0) {
+      return Response.json({ error: "Voucher code already exists" }, { status: 409 });
+    }
+
+    return Response.json({ ok: true, created: 1 });
   }
 
-  return Response.json({ ok: true });
+  if (generateCount < 1 || generateCount > MAX_GENERATE_COUNT) {
+    return Response.json(
+      { error: `generateCount must be between 1 and ${MAX_GENERATE_COUNT}` },
+      { status: 400 },
+    );
+  }
+
+  const prefix = (body.prefix ?? "").trim().toUpperCase();
+  if (prefix.length > MAX_PREFIX_LENGTH) {
+    return Response.json(
+      { error: `prefix must be at most ${MAX_PREFIX_LENGTH} characters` },
+      { status: 400 },
+    );
+  }
+  if (prefix && !/^[A-Z0-9_-]+$/.test(prefix)) {
+    return Response.json(
+      { error: "prefix may only contain A-Z, 0-9, underscore, or dash" },
+      { status: 400 },
+    );
+  }
+
+  const parsedCodeLength = Number.parseInt(String(body.codeLength ?? "10"), 10);
+  if (
+    !Number.isFinite(parsedCodeLength) ||
+    parsedCodeLength < MIN_CODE_LENGTH ||
+    parsedCodeLength > MAX_CODE_LENGTH
+  ) {
+    return Response.json(
+      { error: `codeLength must be between ${MIN_CODE_LENGTH} and ${MAX_CODE_LENGTH}` },
+      { status: 400 },
+    );
+  }
+
+  const voucherSourceMode =
+    tenant.voucher_source_mode === "omada_openapi"
+      ? "omada_openapi"
+      : "import_csv";
+
+  const createdCodes: string[] = [];
+  const now = new Date().toISOString();
+
+  if (voucherSourceMode === "omada_openapi") {
+    const config = await resolveTenantOmadaOpenApiConfig(tenant.id);
+    if (!config) {
+      return Response.json(
+        {
+          error:
+            "Omada OpenAPI mode is enabled but required Omada credentials are missing. Update architecture settings first.",
+        },
+        { status: 409 },
+      );
+    }
+
+    const packageLabel = pkg.id.slice(0, 8);
+    const groupName = `PS-${packageLabel}-${Date.now()}`;
+    let omadaCodes: string[] = [];
+    try {
+      const provisioned = await provisionOmadaVouchers({
+        config,
+        amount: generateCount,
+        durationMinutes: pkg.duration_minutes,
+        groupName,
+        codeLength: parsedCodeLength,
+      });
+      omadaCodes = provisioned.codes;
+    } catch (error) {
+      return Response.json(
+        {
+          error:
+            error instanceof Error
+              ? `Omada voucher generation failed: ${error.message}`
+              : "Omada voucher generation failed",
+        },
+        { status: 502 },
+      );
+    }
+
+    const run = db.transaction(async () => {
+      for (const code of omadaCodes) {
+        const result = await db
+          .prepare(
+            `
+          INSERT INTO voucher_pool (
+            id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
+          ) VALUES (?, ?, ?, ?, 'UNUSED', ?, ?)
+          ON CONFLICT (tenant_id, voucher_code) DO NOTHING
+        `,
+          )
+          .run(
+            randomUUID(),
+            tenant.id,
+            code,
+            pkg.duration_minutes,
+            packageId,
+            now,
+          );
+        if (result.changes === 1) createdCodes.push(code);
+      }
+    });
+    await run();
+
+    if (createdCodes.length < generateCount) {
+      return Response.json(
+        {
+          error:
+            "Omada generated vouchers, but not all could be stored due duplicates in local pool.",
+        },
+        { status: 409 },
+      );
+    }
+
+    const ignoredPrefix = prefix ? " (prefix ignored in Omada mode)" : "";
+    return Response.json({
+      ok: true,
+      created: createdCodes.length,
+      source: "omada_openapi",
+      notice: `Generated via Omada${ignoredPrefix}`,
+    });
+  }
+
+  const seen = new Set<string>();
+  let attempts = 0;
+  const maxAttempts = generateCount * 30;
+  const run = db.transaction(async () => {
+    while (createdCodes.length < generateCount && attempts < maxAttempts) {
+      attempts += 1;
+      const suffix = randomCode(parsedCodeLength);
+      const code = prefix ? `${prefix}-${suffix}` : suffix;
+      if (seen.has(code)) continue;
+      seen.add(code);
+
+      const result = await db
+        .prepare(
+          `
+      INSERT INTO voucher_pool (
+        id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
+      ) VALUES (?, ?, ?, ?, 'UNUSED', ?, ?)
+      ON CONFLICT (tenant_id, voucher_code) DO NOTHING
+    `,
+        )
+        .run(
+          randomUUID(),
+          tenant.id,
+          code,
+          pkg.duration_minutes,
+          packageId,
+          now,
+        );
+
+      if (result.changes === 1) createdCodes.push(code);
+    }
+
+    if (createdCodes.length < generateCount) {
+      throw new Error("not_enough_unique_codes");
+    }
+  });
+
+  try {
+    await run();
+  } catch {
+    return Response.json(
+      {
+        error: `Unable to generate ${generateCount} unique voucher codes. Try a different prefix or smaller batch size.`,
+      },
+      { status: 409 },
+    );
+  }
+
+  return Response.json({
+    ok: true,
+    created: createdCodes.length,
+    source: "import_csv",
+  });
 }
 
 export async function PATCH(request: Request, { params }: Props) {

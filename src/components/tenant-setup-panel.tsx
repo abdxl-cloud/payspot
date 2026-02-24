@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { BadgeCheck, Link2, LockKeyhole, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -48,7 +49,9 @@ export function TenantSetupPanel({
   const [paystackSecretKey, setPaystackSecretKey] = useState("");
   const [portalSlug, setPortalSlug] = useState(currentSlug);
   const [slugState, setSlugState] = useState<SlugState>("idle");
-  const [slugMessage, setSlugMessage] = useState<string>("Keep this short and brand-specific. Example: walstreet");
+  const [slugMessage, setSlugMessage] = useState<string>(
+    "Keep this short and brand-specific. Example: walstreet",
+  );
 
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
   const [voucherImporting, setVoucherImporting] = useState(false);
@@ -197,12 +200,18 @@ export function TenantSetupPanel({
   }
 
   return (
-    <Card className="border-slate-200/80 bg-white/85">
-      <CardHeader className="space-y-1">
+    <Card className="border-slate-200/85 bg-white/92">
+      <CardHeader className="space-y-2">
         <p className="section-kicker">Launch checklist</p>
         <CardTitle className="section-title">Finish required setup</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
+        <div className="flex flex-wrap gap-2">
+          <StatusPill label="Password" done={!requirePasswordChange} />
+          <StatusPill label="Paystack key" done={!requirePaystackKey} />
+          <StatusPill label="Voucher import" done={voucherImported} />
+        </div>
+
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>Setup failed</AlertTitle>
@@ -220,14 +229,17 @@ export function TenantSetupPanel({
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <div className="grid gap-2">
             <Label htmlFor="portalSlug">Portal link name</Label>
-            <Input
-              id="portalSlug"
-              className="h-11"
-              placeholder="walstreet"
-              value={portalSlug}
-              onChange={(event) => setPortalSlug(event.target.value)}
-              required
-            />
+            <div className="relative">
+              <Link2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="portalSlug"
+                className="h-11 pl-9"
+                placeholder="walstreet"
+                value={portalSlug}
+                onChange={(event) => setPortalSlug(event.target.value)}
+                required
+              />
+            </div>
             <p
               className={[
                 "text-xs",
@@ -246,14 +258,17 @@ export function TenantSetupPanel({
             <>
               <div className="grid gap-2">
                 <Label htmlFor="newPassword">New password</Label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  className="h-11"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  required
-                />
+                <div className="relative">
+                  <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    className="h-11 pl-9"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    required
+                  />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   At least 8 characters, with upper/lowercase and a number.
                 </p>
@@ -286,17 +301,23 @@ export function TenantSetupPanel({
                 required
               />
               <p className="text-xs text-muted-foreground">
-                We keep this secure. Required to receive payouts.
+                Stored securely and required to accept payments.
               </p>
             </div>
           ) : null}
 
-          <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 sm:p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Voucher import</p>
-            <p className="mt-1 text-sm text-slate-600">Upload voucher CSV now so your dashboard starts with real inventory.</p>
+          <div className="rounded-2xl border border-slate-200/85 bg-slate-50/75 p-4">
+            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+              <Upload className="size-3.5" /> Voucher import
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              Upload your Omada CSV so your portal launches with available voucher inventory.
+            </p>
 
             {voucherImported ? (
-              <p className="mt-3 text-sm font-semibold text-emerald-700">Voucher CSV imported.</p>
+              <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                <BadgeCheck className="size-4" /> Voucher CSV imported.
+              </p>
             ) : (
               <div className="mt-3 grid gap-3">
                 <Input
@@ -304,7 +325,12 @@ export function TenantSetupPanel({
                   accept=".csv,text/csv"
                   onChange={(event) => setVoucherFile(event.target.files?.[0] ?? null)}
                 />
-                <Button type="button" variant="outline" disabled={!voucherFile || voucherImporting} onClick={handleVoucherImport}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!voucherFile || voucherImporting}
+                  onClick={handleVoucherImport}
+                >
                   {voucherImporting ? "Importing..." : "Import voucher CSV"}
                 </Button>
               </div>
@@ -320,5 +346,18 @@ export function TenantSetupPanel({
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+function StatusPill({ label, done }: { label: string; done: boolean }) {
+  return done ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+      <BadgeCheck className="size-3.5" />
+      {label}
+    </span>
+  ) : (
+    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+      {label}
+    </span>
   );
 }

@@ -68,8 +68,8 @@ export function ResetPasswordForm({ token }: Props) {
       : null;
 
   return (
-    <Card className="border-slate-200/80 bg-white/85">
-      <CardHeader className="space-y-1">
+    <Card className="border-slate-200/85 bg-white/92">
+      <CardHeader className="space-y-2">
         <p className="section-kicker">Password update</p>
         <CardTitle className="section-title">Set a new password</CardTitle>
       </CardHeader>
@@ -116,9 +116,7 @@ export function ResetPasswordForm({ token }: Props) {
             />
           </div>
 
-          {passwordError ? (
-            <p className="text-sm text-red-700">{passwordError}</p>
-          ) : null}
+          {passwordError ? <p className="text-sm text-red-700">{passwordError}</p> : null}
           {mismatch ? <p className="text-sm text-red-700">{mismatch}</p> : null}
 
           <Button type="submit" className="h-12" disabled={!canSubmit}>
@@ -135,4 +133,3 @@ export function ResetPasswordForm({ token }: Props) {
     </Card>
   );
 }
-

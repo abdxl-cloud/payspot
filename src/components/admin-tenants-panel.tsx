@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { readJsonResponse } from "@/lib/http";
@@ -22,6 +23,20 @@ type TenantUpdatePayload = Partial<TenantDto> & {
 };
 
 const COMMON_STATUSES = ["active", "pending", "inactive", "suspended"];
+
+function statusBadge(status: string) {
+  const normalized = status.toLowerCase();
+  if (normalized === "active") {
+    return <Badge className="bg-emerald-700 text-white">Active</Badge>;
+  }
+  if (normalized === "pending") {
+    return <Badge className="bg-amber-600 text-white">Pending</Badge>;
+  }
+  if (normalized === "suspended") {
+    return <Badge variant="destructive">Suspended</Badge>;
+  }
+  return <Badge variant="outline">{status}</Badge>;
+}
 
 export function AdminTenantsPanel() {
   const [tenants, setTenants] = useState<TenantDto[]>([]);
@@ -62,7 +77,8 @@ export function AdminTenantsPanel() {
   const filteredTenants = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return tenants.filter((tenant) => {
-      const matchStatus = statusFilter === "all" || tenant.status.toLowerCase() === statusFilter.toLowerCase();
+      const matchStatus =
+        statusFilter === "all" || tenant.status.toLowerCase() === statusFilter.toLowerCase();
       if (!matchStatus) return false;
       if (!normalizedQuery) return true;
       return (
@@ -126,7 +142,7 @@ export function AdminTenantsPanel() {
 
       const creds = data.credentials;
       setNotice(
-        `Created "${data.tenant.slug}" | Email: ${creds.email} | Temp password: ${creds.temporaryPassword} | mailSent: ${creds.mailSent}`,
+        `Created ${data.tenant.slug} | Email: ${creds.email} | Temp password: ${creds.temporaryPassword} | mailSent: ${creds.mailSent}`,
       );
 
       setNewSlug("");
@@ -218,8 +234,10 @@ export function AdminTenantsPanel() {
       <section className="panel-surface">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
           <div>
-            <h2 className="section-title">Overview</h2>
-            <p className="mt-1 text-sm text-slate-600">Tenant footprint and platform readiness.</p>
+            <h2 className="section-title">Platform overview</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Monitor tenant readiness, status distribution, and payment configuration health.
+            </p>
           </div>
           <Button variant="outline" onClick={loadTenants} disabled={loading} type="button">
             {loading ? "Refreshing..." : "Refresh"}
@@ -252,20 +270,54 @@ export function AdminTenantsPanel() {
       </section>
 
       <section id="tenant-provisioning" className="panel-surface">
-        <h2 className="section-title">Create Tenant</h2>
+        <h2 className="section-title">Create tenant</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Provision a tenant, generate credentials, and send onboarding details.
+        </p>
         <form className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" onSubmit={handleCreate}>
-          <Input placeholder="Slug" value={newSlug} onChange={(event) => setNewSlug(event.target.value)} required />
-          <Input placeholder="Name" value={newName} onChange={(event) => setNewName(event.target.value)} required />
-          <Input type="email" placeholder="Admin email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} required />
-          <Input type="text" placeholder="Temp password (optional)" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+          <Input
+            placeholder="Slug"
+            value={newSlug}
+            onChange={(event) => setNewSlug(event.target.value)}
+            required
+          />
+          <Input
+            placeholder="Name"
+            value={newName}
+            onChange={(event) => setNewName(event.target.value)}
+            required
+          />
+          <Input
+            type="email"
+            placeholder="Admin email"
+            value={newEmail}
+            onChange={(event) => setNewEmail(event.target.value)}
+            required
+          />
+          <Input
+            type="text"
+            placeholder="Temp password (optional)"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+          />
           <Button type="submit" disabled={!canCreate}>{loading ? "Working..." : "Create"}</Button>
         </form>
       </section>
 
       <section id="tenant-directory" className="panel-surface">
-        <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-          <Input placeholder="Search by slug, name, email" value={query} onChange={(event) => setQuery(event.target.value)} />
-          <select className="w-full" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+        <div className="grid gap-3 md:grid-cols-[1fr_200px] md:items-center">
+          <Input
+            placeholder="Search by slug, name, email"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search tenants"
+          />
+          <select
+            className="w-full"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            aria-label="Filter tenants by status"
+          >
             <option value="all">All statuses</option>
             {Array.from(new Set(tenants.map((tenant) => tenant.status.toLowerCase()))).map((status) => (
               <option key={status} value={status}>
@@ -275,15 +327,18 @@ export function AdminTenantsPanel() {
           </select>
         </div>
 
-        <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200/80 bg-white">
-          <table className="w-full min-w-[1300px] text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.06em] text-slate-500">
+        <p className="mt-3 text-xs text-slate-500">
+          Showing {filteredTenants.length} of {tenants.length} tenants
+        </p>
+
+        <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200/85 bg-white">
+          <table className="w-full min-w-[1250px] text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
               <tr>
-                <th className="px-3 py-2">Slug</th>
-                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Tenant</th>
                 <th className="px-3 py-2">Admin email</th>
                 <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Paystack</th>
+                <th className="px-3 py-2">Paystack key</th>
                 <th className="px-3 py-2">Updated</th>
                 <th className="px-3 py-2">Actions</th>
               </tr>
@@ -291,8 +346,8 @@ export function AdminTenantsPanel() {
             <tbody>
               {filteredTenants.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-4 text-slate-600" colSpan={7}>
-                    {loading ? "Loading..." : "No tenants match your filters."}
+                  <td className="px-3 py-4 text-slate-600" colSpan={6}>
+                    {loading ? "Loading tenants..." : "No tenants match your filters."}
                   </td>
                 </tr>
               ) : (
@@ -353,26 +408,36 @@ function TenantRow(props: {
   return (
     <tr className="border-b border-slate-100 last:border-0">
       <td className="px-3 py-2 align-top">
-        <Input value={slug} onChange={(event) => setSlug(event.target.value)} disabled={props.disabled} />
-      </td>
-      <td className="px-3 py-2 align-top">
-        <Input value={name} onChange={(event) => setName(event.target.value)} disabled={props.disabled} />
+        <div className="grid gap-2">
+          <Input value={slug} onChange={(event) => setSlug(event.target.value)} disabled={props.disabled} />
+          <Input value={name} onChange={(event) => setName(event.target.value)} disabled={props.disabled} />
+        </div>
       </td>
       <td className="px-3 py-2 align-top">
         <Input value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} disabled={props.disabled} />
       </td>
       <td className="px-3 py-2 align-top">
-        <select className="h-10 w-full" value={status.toLowerCase()} onChange={(event) => setStatus(event.target.value)} disabled={props.disabled}>
-          {statusOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+        <div className="grid gap-2">
+          {statusBadge(status)}
+          <select
+            className="h-10 w-full"
+            value={status.toLowerCase()}
+            onChange={(event) => setStatus(event.target.value)}
+            disabled={props.disabled}
+          >
+            {statusOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
       </td>
       <td className="px-3 py-2 align-top">
         <div className="grid gap-2">
-          <div className="text-xs text-slate-600">{props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}</div>
+          <div className="text-xs text-slate-600">
+            {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
+          </div>
           <div className="flex gap-2">
             <Input
               type="password"
@@ -396,10 +461,17 @@ function TenantRow(props: {
           </div>
         </div>
       </td>
-      <td className="px-3 py-2 align-top text-xs text-slate-600">{new Date(props.tenant.updatedAt).toLocaleString()}</td>
+      <td className="px-3 py-2 align-top text-xs text-slate-600">
+        {new Date(props.tenant.updatedAt).toLocaleString()}
+      </td>
       <td className="px-3 py-2 align-top">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" onClick={() => props.onUpdate({ slug, name, adminEmail, status })} disabled={props.disabled || !dirty}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => props.onUpdate({ slug, name, adminEmail, status })}
+            disabled={props.disabled || !dirty}
+          >
             Save
           </Button>
           <Button type="button" size="sm" variant="outline" onClick={props.onResetPassword} disabled={props.disabled}>

@@ -13,9 +13,54 @@ export type TenantRow = {
   paystack_secret_enc: string | null;
   paystack_secret_last4: string | null;
   admin_api_key_hash: string | null;
+  voucher_source_mode: string | null;
+  portal_auth_mode: string | null;
+  omada_api_base_url: string | null;
+  omada_omadac_id: string | null;
+  omada_site_id: string | null;
+  omada_client_id: string | null;
+  omada_client_secret_enc: string | null;
+  omada_hotspot_operator_username: string | null;
+  omada_hotspot_operator_password_enc: string | null;
   created_at: string;
   updated_at: string;
 };
+
+export type VoucherSourceMode = "import_csv" | "omada_openapi";
+export type PortalAuthMode =
+  | "omada_builtin"
+  | "external_portal_api"
+  | "external_radius_portal";
+
+export type TenantArchitecture = {
+  voucherSourceMode: VoucherSourceMode;
+  portalAuthMode: PortalAuthMode;
+  omada: {
+    apiBaseUrl: string;
+    omadacId: string;
+    siteId: string;
+    clientId: string;
+    hasClientSecret: boolean;
+    hotspotOperatorUsername: string;
+    hasHotspotOperatorPassword: boolean;
+  };
+};
+
+export type TenantOmadaOpenApiConfig = {
+  apiBaseUrl: string;
+  omadacId: string;
+  siteId: string;
+  clientId: string;
+  clientSecret: string;
+};
+
+type TenantOmadaOpenApiConfigOverrides = Partial<{
+  apiBaseUrl: string;
+  omadacId: string;
+  siteId: string;
+  clientId: string;
+  clientSecret: string;
+}>;
 
 export type TenantRequestRow = {
   id: string;
@@ -109,6 +154,19 @@ function normalizeUsername(username: string) {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function normalizeVoucherSourceMode(
+  value: string | null | undefined,
+): VoucherSourceMode {
+  if (value === "omada_openapi") return "omada_openapi";
+  return "import_csv";
+}
+
+function normalizePortalAuthMode(value: string | null | undefined): PortalAuthMode {
+  if (value === "external_portal_api") return "external_portal_api";
+  if (value === "external_radius_portal") return "external_radius_portal";
+  return "omada_builtin";
 }
 
 function normalizePhoneForLookup(phone: string) {
@@ -768,6 +826,192 @@ export async function setTenantPaystackSecret(params: {
   ).run(enc, last4, now, params.tenantId);
 
   return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
+}
+
+export async function getTenantArchitecture(tenantId: string) {
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) return null;
+
+  return {
+    voucherSourceMode: normalizeVoucherSourceMode(tenant.voucher_source_mode),
+    portalAuthMode: normalizePortalAuthMode(tenant.portal_auth_mode),
+    omada: {
+      apiBaseUrl: tenant.omada_api_base_url ?? "",
+      omadacId: tenant.omada_omadac_id ?? "",
+      siteId: tenant.omada_site_id ?? "",
+      clientId: tenant.omada_client_id ?? "",
+      hasClientSecret: !!tenant.omada_client_secret_enc,
+      hotspotOperatorUsername: tenant.omada_hotspot_operator_username ?? "",
+      hasHotspotOperatorPassword: !!tenant.omada_hotspot_operator_password_enc,
+    },
+  } satisfies TenantArchitecture;
+}
+
+export async function setTenantArchitecture(params: {
+  tenantId: string;
+  voucherSourceMode?: VoucherSourceMode;
+  portalAuthMode?: PortalAuthMode;
+  omada?: {
+    apiBaseUrl?: string;
+    omadacId?: string;
+    siteId?: string;
+    clientId?: string;
+    clientSecret?: string | null;
+    hotspotOperatorUsername?: string;
+    hotspotOperatorPassword?: string | null;
+  };
+}) {
+  const tenant = await getTenantById(params.tenantId);
+  if (!tenant) return { status: "missing" as const };
+
+  const now = nowIso();
+  const db = getDb();
+
+  const voucherSourceMode = params.voucherSourceMode
+    ? normalizeVoucherSourceMode(params.voucherSourceMode)
+    : normalizeVoucherSourceMode(tenant.voucher_source_mode);
+  const portalAuthMode = params.portalAuthMode
+    ? normalizePortalAuthMode(params.portalAuthMode)
+    : normalizePortalAuthMode(tenant.portal_auth_mode);
+
+  const apiBaseUrl = params.omada?.apiBaseUrl !== undefined
+    ? params.omada.apiBaseUrl.trim()
+    : (tenant.omada_api_base_url ?? "");
+  const omadacId = params.omada?.omadacId !== undefined
+    ? params.omada.omadacId.trim()
+    : (tenant.omada_omadac_id ?? "");
+  const siteId = params.omada?.siteId !== undefined
+    ? params.omada.siteId.trim()
+    : (tenant.omada_site_id ?? "");
+  const clientId = params.omada?.clientId !== undefined
+    ? params.omada.clientId.trim()
+    : (tenant.omada_client_id ?? "");
+  const hotspotOperatorUsername = params.omada?.hotspotOperatorUsername !== undefined
+    ? params.omada.hotspotOperatorUsername.trim()
+    : (tenant.omada_hotspot_operator_username ?? "");
+
+  let omadaClientSecretEnc = tenant.omada_client_secret_enc;
+  if (params.omada && "clientSecret" in params.omada) {
+    const next = params.omada.clientSecret;
+    if (next == null || next.trim() === "") {
+      omadaClientSecretEnc = null;
+    } else {
+      omadaClientSecretEnc = encryptSecret(next.trim());
+    }
+  }
+
+  let omadaHotspotOperatorPasswordEnc = tenant.omada_hotspot_operator_password_enc;
+  if (params.omada && "hotspotOperatorPassword" in params.omada) {
+    const next = params.omada.hotspotOperatorPassword;
+    if (next == null || next.trim() === "") {
+      omadaHotspotOperatorPasswordEnc = null;
+    } else {
+      omadaHotspotOperatorPasswordEnc = encryptSecret(next.trim());
+    }
+  }
+
+  await db
+    .prepare(
+      `
+      UPDATE tenants
+      SET voucher_source_mode = ?,
+          portal_auth_mode = ?,
+          omada_api_base_url = ?,
+          omada_omadac_id = ?,
+          omada_site_id = ?,
+          omada_client_id = ?,
+          omada_client_secret_enc = ?,
+          omada_hotspot_operator_username = ?,
+          omada_hotspot_operator_password_enc = ?,
+          updated_at = ?
+      WHERE id = ?
+    `,
+    )
+    .run(
+      voucherSourceMode,
+      portalAuthMode,
+      apiBaseUrl || null,
+      omadacId || null,
+      siteId || null,
+      clientId || null,
+      omadaClientSecretEnc,
+      hotspotOperatorUsername || null,
+      omadaHotspotOperatorPasswordEnc,
+      now,
+      params.tenantId,
+    );
+
+  return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
+}
+
+export async function resolveTenantOmadaOpenApiConfig(tenantId: string) {
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) return null;
+  if (normalizeVoucherSourceMode(tenant.voucher_source_mode) !== "omada_openapi") {
+    return null;
+  }
+
+  if (
+    !tenant.omada_api_base_url ||
+    !tenant.omada_omadac_id ||
+    !tenant.omada_site_id ||
+    !tenant.omada_client_id ||
+    !tenant.omada_client_secret_enc
+  ) {
+    return null;
+  }
+
+  return {
+    apiBaseUrl: tenant.omada_api_base_url,
+    omadacId: tenant.omada_omadac_id,
+    siteId: tenant.omada_site_id,
+    clientId: tenant.omada_client_id,
+    clientSecret: decryptSecret(tenant.omada_client_secret_enc),
+  } satisfies TenantOmadaOpenApiConfig;
+}
+
+export async function resolveTenantOmadaOpenApiConfigForTesting(params: {
+  tenantId: string;
+  overrides?: TenantOmadaOpenApiConfigOverrides;
+}) {
+  const tenant = await getTenantById(params.tenantId);
+  if (!tenant) return { status: "missing" as const };
+
+  const apiBaseUrl = params.overrides?.apiBaseUrl?.trim() || tenant.omada_api_base_url || "";
+  const omadacId = params.overrides?.omadacId?.trim() || tenant.omada_omadac_id || "";
+  const siteId = params.overrides?.siteId?.trim() || tenant.omada_site_id || "";
+  const clientId = params.overrides?.clientId?.trim() || tenant.omada_client_id || "";
+  const overrideSecret = params.overrides?.clientSecret?.trim() || "";
+  const clientSecret = overrideSecret || (
+    tenant.omada_client_secret_enc
+      ? decryptSecret(tenant.omada_client_secret_enc)
+      : ""
+  );
+
+  const missing: Array<"apiBaseUrl" | "omadacId" | "siteId" | "clientId" | "clientSecret"> = [];
+  if (!apiBaseUrl) missing.push("apiBaseUrl");
+  if (!omadacId) missing.push("omadacId");
+  if (!siteId) missing.push("siteId");
+  if (!clientId) missing.push("clientId");
+  if (!clientSecret) missing.push("clientSecret");
+
+  if (missing.length > 0) {
+    return {
+      status: "incomplete" as const,
+      missing,
+    };
+  }
+
+  return {
+    status: "ok" as const,
+    config: {
+      apiBaseUrl,
+      omadacId,
+      siteId,
+      clientId,
+      clientSecret,
+    } satisfies TenantOmadaOpenApiConfig,
+  };
 }
 
 async function seedDefaultPackagesForTenant(db: ReturnType<typeof getDb>, tenantId: string) {

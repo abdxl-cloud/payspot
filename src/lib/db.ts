@@ -111,6 +111,15 @@ async function initSchema() {
       paystack_secret_enc TEXT,
       paystack_secret_last4 TEXT,
       admin_api_key_hash TEXT,
+      voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv',
+      portal_auth_mode TEXT NOT NULL DEFAULT 'omada_builtin',
+      omada_api_base_url TEXT,
+      omada_omadac_id TEXT,
+      omada_site_id TEXT,
+      omada_client_id TEXT,
+      omada_client_secret_enc TEXT,
+      omada_hotspot_operator_username TEXT,
+      omada_hotspot_operator_password_enc TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -234,6 +243,27 @@ async function initSchema() {
       ON transactions(tenant_id, payment_status);
     CREATE INDEX IF NOT EXISTS idx_transactions_tenant_reference
       ON transactions(tenant_id, reference);
+  `);
+
+  await p.query(`
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv';
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS portal_auth_mode TEXT NOT NULL DEFAULT 'omada_builtin';
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS omada_api_base_url TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS omada_omadac_id TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS omada_site_id TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS omada_client_id TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS omada_client_secret_enc TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS omada_hotspot_operator_username TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS omada_hotspot_operator_password_enc TEXT;
   `);
 }
 
