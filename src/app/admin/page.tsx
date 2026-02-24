@@ -30,13 +30,6 @@ export default async function AdminPage() {
           action={<LogoutButton />}
         />
 
-        <header className="dashboard-header">
-          <h1 className="dashboard-title">Platform Tenant Operations</h1>
-          <p className="dashboard-subtitle">
-            Create and govern tenant workspaces, control access lifecycle, and verify payment readiness.
-          </p>
-        </header>
-
         <AdminTenantsPanel />
       </div>
     </div>

@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Building2, Search, ShieldCheck, UserPlus } from "lucide-react";
+import {
+  Building2,
+  PencilLine,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,10 +55,18 @@ export function AdminTenantsPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [newSlug, setNewSlug] = useState("");
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
+
+  const [editingTenant, setEditingTenant] = useState<TenantDto | null>(null);
+  const [editSlug, setEditSlug] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editStatus, setEditStatus] = useState("active");
+  const [editPaystackSecretKey, setEditPaystackSecretKey] = useState("");
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -62,6 +79,23 @@ export function AdminTenantsPanel() {
       !loading
     );
   }, [newSlug, newName, newEmail, loading]);
+
+  const canSaveEdit = useMemo(() => {
+    if (!editingTenant || loading) return false;
+    if (editSlug.trim().length < 2) return false;
+    if (editName.trim().length < 2) return false;
+    if (!editEmail.includes("@")) return false;
+    if (editPaystackSecretKey.trim().length > 0 && editPaystackSecretKey.trim().length < 10) return false;
+
+    const changed =
+      editSlug.trim() !== editingTenant.slug ||
+      editName.trim() !== editingTenant.name ||
+      editEmail.trim() !== editingTenant.adminEmail ||
+      editStatus.toLowerCase() !== editingTenant.status.toLowerCase() ||
+      editPaystackSecretKey.trim().length >= 10;
+
+    return changed;
+  }, [editingTenant, loading, editSlug, editName, editEmail, editStatus, editPaystackSecretKey]);
 
   const tenantStats = useMemo(() => {
     const active = tenants.filter((tenant) => tenant.status.toLowerCase() === "active").length;
@@ -150,6 +184,7 @@ export function AdminTenantsPanel() {
       setNewName("");
       setNewEmail("");
       setNewPassword("");
+      setShowCreateModal(false);
       await loadTenants();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -177,8 +212,10 @@ export function AdminTenantsPanel() {
       if (!response.ok) throw new Error(data?.error || "Unable to update tenant.");
       setNotice("Tenant updated.");
       await loadTenants();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
+      return false;
     } finally {
       setLoading(false);
     }
@@ -230,38 +267,190 @@ export function AdminTenantsPanel() {
     }
   }
 
+  function openEditModal(tenant: TenantDto) {
+    setEditingTenant(tenant);
+    setEditSlug(tenant.slug);
+    setEditName(tenant.name);
+    setEditEmail(tenant.adminEmail);
+    setEditStatus(tenant.status.toLowerCase());
+    setEditPaystackSecretKey("");
+  }
+
+  async function saveEdit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editingTenant || !canSaveEdit) return;
+
+    const saved = await handleUpdate(editingTenant.id, {
+      slug: editSlug.trim(),
+      name: editName.trim(),
+      adminEmail: editEmail.trim(),
+      status: editStatus,
+      paystackSecretKey: editPaystackSecretKey.trim() ? editPaystackSecretKey.trim() : undefined,
+    });
+
+    if (saved) {
+      setEditingTenant(null);
+    }
+  }
+
+  const statusOptions = useMemo(() => {
+    const fromData = tenants.map((tenant) => tenant.status.toLowerCase());
+    return Array.from(new Set([...COMMON_STATUSES, ...fromData]));
+  }, [tenants]);
+
   return (
-    <div className="grid gap-5">
-      <section className="panel-surface">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <div>
-            <p className="section-kicker">Control center</p>
-            <h2 className="section-title mt-1">Platform overview</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Monitor tenant readiness, status distribution, and payment configuration health.
-            </p>
+    <>
+      <div className="grid gap-5">
+        <section className="panel-surface w-full max-w-full overflow-hidden">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <p className="section-kicker">Control center</p>
+              <h2 className="section-title mt-1">Platform overview</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Monitor tenant readiness, status distribution, and payment configuration health.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={loadTenants}
+                disabled={loading}
+                type="button"
+                aria-label="Refresh tenants"
+              >
+                <RefreshCw className={["size-4", loading ? "animate-spin" : ""].join(" ")} />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                aria-label="Create tenant"
+              >
+                <Plus className="size-4" />
+              </Button>
+            </div>
           </div>
-          <Button variant="outline" onClick={loadTenants} disabled={loading} type="button">
-            {loading ? "Refreshing..." : "Refresh"}
-          </Button>
-        </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatTile label="Total tenants" value={String(tenantStats.total)} />
-          <StatTile label="Active" value={String(tenantStats.active)} />
-          <StatTile label="Pending" value={String(tenantStats.pending)} />
-          <StatTile label="Paystack configured" value={String(tenantStats.configuredPayments)} />
-        </div>
-
-        <div className="mt-5 border-t border-slate-200/85 pt-4">
-          <div className="mb-2 flex items-center gap-2">
-            <UserPlus className="size-4 text-indigo-600" />
-            <h2 className="text-base font-semibold text-slate-900">Create tenant</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <StatTile label="Total tenants" value={String(tenantStats.total)} />
+            <StatTile label="Active" value={String(tenantStats.active)} />
+            <StatTile label="Pending" value={String(tenantStats.pending)} />
+            <StatTile label="Paystack configured" value={String(tenantStats.configuredPayments)} />
           </div>
-          <p className="text-sm text-slate-600">
-            Provision a tenant, generate credentials, and send onboarding details.
+
+          <p className="mt-3 text-xs text-slate-500">
+            {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "No sync yet"}
           </p>
-          <form className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" onSubmit={handleCreate}>
+
+          {error ? (
+            <Alert variant="destructive" className="mt-4">
+              <AlertTitle>Action failed</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+          {notice ? (
+            <Alert className="mt-4">
+              <AlertTitle>Update</AlertTitle>
+              <AlertDescription className="break-words">{notice}</AlertDescription>
+            </Alert>
+          ) : null}
+        </section>
+
+        <section id="tenant-directory" className="panel-surface w-full max-w-full overflow-hidden rounded-lg">
+          <div className="mb-3 flex items-center gap-2">
+            <Building2 className="size-4 text-indigo-600" />
+            <h2 className="text-base font-semibold text-slate-900">Tenant directory</h2>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1fr_200px] md:items-center">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="Search by slug, name, email"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                aria-label="Search tenants"
+                className="pl-9"
+              />
+            </div>
+            <select
+              className="w-full"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              aria-label="Filter tenants by status"
+            >
+              <option value="all">All statuses</option>
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <p className="mt-3 text-xs text-slate-500">
+            Showing {filteredTenants.length} of {tenants.length} tenants
+          </p>
+
+          <div className="mt-3 space-y-3 lg:hidden">
+            {filteredTenants.length === 0 ? (
+              <div className="rounded-xl border border-slate-200/85 bg-white p-4 text-sm text-slate-600">
+                {loading ? "Loading tenants..." : "No tenants match your filters."}
+              </div>
+            ) : (
+              filteredTenants.map((tenant) => (
+                <TenantCard
+                  key={tenant.id}
+                  tenant={tenant}
+                  disabled={loading}
+                  onEdit={() => openEditModal(tenant)}
+                  onDelete={() => handleDelete(tenant.id)}
+                  onResetPassword={() => handleResetPassword(tenant.id)}
+                />
+              ))
+            )}
+          </div>
+
+          <div className="mt-3 hidden overflow-x-auto rounded-lg border border-slate-200/85 bg-white lg:block">
+            <table className="w-full min-w-[860px] text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Tenant</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Paystack</th>
+                  <th className="px-3 py-2">Updated</th>
+                  <th className="px-3 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTenants.length === 0 ? (
+                  <tr>
+                    <td className="px-3 py-4 text-slate-600" colSpan={5}>
+                      {loading ? "Loading tenants..." : "No tenants match your filters."}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTenants.map((tenant) => (
+                    <TenantRow
+                      key={tenant.id}
+                      tenant={tenant}
+                      disabled={loading}
+                      onEdit={() => openEditModal(tenant)}
+                      onDelete={() => handleDelete(tenant.id)}
+                      onResetPassword={() => handleResetPassword(tenant.id)}
+                    />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      {showCreateModal ? (
+        <ModalShell title="Create tenant" onClose={() => setShowCreateModal(false)}>
+          <form className="grid gap-3" onSubmit={handleCreate}>
             <Input
               placeholder="Slug"
               value={newSlug}
@@ -287,120 +476,55 @@ export function AdminTenantsPanel() {
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
             />
-            <Button type="submit" disabled={!canCreate}>
-              {loading ? "Working..." : "Create"}
-            </Button>
-          </form>
-        </div>
-
-        <p className="mt-3 text-xs text-slate-500">
-          {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "No sync yet"}
-        </p>
-
-        {error ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Action failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
-        {notice ? (
-          <Alert className="mt-4">
-            <AlertTitle>Update</AlertTitle>
-            <AlertDescription className="break-words">{notice}</AlertDescription>
-          </Alert>
-        ) : null}
-      </section>
-
-      <section id="tenant-directory" className="panel-surface">
-        <div className="mb-3 flex items-center gap-2">
-          <Building2 className="size-4 text-indigo-600" />
-          <h2 className="text-base font-semibold text-slate-900">Tenant directory</h2>
-        </div>
-        <div className="grid gap-3 md:grid-cols-[1fr_200px] md:items-center">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              placeholder="Search by slug, name, email"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              aria-label="Search tenants"
-              className="pl-9"
-            />
-          </div>
-          <select
-            className="w-full"
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            aria-label="Filter tenants by status"
-          >
-            <option value="all">All statuses</option>
-            {Array.from(new Set(tenants.map((tenant) => tenant.status.toLowerCase()))).map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <p className="mt-3 text-xs text-slate-500">
-          Showing {filteredTenants.length} of {tenants.length} tenants
-        </p>
-
-        <div className="mt-3 space-y-3 lg:hidden">
-          {filteredTenants.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200/85 bg-white p-4 text-sm text-slate-600">
-              {loading ? "Loading tenants..." : "No tenants match your filters."}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!canCreate}>
+                {loading ? "Working..." : "Create tenant"}
+              </Button>
             </div>
-          ) : (
-            filteredTenants.map((tenant) => (
-              <TenantCard
-                key={tenant.id}
-                tenant={tenant}
-                disabled={loading}
-                onUpdate={(patch) => handleUpdate(tenant.id, patch)}
-                onDelete={() => handleDelete(tenant.id)}
-                onResetPassword={() => handleResetPassword(tenant.id)}
-              />
-            ))
-          )}
-        </div>
+          </form>
+        </ModalShell>
+      ) : null}
 
-        <div className="mt-3 hidden overflow-x-auto rounded-2xl border border-slate-200/85 bg-white xl:block">
-          <table className="w-full min-w-[1250px] text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Tenant</th>
-                <th className="px-3 py-2">Admin email</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Paystack key</th>
-                <th className="px-3 py-2">Updated</th>
-                <th className="px-3 py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTenants.length === 0 ? (
-                <tr>
-                  <td className="px-3 py-4 text-slate-600" colSpan={6}>
-                    {loading ? "Loading tenants..." : "No tenants match your filters."}
-                  </td>
-                </tr>
-              ) : (
-                filteredTenants.map((tenant) => (
-                  <TenantRow
-                    key={tenant.id}
-                    tenant={tenant}
-                    disabled={loading}
-                    onUpdate={(patch) => handleUpdate(tenant.id, patch)}
-                    onDelete={() => handleDelete(tenant.id)}
-                    onResetPassword={() => handleResetPassword(tenant.id)}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
+      {editingTenant ? (
+        <ModalShell title={`Edit ${editingTenant.name}`} onClose={() => setEditingTenant(null)}>
+          <form className="grid gap-3" onSubmit={saveEdit}>
+            <Input value={editSlug} onChange={(event) => setEditSlug(event.target.value)} required />
+            <Input value={editName} onChange={(event) => setEditName(event.target.value)} required />
+            <Input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} required />
+            <select className="w-full" value={editStatus} onChange={(event) => setEditStatus(event.target.value)}>
+              {statusOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <div className="rounded-lg border border-slate-200/85 bg-slate-50 p-3">
+              <p className="text-xs text-slate-600">
+                Current Paystack key: {editingTenant.paystackLast4 ? `****${editingTenant.paystackLast4}` : "not set"}
+              </p>
+              <Input
+                className="mt-2"
+                type="password"
+                placeholder="New Paystack secret (optional)"
+                value={editPaystackSecretKey}
+                onChange={(event) => setEditPaystackSecretKey(event.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => setEditingTenant(null)} disabled={loading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!canSaveEdit}>
+                Save changes
+              </Button>
+            </div>
+          </form>
+        </ModalShell>
+      ) : null}
+    </>
   );
 }
 
@@ -416,103 +540,36 @@ function StatTile({ label, value }: { label: string; value: string }) {
 function TenantRow(props: {
   tenant: TenantDto;
   disabled: boolean;
-  onUpdate: (patch: TenantUpdatePayload) => void;
+  onEdit: () => void;
   onDelete: () => void;
   onResetPassword: () => void;
 }) {
-  const [slug, setSlug] = useState(props.tenant.slug);
-  const [name, setName] = useState(props.tenant.name);
-  const [adminEmail, setAdminEmail] = useState(props.tenant.adminEmail);
-  const [status, setStatus] = useState(props.tenant.status);
-  const [paystackSecretKey, setPaystackSecretKey] = useState("");
-
-  const statusOptions = useMemo(() => {
-    const normalized = props.tenant.status.toLowerCase();
-    if (COMMON_STATUSES.includes(normalized)) return COMMON_STATUSES;
-    return [...COMMON_STATUSES, normalized];
-  }, [props.tenant.status]);
-
-  const dirty =
-    slug !== props.tenant.slug ||
-    name !== props.tenant.name ||
-    adminEmail !== props.tenant.adminEmail ||
-    status !== props.tenant.status;
-  const paystackDirty = paystackSecretKey.trim().length >= 10;
-
   return (
     <tr className="border-b border-slate-100 last:border-0">
       <td className="px-3 py-2 align-top">
-        <div className="grid gap-2">
-          <Input value={slug} onChange={(event) => setSlug(event.target.value)} disabled={props.disabled} />
-          <Input value={name} onChange={(event) => setName(event.target.value)} disabled={props.disabled} />
-        </div>
+        <p className="font-semibold text-slate-900">{props.tenant.name}</p>
+        <p className="text-xs text-slate-500">/{props.tenant.slug}</p>
+        <p className="text-xs text-slate-500">{props.tenant.adminEmail}</p>
       </td>
-      <td className="px-3 py-2 align-top">
-        <Input value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} disabled={props.disabled} />
-      </td>
-      <td className="px-3 py-2 align-top">
-        <div className="grid gap-2">
-          {statusBadge(status)}
-          <select
-            className="h-10 w-full"
-            value={status.toLowerCase()}
-            onChange={(event) => setStatus(event.target.value)}
-            disabled={props.disabled}
-          >
-            {statusOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </div>
-      </td>
-      <td className="px-3 py-2 align-top">
-        <div className="grid gap-2">
-          <div className="text-xs text-slate-600">
-            {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
-          </div>
-          <div className="flex gap-2">
-            <Input
-              type="password"
-              placeholder="sk_live_..."
-              value={paystackSecretKey}
-              onChange={(event) => setPaystackSecretKey(event.target.value)}
-              disabled={props.disabled}
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                props.onUpdate({ paystackSecretKey: paystackSecretKey.trim() });
-                setPaystackSecretKey("");
-              }}
-              disabled={props.disabled || !paystackDirty}
-            >
-              Update
-            </Button>
-          </div>
-        </div>
+      <td className="px-3 py-2 align-top">{statusBadge(props.tenant.status)}</td>
+      <td className="px-3 py-2 align-top text-xs text-slate-600">
+        {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
       </td>
       <td className="px-3 py-2 align-top text-xs text-slate-600">
         {new Date(props.tenant.updatedAt).toLocaleString()}
       </td>
       <td className="px-3 py-2 align-top">
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => props.onUpdate({ slug, name, adminEmail, status })}
-            disabled={props.disabled || !dirty}
-          >
-            Save
+          <Button type="button" size="sm" variant="outline" onClick={props.onEdit} disabled={props.disabled}>
+            <PencilLine className="size-3.5" />
+            Edit
           </Button>
           <Button type="button" size="sm" variant="outline" onClick={props.onResetPassword} disabled={props.disabled}>
             <ShieldCheck className="size-3.5" />
-            Reset password
+            Reset
           </Button>
           <Button type="button" size="sm" variant="destructive" onClick={props.onDelete} disabled={props.disabled}>
+            <Trash2 className="size-3.5" />
             Delete
           </Button>
         </div>
@@ -524,102 +581,69 @@ function TenantRow(props: {
 function TenantCard(props: {
   tenant: TenantDto;
   disabled: boolean;
-  onUpdate: (patch: TenantUpdatePayload) => void;
+  onEdit: () => void;
   onDelete: () => void;
   onResetPassword: () => void;
 }) {
-  const [slug, setSlug] = useState(props.tenant.slug);
-  const [name, setName] = useState(props.tenant.name);
-  const [adminEmail, setAdminEmail] = useState(props.tenant.adminEmail);
-  const [status, setStatus] = useState(props.tenant.status);
-  const [paystackSecretKey, setPaystackSecretKey] = useState("");
-
-  const statusOptions = useMemo(() => {
-    const normalized = props.tenant.status.toLowerCase();
-    if (COMMON_STATUSES.includes(normalized)) return COMMON_STATUSES;
-    return [...COMMON_STATUSES, normalized];
-  }, [props.tenant.status]);
-
-  const dirty =
-    slug !== props.tenant.slug ||
-    name !== props.tenant.name ||
-    adminEmail !== props.tenant.adminEmail ||
-    status !== props.tenant.status;
-  const paystackDirty = paystackSecretKey.trim().length >= 10;
-
   return (
-    <article className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <article className="rounded-xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
+      <div className="mb-2 flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-slate-900">{name}</p>
-          <p className="text-xs text-slate-500">/{slug}</p>
+          <p className="text-sm font-semibold text-slate-900">{props.tenant.name}</p>
+          <p className="text-xs text-slate-500">/{props.tenant.slug}</p>
         </div>
-        {statusBadge(status)}
+        {statusBadge(props.tenant.status)}
       </div>
 
-      <div className="grid gap-2">
-        <Input value={slug} onChange={(event) => setSlug(event.target.value)} disabled={props.disabled} />
-        <Input value={name} onChange={(event) => setName(event.target.value)} disabled={props.disabled} />
-        <Input value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} disabled={props.disabled} />
-        <select
-          className="h-10 w-full"
-          value={status.toLowerCase()}
-          onChange={(event) => setStatus(event.target.value)}
-          disabled={props.disabled}
-        >
-          {statusOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </div>
+      <p className="text-xs text-slate-500">{props.tenant.adminEmail}</p>
+      <p className="mt-1 text-xs text-slate-500">
+        Paystack: {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
+      </p>
+      <p className="mt-1 text-xs text-slate-500">{new Date(props.tenant.updatedAt).toLocaleString()}</p>
 
-      <div className="mt-3 rounded-xl border border-slate-200/85 bg-slate-50/70 p-3">
-        <p className="text-xs text-slate-600">
-          Paystack: {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
-        </p>
-        <div className="mt-2 flex gap-2">
-          <Input
-            type="password"
-            placeholder="sk_live_..."
-            value={paystackSecretKey}
-            onChange={(event) => setPaystackSecretKey(event.target.value)}
-            disabled={props.disabled}
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              props.onUpdate({ paystackSecretKey: paystackSecretKey.trim() });
-              setPaystackSecretKey("");
-            }}
-            disabled={props.disabled || !paystackDirty}
-          >
-            Update
-          </Button>
-        </div>
-      </div>
-
-      <p className="mt-3 text-xs text-slate-500">{new Date(props.tenant.updatedAt).toLocaleString()}</p>
-
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => props.onUpdate({ slug, name, adminEmail, status })}
-          disabled={props.disabled || !dirty}
-        >
-          Save
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <Button type="button" size="sm" variant="outline" onClick={props.onEdit} disabled={props.disabled}>
+          <PencilLine className="size-3.5" />
         </Button>
         <Button type="button" size="sm" variant="outline" onClick={props.onResetPassword} disabled={props.disabled}>
-          Reset
+          <ShieldCheck className="size-3.5" />
         </Button>
-        <Button type="button" size="sm" variant="destructive" className="col-span-2" onClick={props.onDelete} disabled={props.disabled}>
-          Delete
+        <Button type="button" size="sm" variant="destructive" onClick={props.onDelete} disabled={props.disabled}>
+          <Trash2 className="size-3.5" />
         </Button>
       </div>
     </article>
+  );
+}
+
+function ModalShell({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-xl border border-slate-200/90 bg-white p-5 shadow-[var(--shadow-lg)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex size-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-100"
+            aria-label="Close"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }

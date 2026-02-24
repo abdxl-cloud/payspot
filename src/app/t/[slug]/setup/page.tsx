@@ -37,27 +37,11 @@ export default async function TenantSetupPage({ params }: Props) {
           environment="Setup"
           accountLabel={tenant.name}
         />
-        <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1fr_380px]">
-          <section className="order-2 panel-surface lg:order-1">
-            <p className="section-kicker">Launch checklist</p>
-            <h1 className="panel-title mt-1">Complete setup before going live</h1>
-            <p className="panel-copy mt-3 max-w-2xl">
-              Finish security, payment, and voucher inventory setup for{" "}
-              <span className="font-mono break-all">/t/{tenant.slug}</span>.
-            </p>
-            <div className="dashboard-meta">
-              <span>Tenant: {tenant.name}</span>
-              <span>Mode: Setup gate</span>
-              <span>Rendered: {renderedAt}</span>
-            </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
-              <div className="dashboard-kpi"><p className="dashboard-kpi-label">Password hardening</p><p className="dashboard-kpi-value">Required</p></div>
-              <div className="dashboard-kpi"><p className="dashboard-kpi-label">Paystack key</p><p className="dashboard-kpi-value">Required</p></div>
-              <div className="dashboard-kpi"><p className="dashboard-kpi-label">Activation gate</p><p className="dashboard-kpi-value">Checks pass</p></div>
-            </div>
-          </section>
-
-          <section className="order-1 grid gap-4 lg:order-2">
+        <section className="mx-auto w-full max-w-3xl">
+          <p className="mb-3 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Tenant: {tenant.name} | Rendered: {renderedAt}
+          </p>
+          <div className="mx-auto">
             <TenantSetupPanel
               tenantSlug={tenant.slug}
               currentSlug={tenant.slug}
@@ -65,14 +49,8 @@ export default async function TenantSetupPage({ params }: Props) {
               requirePaystackKey={!tenant.paystack_secret_enc}
               requireVoucherImport={!hasVoucherImport}
             />
-            <div className="dashboard-lane">
-              <h3 className="dashboard-lane-title">Setup sequence</h3>
-              <p className="dashboard-lane-copy">1. Set a strong admin password.</p>
-              <p className="dashboard-lane-copy">2. Add Paystack secret key for payments.</p>
-              <p className="dashboard-lane-copy">3. Import voucher inventory from Omada CSV.</p>
-            </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </div>
     </div>
   );

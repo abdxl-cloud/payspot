@@ -18,6 +18,7 @@ type Props = {
 };
 
 type SlugState = "idle" | "checking" | "available" | "taken" | "invalid";
+type SetupStepKey = "slug" | "password" | "paystack" | "voucher";
 
 function validatePassword(pw: string) {
   if (pw.length < 8) return "Password must be at least 8 characters.";
@@ -62,6 +63,7 @@ export function TenantSetupPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
   useEffect(() => {
     const normalized = normalizeSlug(portalSlug);
@@ -135,6 +137,51 @@ export function TenantSetupPanel({
     paystackSecretKey,
   ]);
 
+  const steps = useMemo(() => {
+    const built: Array<{ key: SetupStepKey; label: string; complete: boolean }> = [
+      { key: "slug", label: "Portal link", complete: slugState === "available" },
+    ];
+
+    if (requirePasswordChange) {
+      built.push({
+        key: "password",
+        label: "Password",
+        complete:
+          !!newPassword &&
+          !!confirmPassword &&
+          newPassword === confirmPassword &&
+          !validatePassword(newPassword),
+      });
+    }
+
+    if (requirePaystackKey) {
+      built.push({
+        key: "paystack",
+        label: "Paystack",
+        complete: paystackSecretKey.trim().length >= 10,
+      });
+    }
+
+    built.push({ key: "voucher", label: "Vouchers", complete: voucherImported });
+    return built;
+  }, [
+    slugState,
+    requirePasswordChange,
+    newPassword,
+    confirmPassword,
+    requirePaystackKey,
+    paystackSecretKey,
+    voucherImported,
+  ]);
+
+  useEffect(() => {
+    setCurrentStepIndex((index) => Math.min(index, Math.max(steps.length - 1, 0)));
+  }, [steps.length]);
+
+  const currentStep = steps[currentStepIndex];
+  const isLastStep = currentStepIndex === steps.length - 1;
+  const canContinue = currentStep?.complete ?? false;
+
   async function handleVoucherImport() {
     if (!voucherFile || voucherImporting) return;
 
@@ -172,6 +219,10 @@ export function TenantSetupPanel({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (!isLastStep) {
+      if (canContinue) setCurrentStepIndex((index) => Math.min(index + 1, steps.length - 1));
+      return;
+    }
     if (!canSubmit) return;
 
     setError(null);
@@ -203,13 +254,26 @@ export function TenantSetupPanel({
     <Card className="border-slate-200/85 bg-white/92">
       <CardHeader className="space-y-2">
         <p className="section-kicker">Launch checklist</p>
-        <CardTitle className="section-title">Finish required setup</CardTitle>
+        <CardTitle className="section-title">Tenant setup wizard</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="flex flex-wrap gap-2">
-          <StatusPill label="Password" done={!requirePasswordChange} />
-          <StatusPill label="Paystack key" done={!requirePaystackKey} />
-          <StatusPill label="Voucher import" done={voucherImported} />
+        <div className="grid gap-2 sm:grid-cols-2">
+          {steps.map((step, index) => (
+            <button
+              key={step.key}
+              type="button"
+              onClick={() => setCurrentStepIndex(index)}
+              className={[
+                "flex items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition",
+                index === currentStepIndex
+                  ? "border-indigo-300 bg-indigo-50 text-indigo-900"
+                  : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-white",
+              ].join(" ")}
+            >
+              <span>{step.label}</span>
+              {step.complete ? <BadgeCheck className="size-4 text-emerald-600" /> : null}
+            </button>
+          ))}
         </div>
 
         {error ? (
@@ -227,35 +291,37 @@ export function TenantSetupPanel({
         ) : null}
 
         <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="portalSlug">Portal link name</Label>
-            <div className="relative">
-              <Link2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                id="portalSlug"
-                className="h-11 pl-9"
-                placeholder="walstreet"
-                value={portalSlug}
-                onChange={(event) => setPortalSlug(event.target.value)}
-                required
-              />
+          {currentStep?.key === "slug" ? (
+            <div className="grid gap-2">
+              <Label htmlFor="portalSlug">Portal link name</Label>
+              <div className="relative">
+                <Link2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  id="portalSlug"
+                  className="h-11 pl-9"
+                  placeholder="walstreet"
+                  value={portalSlug}
+                  onChange={(event) => setPortalSlug(event.target.value)}
+                  required
+                />
+              </div>
+              <p
+                className={[
+                  "text-xs",
+                  slugState === "taken" || slugState === "invalid"
+                    ? "text-red-700"
+                    : slugState === "available"
+                      ? "text-emerald-700"
+                      : "text-muted-foreground",
+                ].join(" ")}
+              >
+                {slugState === "checking" ? "Checking availability..." : slugMessage}
+              </p>
             </div>
-            <p
-              className={[
-                "text-xs",
-                slugState === "taken" || slugState === "invalid"
-                  ? "text-red-700"
-                  : slugState === "available"
-                    ? "text-emerald-700"
-                    : "text-muted-foreground",
-              ].join(" ")}
-            >
-              {slugState === "checking" ? "Checking availability..." : slugMessage}
-            </p>
-          </div>
+          ) : null}
 
-          {requirePasswordChange ? (
-            <>
+          {currentStep?.key === "password" && requirePasswordChange ? (
+            <div className="grid gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="newPassword">New password</Label>
                 <div className="relative">
@@ -285,10 +351,10 @@ export function TenantSetupPanel({
                   required
                 />
               </div>
-            </>
+            </div>
           ) : null}
 
-          {requirePaystackKey ? (
+          {currentStep?.key === "paystack" && requirePaystackKey ? (
             <div className="grid gap-2">
               <Label htmlFor="paystackKey">Paystack secret key</Label>
               <Input
@@ -306,58 +372,63 @@ export function TenantSetupPanel({
             </div>
           ) : null}
 
-          <div className="rounded-2xl border border-slate-200/85 bg-slate-50/75 p-4">
-            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-              <Upload className="size-3.5" /> Voucher import
-            </p>
-            <p className="mt-1 text-sm text-slate-600">
-              Upload your Omada CSV so your portal launches with available voucher inventory.
-            </p>
-
-            {voucherImported ? (
-              <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                <BadgeCheck className="size-4" /> Voucher CSV imported.
+          {currentStep?.key === "voucher" ? (
+            <div className="rounded-2xl border border-slate-200/85 bg-slate-50/75 p-4">
+              <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                <Upload className="size-3.5" /> Voucher import
               </p>
+              <p className="mt-1 text-sm text-slate-600">
+                Upload your Omada CSV so your portal launches with available voucher inventory.
+              </p>
+
+              {voucherImported ? (
+                <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                  <BadgeCheck className="size-4" /> Voucher CSV imported.
+                </p>
+              ) : (
+                <div className="mt-3 grid gap-3">
+                  <Input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(event) => setVoucherFile(event.target.files?.[0] ?? null)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!voucherFile || voucherImporting}
+                    onClick={handleVoucherImport}
+                  >
+                    {voucherImporting ? "Importing..." : "Import voucher CSV"}
+                  </Button>
+                </div>
+              )}
+
+              {voucherError ? <p className="mt-2 text-sm text-red-700">{voucherError}</p> : null}
+              {voucherResult ? <p className="mt-2 text-sm text-slate-600">{voucherResult}</p> : null}
+            </div>
+          ) : null}
+
+          <div className="flex items-center justify-between gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading || currentStepIndex === 0}
+              onClick={() => setCurrentStepIndex((index) => Math.max(index - 1, 0))}
+            >
+              Back
+            </Button>
+            {isLastStep ? (
+              <Button type="submit" className="h-11" disabled={!canSubmit}>
+                {loading ? "Saving..." : "Complete setup"}
+              </Button>
             ) : (
-              <div className="mt-3 grid gap-3">
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={(event) => setVoucherFile(event.target.files?.[0] ?? null)}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!voucherFile || voucherImporting}
-                  onClick={handleVoucherImport}
-                >
-                  {voucherImporting ? "Importing..." : "Import voucher CSV"}
-                </Button>
-              </div>
+              <Button type="submit" className="h-11" disabled={!canContinue || loading}>
+                Next step
+              </Button>
             )}
-
-            {voucherError ? <p className="mt-2 text-sm text-red-700">{voucherError}</p> : null}
-            {voucherResult ? <p className="mt-2 text-sm text-slate-600">{voucherResult}</p> : null}
           </div>
-
-          <Button type="submit" className="h-12" disabled={!canSubmit}>
-            {loading ? "Saving..." : "Complete setup"}
-          </Button>
         </form>
       </CardContent>
     </Card>
-  );
-}
-
-function StatusPill({ label, done }: { label: string; done: boolean }) {
-  return done ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-      <BadgeCheck className="size-3.5" />
-      {label}
-    </span>
-  ) : (
-    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-      {label}
-    </span>
   );
 }
