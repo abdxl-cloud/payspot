@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Chakra_Petch, Plus_Jakarta_Sans } from "next/font/google";
+import { Exo_2, Manrope } from "next/font/google";
 import "./globals.css";
 
-const bodyFont = Plus_Jakarta_Sans({
+const bodyFont = Manrope({
   variable: "--font-body",
   subsets: ["latin"],
   display: "swap",
 });
 
-const headingFont = Chakra_Petch({
+const headingFont = Exo_2({
   variable: "--font-heading",
   subsets: ["latin"],
   weight: ["500", "600", "700"],

@@ -26,14 +26,14 @@ export default async function ForgotPasswordPage() {
             accountLabel="Guest"
           />
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
-            <section className="panel-surface space-y-4">
+            <section className="order-2 panel-surface space-y-4 lg:order-1">
               <p className="section-kicker">Account recovery</p>
               <h1 className="panel-title">Recover access quickly</h1>
               <p className="panel-copy max-w-xl">
                 Enter your admin email and we will send a secure reset link if an account exists.
               </p>
             </section>
-            <div className="mx-auto w-full max-w-xl">
+            <div className="order-1 mx-auto w-full max-w-xl lg:order-2">
               <ForgotPasswordForm />
             </div>
           </div>

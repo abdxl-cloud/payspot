@@ -312,7 +312,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
               <p className="section-kicker">Purchase flow</p>
               <CardTitle className="section-title">Buy Wi-Fi Access Voucher</CardTitle>
             </div>
-            <div className="flex items-center gap-2 text-xs">
+            <div className="hidden items-center gap-2 text-xs sm:flex">
               <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
                 <ShieldCheck className="size-3.5" /> Secure checkout
               </Badge>
@@ -565,7 +565,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
             </div>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-4 md:grid-cols-[minmax(0,1fr)_230px] md:items-end" onSubmit={handleSubmit}>
+            <form className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_230px] lg:items-end" onSubmit={handleSubmit}>
               <div className="grid gap-2">
                 <Label htmlFor="phone">Phone number</Label>
                 <Input
@@ -582,7 +582,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
                 </p>
               </div>
 
-              <Button type="submit" disabled={!canSubmit} className="h-11 md:mb-[22px]">
+              <Button type="submit" disabled={!canSubmit} className="h-11 lg:mb-[22px]">
                 {loading
                   ? "Preparing payment..."
                   : selected
@@ -591,7 +591,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
               </Button>
 
               {paymentReference ? (
-                <Alert className="border-emerald-200 bg-emerald-50/90 md:col-span-2">
+                <Alert className="border-emerald-200 bg-emerald-50/90 lg:col-span-2">
                   <AlertTitle>Reference saved: {paymentReference}</AlertTitle>
                   <AlertDescription className="space-y-2">
                     <p>Keep this reference. You can resume payment with it if interrupted.</p>
@@ -630,7 +630,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
                 </Alert>
               ) : null}
 
-              <div className="grid gap-2 text-xs text-slate-600 md:col-span-2 sm:grid-cols-2">
+              <div className="grid gap-2 text-xs text-slate-600 lg:col-span-2 sm:grid-cols-2">
                 <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                   <Lock className="size-4 text-slate-500" />
                   Secured by Paystack
@@ -654,9 +654,9 @@ export function Checkout({ tenantSlug, packages }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-3 sm:grid-cols-2" onSubmit={handleResume}>
+            <form className="grid gap-3 md:grid-cols-2" onSubmit={handleResume}>
               {resumeMessage ? (
-                <Alert className="sm:col-span-2">
+                <Alert className="md:col-span-2">
                   <AlertTitle>Resume status</AlertTitle>
                   <AlertDescription>{resumeMessage}</AlertDescription>
                 </Alert>
@@ -685,7 +685,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
                   required
                 />
               </div>
-              <Button type="submit" variant="outline" disabled={resumeLoading} className="sm:col-span-2">
+              <Button type="submit" variant="outline" disabled={resumeLoading} className="md:col-span-2">
                 {resumeLoading ? "Checking status..." : "Resume payment"}
               </Button>
             </form>

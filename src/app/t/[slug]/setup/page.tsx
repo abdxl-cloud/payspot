@@ -42,14 +42,15 @@ export default async function TenantSetupPage({ params }: Props) {
             <p className="section-kicker">Launch checklist</p>
             <h1 className="panel-title mt-1">Complete setup before going live</h1>
             <p className="panel-copy mt-3 max-w-2xl">
-              Finish security, payment, and voucher inventory setup for <span className="font-mono">/t/{tenant.slug}</span>.
+              Finish security, payment, and voucher inventory setup for{" "}
+              <span className="font-mono break-all">/t/{tenant.slug}</span>.
             </p>
             <div className="dashboard-meta">
               <span>Tenant: {tenant.name}</span>
               <span>Mode: Setup gate</span>
               <span>Rendered: {renderedAt}</span>
             </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
               <div className="dashboard-kpi"><p className="dashboard-kpi-label">Password hardening</p><p className="dashboard-kpi-value">Required</p></div>
               <div className="dashboard-kpi"><p className="dashboard-kpi-label">Paystack key</p><p className="dashboard-kpi-value">Required</p></div>
               <div className="dashboard-kpi"><p className="dashboard-kpi-label">Activation gate</p><p className="dashboard-kpi-value">Checks pass</p></div>

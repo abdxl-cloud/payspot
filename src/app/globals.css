@@ -47,32 +47,32 @@
 }
 
 :root {
-  --radius: 0.95rem;
+  --radius: 0.8rem;
   --font-heading: var(--font-body);
 
-  --background: oklch(0.98 0.005 223);
-  --foreground: oklch(0.22 0.03 257);
+  --background: oklch(0.97 0.01 243);
+  --foreground: oklch(0.23 0.036 259);
 
-  --card: oklch(0.995 0.002 220 / 96%);
+  --card: oklch(0.995 0.003 240 / 97%);
   --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
   --popover-foreground: var(--foreground);
 
-  --primary: oklch(0.38 0.1 253);
-  --primary-foreground: oklch(0.98 0.004 232);
-  --secondary: oklch(0.94 0.01 225);
-  --secondary-foreground: oklch(0.28 0.03 255);
-  --muted: oklch(0.95 0.008 227);
-  --muted-foreground: oklch(0.51 0.028 252);
+  --primary: oklch(0.4 0.12 256);
+  --primary-foreground: oklch(0.98 0.003 228);
+  --secondary: oklch(0.93 0.018 239);
+  --secondary-foreground: oklch(0.28 0.04 255);
+  --muted: oklch(0.95 0.012 240);
+  --muted-foreground: oklch(0.46 0.03 251);
 
-  --accent: oklch(0.79 0.12 82);
-  --accent-foreground: oklch(0.22 0.03 257);
+  --accent: oklch(0.76 0.15 84);
+  --accent-foreground: oklch(0.2 0.04 257);
   --destructive: oklch(0.61 0.2 27);
-  --border: oklch(0.88 0.012 232);
-  --input: oklch(0.88 0.012 232);
+  --border: oklch(0.86 0.016 240);
+  --input: oklch(0.86 0.016 240);
   --ring: oklch(0.58 0.14 253);
 
-  --status-success: oklch(0.54 0.13 156);
+  --status-success: oklch(0.55 0.13 156);
   --status-success-soft: oklch(0.95 0.045 156);
   --status-warning: oklch(0.75 0.14 85);
   --status-warning-soft: oklch(0.97 0.04 85);
@@ -81,9 +81,9 @@
   --status-info: oklch(0.6 0.12 245);
   --status-info-soft: oklch(0.95 0.03 245);
 
-  --shadow-sm: 0 8px 20px rgb(15 23 42 / 0.06);
-  --shadow-md: 0 18px 42px rgb(15 23 42 / 0.12);
-  --shadow-lg: 0 28px 72px rgb(15 23 42 / 0.18);
+  --shadow-sm: 0 10px 24px rgb(15 23 42 / 0.08);
+  --shadow-md: 0 22px 52px rgb(15 23 42 / 0.14);
+  --shadow-lg: 0 34px 90px rgb(15 23 42 / 0.2);
 
   --chart-1: oklch(0.56 0.16 253);
   --chart-2: oklch(0.68 0.11 204);
@@ -125,7 +125,7 @@
 @keyframes rise-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 12px, 0);
+    transform: translate3d(0, 10px, 0);
   }
 
   to {
@@ -141,16 +141,16 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-body), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-body), "Manrope", ui-sans-serif, system-ui, sans-serif;
     min-height: 100vh;
     background-image:
-      radial-gradient(circle at 8% 0%, rgb(56 189 248 / 0.13), transparent 33%),
-      radial-gradient(circle at 100% 15%, rgb(14 116 144 / 0.13), transparent 40%),
-      linear-gradient(160deg, #f8fafc 0%, #eef4fb 42%, #f4f7ff 100%);
+      radial-gradient(circle at 6% 0%, rgb(30 64 175 / 0.18), transparent 34%),
+      radial-gradient(circle at 100% 0%, rgb(14 165 233 / 0.14), transparent 40%),
+      linear-gradient(160deg, #f5f8ff 0%, #e9eff8 48%, #edf3fd 100%);
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-ring/50 ring-offset-2 ring-offset-background;
+    @apply outline-none ring-2 ring-ring/60 ring-offset-2 ring-offset-background;
   }
 
   select,
@@ -174,7 +174,7 @@
     position: absolute;
     inset: -17rem -12rem auto;
     height: 33rem;
-    background: radial-gradient(circle at center, rgb(14 116 144 / 0.16), transparent 70%);
+    background: radial-gradient(circle at center, rgb(15 23 42 / 0.2), transparent 70%);
     pointer-events: none;
   }
 
@@ -183,7 +183,7 @@
     position: absolute;
     inset: auto -10rem -14rem;
     height: 28rem;
-    background: radial-gradient(circle at center, rgb(2 132 199 / 0.14), transparent 68%);
+    background: radial-gradient(circle at center, rgb(37 99 235 / 0.12), transparent 68%);
     pointer-events: none;
   }
 
@@ -196,20 +196,20 @@
   }
 
   .surface-card {
-    @apply rounded-3xl border border-white/90 bg-white/86 shadow-[var(--shadow-lg)] backdrop-blur-lg;
+    @apply rounded-3xl border border-white/90 bg-white/92 shadow-[var(--shadow-lg)] backdrop-blur-lg;
   }
 
   .soft-panel {
-    @apply rounded-2xl border border-slate-200/85 bg-white/88 shadow-[var(--shadow-sm)];
+    @apply rounded-2xl border border-slate-200/90 bg-white/92 shadow-[var(--shadow-sm)];
   }
 
   .panel-surface {
-    @apply rounded-3xl border border-slate-200/80 bg-white/88 p-4 shadow-[var(--shadow-sm)] sm:p-6;
-    animation: rise-in 320ms ease-out both;
+    @apply rounded-2xl border border-slate-200/95 bg-white p-4 shadow-[var(--shadow-sm)] sm:p-6;
+    animation: rise-in 280ms ease-out both;
   }
 
   .section-kicker {
-    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700;
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700;
   }
 
   .section-title {
@@ -217,7 +217,7 @@
   }
 
   .panel-title {
-    @apply font-display text-balance text-[clamp(1.7rem,5.3vw,3.1rem)] font-semibold leading-[1.04] tracking-tight text-slate-950;
+    @apply font-display text-balance text-[clamp(1.7rem,5.3vw,3.1rem)] font-semibold leading-[1.02] tracking-tight text-slate-950;
   }
 
   .panel-copy {
@@ -225,7 +225,7 @@
   }
 
   .hero-chip {
-    @apply inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-800;
+    @apply inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-800;
   }
 
   .hero-title {
@@ -237,11 +237,11 @@
   }
 
   .hero-metric-grid {
-    @apply grid gap-3 sm:grid-cols-3;
+    @apply grid gap-3 md:grid-cols-3;
   }
 
   .hero-metric {
-    @apply rounded-2xl border border-slate-200/90 bg-white/88 p-3.5 shadow-[var(--shadow-sm)] sm:p-4;
+    @apply rounded-2xl border border-slate-200/95 bg-white p-4 shadow-[var(--shadow-sm)];
   }
 
   .hero-metric strong {
@@ -253,7 +253,7 @@
   }
 
   .dashboard-header {
-    @apply mb-6 rounded-3xl border border-slate-200/85 bg-white/86 p-5 shadow-[var(--shadow-sm)] sm:p-7;
+    @apply mb-6 rounded-2xl border border-indigo-900/20 bg-gradient-to-br from-slate-950 via-indigo-950 to-sky-900 px-5 py-6 text-white shadow-[var(--shadow-md)] sm:px-7 sm:py-8;
   }
 
   .dashboard-header-top {
@@ -261,19 +261,19 @@
   }
 
   .dashboard-title {
-    @apply font-display text-[clamp(1.5rem,4.8vw,2.7rem)] font-semibold tracking-tight text-slate-950;
+    @apply font-display text-[clamp(1.5rem,4.8vw,2.7rem)] font-semibold tracking-tight text-white;
   }
 
   .dashboard-subtitle {
-    @apply mt-2 max-w-3xl text-sm leading-relaxed text-slate-700 sm:text-base;
+    @apply mt-2 max-w-3xl text-sm leading-relaxed text-slate-200 sm:text-base;
   }
 
   .dashboard-meta {
-    @apply mt-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-3;
+    @apply mt-4 grid gap-2 text-xs text-slate-200 md:grid-cols-3;
   }
 
   .dashboard-meta span {
-    @apply rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2;
+    @apply rounded-xl border border-white/20 bg-white/10 px-3 py-2 break-words;
   }
 
   .dashboard-kpi-grid {
@@ -281,7 +281,7 @@
   }
 
   .dashboard-kpi {
-    @apply rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-[var(--shadow-sm)];
+    @apply rounded-2xl border border-slate-200/95 bg-white px-4 py-3 shadow-[var(--shadow-sm)];
   }
 
   .dashboard-kpi-label {
@@ -289,11 +289,11 @@
   }
 
   .dashboard-kpi-value {
-    @apply mt-1 text-xl font-semibold text-slate-950;
+    @apply mt-1 text-2xl font-semibold leading-none text-slate-950;
   }
 
   .dashboard-lane {
-    @apply grid gap-3 rounded-2xl border border-slate-200/80 bg-white/88 p-4 shadow-[var(--shadow-sm)] sm:p-5;
+    @apply grid gap-3 rounded-2xl border border-slate-200/95 bg-white p-4 shadow-[var(--shadow-sm)] sm:p-5;
   }
 
   .dashboard-lane-title {
@@ -305,39 +305,39 @@
   }
 
   .app-topbar {
-    @apply mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/85 bg-white/90 px-3 py-3 shadow-[var(--shadow-sm)] sm:mb-6 sm:px-5;
+    @apply mb-4 grid gap-2 rounded-2xl border border-slate-800/20 bg-slate-950 px-3 py-3 text-white shadow-[var(--shadow-sm)] sm:mb-6 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:px-5;
   }
 
   .app-topbar-left {
-    @apply flex min-w-0 items-center gap-2.5;
+    @apply flex min-w-0 items-center gap-2 sm:gap-2.5;
   }
 
   .app-topbar-brand {
-    @apply font-display text-sm font-semibold uppercase tracking-[0.14em] text-slate-950;
+    @apply font-display text-sm font-semibold uppercase tracking-[0.14em] text-white;
   }
 
   .app-topbar-divider {
-    @apply h-4 w-px bg-slate-300;
+    @apply hidden h-4 w-px bg-white/35 sm:block;
   }
 
   .app-topbar-breadcrumb {
-    @apply truncate text-xs font-medium text-slate-600 sm:text-sm;
+    @apply truncate text-[11px] font-medium text-slate-200 sm:text-sm;
   }
 
   .app-topbar-right {
-    @apply flex flex-wrap items-center gap-2;
+    @apply flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-start;
   }
 
   .app-topbar-pill {
-    @apply rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700;
+    @apply rounded-full border border-sky-300/35 bg-sky-500/20 px-2.5 py-1 text-[11px] font-semibold text-sky-100;
   }
 
   .app-topbar-account {
-    @apply rounded-full border border-slate-300/80 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700;
+    @apply rounded-full border border-white/30 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-100;
   }
 
   .status-card {
-    @apply rounded-3xl border border-slate-200/85 bg-white/90 p-6 shadow-[var(--shadow-md)] sm:p-8;
+    @apply rounded-2xl border border-slate-200/95 bg-white p-6 shadow-[var(--shadow-md)] sm:p-8;
   }
 
   .status-title {
@@ -349,7 +349,7 @@
   }
 
   .workspace-grid {
-    @apply grid gap-6 xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start;
+    @apply grid gap-4 lg:gap-6 xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start;
   }
 
   .workspace-main {
@@ -357,7 +357,7 @@
   }
 
   .workspace-side {
-    @apply space-y-4;
+    @apply grid gap-3 sm:grid-cols-2 xl:block xl:space-y-4;
   }
 
   .workspace-side-sticky {
@@ -365,7 +365,7 @@
   }
 
   .workspace-rail {
-    @apply rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-[var(--shadow-sm)];
+    @apply rounded-2xl border border-slate-200/95 bg-white p-5 shadow-[var(--shadow-sm)];
   }
 
   .workspace-rail h3 {
@@ -381,7 +381,7 @@
   }
 
   .ops-card {
-    @apply rounded-2xl border border-slate-200/85 bg-white/88 p-4 shadow-[var(--shadow-sm)];
+    @apply rounded-2xl border border-slate-200/95 bg-white p-4 shadow-[var(--shadow-sm)];
   }
 
   .ops-card strong {
@@ -392,28 +392,8 @@
     @apply mt-1 block text-xs text-slate-600;
   }
 
-  .status-dot {
-    @apply inline-block size-2 rounded-full;
-  }
-
-  .status-dot-success {
-    background: var(--status-success);
-  }
-
-  .status-dot-warning {
-    background: var(--status-warning);
-  }
-
-  .status-dot-danger {
-    background: var(--status-danger);
-  }
-
-  .status-dot-info {
-    background: var(--status-info);
-  }
-
   .text-gradient {
-    background: linear-gradient(115deg, #0f172a 0%, #0f4c81 45%, #0ea5e9 100%);
+    background: linear-gradient(110deg, #0b1220 0%, #1d4ed8 45%, #0891b2 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -422,7 +402,7 @@
 
 @layer utilities {
   .font-display {
-    font-family: var(--font-heading), "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-heading), "Exo 2", ui-sans-serif, system-ui, sans-serif;
     letter-spacing: 0.01em;
   }
 

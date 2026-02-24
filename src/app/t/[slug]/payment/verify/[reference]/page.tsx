@@ -23,7 +23,7 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
   if (!transaction) {
     return (
       <div className="app-shell">
-        <div className="app-container max-w-3xl py-20 sm:py-24">
+        <div className="app-container max-w-3xl py-12 sm:py-20">
           <div className="status-card">
             <h1 className="status-title">Transaction not found</h1>
             <p className="status-copy">
@@ -42,7 +42,7 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
     } catch {
       return (
         <div className="app-shell">
-          <div className="app-container max-w-3xl py-20 sm:py-24">
+          <div className="app-container max-w-3xl py-12 sm:py-20">
             <div className="status-card">
               <h1 className="status-title">Unable to verify payment</h1>
               <p className="status-copy">Payments are not configured for this tenant.</p>
@@ -65,17 +65,17 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
   if (updated?.payment_status === "success" && updated.voucher_code) {
     return (
       <div className="app-shell">
-        <div className="app-container max-w-3xl py-20 sm:py-24">
+        <div className="app-container max-w-3xl py-12 sm:py-20">
           <div className="status-card">
             <p className="section-kicker">Payment confirmed</p>
             <h1 className="mt-2 status-title">Your voucher is ready</h1>
-            <p className="mt-2 text-slate-600">
+            <p className="mt-2 break-all text-slate-600">
               {pkg?.name ?? "WiFi Access"} | Reference: {reference}
             </p>
 
             <div className="mt-6 rounded-2xl border border-slate-300/90 bg-slate-50/85 px-5 py-7 text-center sm:px-6 sm:py-8">
               <p className="text-sm text-slate-500">Voucher code</p>
-              <p className="mt-2 break-all text-3xl font-semibold tracking-[0.23em] text-slate-950">
+              <p className="mt-2 break-all text-2xl font-semibold tracking-[0.14em] text-slate-950 sm:text-3xl sm:tracking-[0.2em]">
                 {updated.voucher_code}
               </p>
             </div>
@@ -111,7 +111,7 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
 
     return (
       <div className="app-shell">
-        <div className="app-container max-w-3xl py-20 sm:py-24">
+        <div className="app-container max-w-3xl py-12 sm:py-20">
           <div className="status-card">
             <h1 className="status-title">Payment not completed</h1>
             <p className="status-copy">{message}</p>
@@ -124,7 +124,7 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
 
   return (
     <div className="app-shell">
-      <div className="app-container max-w-3xl py-20 sm:py-24">
+      <div className="app-container max-w-3xl py-12 sm:py-20">
         <div className="status-card">
           <h1 className="status-title">Payment pending</h1>
           <p className="status-copy">We are verifying your payment. Please refresh this page in a moment.</p>

@@ -14,7 +14,7 @@ export default async function PaymentVerifyRedirect({ params }: Props) {
   if (!tenant) {
     return (
       <div className="app-shell">
-        <div className="app-container max-w-3xl py-20 sm:py-24">
+        <div className="app-container max-w-3xl py-12 sm:py-20">
           <div className="status-card">
             <h1 className="status-title">Transaction not found</h1>
             <p className="status-copy">

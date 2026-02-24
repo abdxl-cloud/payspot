@@ -579,7 +579,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   return (
     <div className="grid gap-5">
       <section className="panel-surface">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+        <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <h2 className="section-title">Operations overview</h2>
             <p className="mt-1 text-sm text-slate-600">Track payments, pool health, and fulfillment volume in one glance.</p>
@@ -816,7 +816,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <h2 className="section-title">Plan management</h2>
             <p className="mt-1 text-sm text-slate-600">Create, update pricing, and toggle availability per plan.</p>
           </div>
-          <form className="grid gap-2 sm:grid-cols-4 md:grid-cols-5" onSubmit={createPlan}>
+          <form className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5" onSubmit={createPlan}>
             <Input value={newPlanCode} onChange={(event) => setNewPlanCode(event.target.value)} placeholder="Code" />
             <Input value={newPlanName} onChange={(event) => setNewPlanName(event.target.value)} placeholder="Name" />
             <Input
@@ -835,7 +835,90 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </form>
         </div>
 
-        <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200/85 bg-white">
+        <div className="mt-3 space-y-3 lg:hidden">
+          {plans.map((plan) => {
+            const draft = planDrafts[plan.id];
+            if (!draft) return null;
+            return (
+              <article key={plan.id} className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
+                <div className="grid gap-2">
+                  <Input
+                    value={draft.code}
+                    onChange={(event) =>
+                      setPlanDrafts((prev) => ({
+                        ...prev,
+                        [plan.id]: { ...prev[plan.id], code: event.target.value },
+                      }))
+                    }
+                  />
+                  <Input
+                    value={draft.name}
+                    onChange={(event) =>
+                      setPlanDrafts((prev) => ({
+                        ...prev,
+                        [plan.id]: { ...prev[plan.id], name: event.target.value },
+                      }))
+                    }
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      value={draft.duration}
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        setPlanDrafts((prev) => ({
+                          ...prev,
+                          [plan.id]: { ...prev[plan.id], duration: event.target.value },
+                        }))
+                      }
+                    />
+                    <Input
+                      value={draft.price}
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        setPlanDrafts((prev) => ({
+                          ...prev,
+                          [plan.id]: { ...prev[plan.id], price: event.target.value },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">Unused: {plan.unusedCount}</span>
+                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">Assigned: {plan.assignedCount}</span>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={draft.active}
+                      onChange={(event) =>
+                        setPlanDrafts((prev) => ({
+                          ...prev,
+                          [plan.id]: { ...prev[plan.id], active: event.target.checked },
+                        }))
+                      }
+                    />
+                    {draft.active ? "Active" : "Inactive"}
+                  </label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => savePlan(plan)}
+                    disabled={savingPlanIds[plan.id]}
+                  >
+                    {savingPlanIds[plan.id] ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
+          {plans.length === 0 && !plansLoading ? (
+            <p className="rounded-2xl border border-slate-200/85 bg-white p-4 text-sm text-slate-600">No plans available.</p>
+          ) : null}
+        </div>
+
+        <div className="mt-3 hidden overflow-x-auto rounded-2xl border border-slate-200/85 bg-white xl:block">
           <table className="w-full min-w-[940px] text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
               <tr>
@@ -956,9 +1039,10 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         <h2 className="section-title">Voucher operations</h2>
         <p className="mt-1 text-sm text-slate-600">Manual create, bulk generate, import CSV, and manage voucher lifecycle.</p>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200/85 bg-white p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Manual voucher</h3>
+        <div className="mt-4 rounded-xl border border-slate-200/85 bg-white p-3 sm:p-4">
+          <div className="grid gap-4 xl:grid-cols-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Manual voucher</h3>
             <form className="mt-3 grid gap-2 sm:grid-cols-3" onSubmit={createVoucher}>
               <Input
                 value={newVoucherCode}
@@ -974,10 +1058,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               </select>
               <Button type="submit" disabled={creatingVoucher}>{creatingVoucher ? "Adding..." : "Add"}</Button>
             </form>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200/85 bg-white p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Batch generate</h3>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Batch generate</h3>
             <form className="mt-3 grid gap-2 sm:grid-cols-4" onSubmit={generateVouchers}>
               <Input
                 value={generateCount}
@@ -1000,27 +1083,27 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 {generatingVouchers ? "Generating..." : "Generate"}
               </Button>
             </form>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">CSV import (Omada export)</h3>
+              <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={importCsv}>
+                <Input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
+                />
+                <Input
+                  value={importPackageCode}
+                  onChange={(event) => setImportPackageCode(event.target.value)}
+                  placeholder="Optional forced plan code"
+                />
+                <Button type="submit" disabled={importLoading}>{importLoading ? "Importing..." : "Import"}</Button>
+              </form>
+            </div>
           </div>
         </div>
 
-        <div className="mt-3 rounded-2xl border border-slate-200/85 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-900">CSV import (Omada export)</h3>
-          <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={importCsv}>
-            <Input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
-            />
-            <Input
-              value={importPackageCode}
-              onChange={(event) => setImportPackageCode(event.target.value)}
-              placeholder="Optional forced plan code"
-            />
-            <Button type="submit" disabled={importLoading}>{importLoading ? "Importing..." : "Import"}</Button>
-          </form>
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_170px_170px_auto]">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_170px_170px_auto]">
           <Input
             placeholder="Search voucher, plan, email, phone"
             value={voucherQuery}
@@ -1044,7 +1127,46 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Button>
         </div>
 
-        <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200/85 bg-white">
+        <div className="mt-3 space-y-3 lg:hidden">
+          {vouchers.map((row) => (
+            <article key={row.id} className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-900 break-all">{row.voucherCode}</p>
+                  <p className="text-xs text-slate-500">{row.packageName}</p>
+                </div>
+                <input
+                  aria-label={`Select voucher ${row.voucherCode}`}
+                  type="checkbox"
+                  checked={selectedVoucherIds.includes(row.id)}
+                  onChange={(event) =>
+                    setSelectedVoucherIds((prev) =>
+                      event.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
+                    )
+                  }
+                />
+              </div>
+              <div className="mt-2">
+                {row.status === "UNUSED" ? (
+                  <Badge className="bg-emerald-700 text-white">UNUSED</Badge>
+                ) : (
+                  <Badge className="bg-amber-600 text-white">ASSIGNED</Badge>
+                )}
+              </div>
+              <div className="mt-3 grid gap-1 text-xs text-slate-600">
+                <p>Email: {row.assignedToEmail || "-"}</p>
+                <p>Phone: {row.assignedToPhone || "-"}</p>
+                <p>Created: {dt(row.createdAt)}</p>
+                <p>Assigned: {dt(row.assignedAt)}</p>
+              </div>
+            </article>
+          ))}
+          {vouchers.length === 0 && !vouchersLoading ? (
+            <p className="rounded-2xl border border-slate-200/85 bg-white p-4 text-sm text-slate-600">No vouchers found.</p>
+          ) : null}
+        </div>
+
+        <div className="mt-3 hidden overflow-x-auto rounded-2xl border border-slate-200/85 bg-white xl:block">
           <table className="w-full min-w-[1060px] text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
               <tr>
@@ -1157,7 +1279,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="dashboard-kpi">
+    <div className="rounded-xl border border-slate-200/85 bg-slate-50/80 px-3 py-2.5">
       <p className="dashboard-kpi-label">{label}</p>
       <p className="dashboard-kpi-value">{value}</p>
     </div>
