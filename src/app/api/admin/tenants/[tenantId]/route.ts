@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getSessionUserFromRequest } from "@/lib/auth";
+import { isPaystackSecretKey } from "@/lib/paystack-key";
 import {
   deleteTenant,
   getTenantById,
@@ -58,6 +59,13 @@ export async function PATCH(request: Request, { params }: Props) {
 
   if (result.status === "slug_taken") {
     return Response.json({ error: "That slug is already in use" }, { status: 409 });
+  }
+
+  if (parsed.data.paystackSecretKey && !isPaystackSecretKey(parsed.data.paystackSecretKey)) {
+    return Response.json(
+      { error: "Use a valid Paystack secret key (sk_test_... or sk_live_...)." },
+      { status: 400 },
+    );
   }
 
   if (parsed.data.paystackSecretKey) {

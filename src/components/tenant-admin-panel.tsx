@@ -129,6 +129,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     Record<string, { name: string; code: string; duration: string; price: string; active: boolean }>
   >({});
   const [savingPlanIds, setSavingPlanIds] = useState<Record<string, boolean>>({});
+  const [deletingPlanIds, setDeletingPlanIds] = useState<Record<string, boolean>>({});
 
   const [newVoucherCode, setNewVoucherCode] = useState("");
   const [newVoucherPackageId, setNewVoucherPackageId] = useState("");
@@ -444,6 +445,30 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setPlansError(error instanceof Error ? error.message : "Unable to save plan.");
     } finally {
       setSavingPlanIds((prev) => ({ ...prev, [plan.id]: false }));
+    }
+  }
+
+  async function deletePlan(plan: PlanRow) {
+    const ok = window.confirm(`Delete plan "${plan.name}" and all its vouchers?`);
+    if (!ok) return;
+
+    setDeletingPlanIds((prev) => ({ ...prev, [plan.id]: true }));
+    setPlansError(null);
+    setPlanNotice(null);
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/plans`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: plan.id }),
+      });
+      const data = await readJsonResponse<{ error?: string }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to delete plan.");
+      setPlanNotice(`Deleted ${plan.name}.`);
+      await Promise.all([loadPlans(), loadStats(), loadVouchers()]);
+    } catch (error) {
+      setPlansError(error instanceof Error ? error.message : "Unable to delete plan.");
+    } finally {
+      setDeletingPlanIds((prev) => ({ ...prev, [plan.id]: false }));
     }
   }
 
@@ -770,14 +795,25 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                     />
                     {draft.active ? "Active" : "Inactive"}
                   </label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => savePlan(plan)}
-                    disabled={savingPlanIds[plan.id]}
-                  >
-                    {savingPlanIds[plan.id] ? "Saving..." : "Save"}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => savePlan(plan)}
+                      disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
+                    >
+                      {savingPlanIds[plan.id] ? "Saving..." : "Save"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => deletePlan(plan)}
+                      disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
+                    >
+                      {deletingPlanIds[plan.id] ? "Deleting..." : "Delete"}
+                    </Button>
+                  </div>
                 </div>
               </article>
             );
@@ -871,14 +907,25 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                       </label>
                     </td>
                     <td className="px-3 py-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => savePlan(plan)}
-                        disabled={savingPlanIds[plan.id]}
-                      >
-                        {savingPlanIds[plan.id] ? "Saving..." : "Save"}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => savePlan(plan)}
+                          disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
+                        >
+                          {savingPlanIds[plan.id] ? "Saving..." : "Save"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => deletePlan(plan)}
+                          disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
+                        >
+                          {deletingPlanIds[plan.id] ? "Deleting..." : "Delete"}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );

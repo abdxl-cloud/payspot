@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { readJsonResponse } from "@/lib/http";
+import { isPaystackSecretKey } from "@/lib/paystack-key";
 
 type TenantDto = {
   id: string;
@@ -85,14 +86,14 @@ export function AdminTenantsPanel() {
     if (editSlug.trim().length < 2) return false;
     if (editName.trim().length < 2) return false;
     if (!editEmail.includes("@")) return false;
-    if (editPaystackSecretKey.trim().length > 0 && editPaystackSecretKey.trim().length < 10) return false;
+    if (editPaystackSecretKey.trim().length > 0 && !isPaystackSecretKey(editPaystackSecretKey)) return false;
 
     const changed =
       editSlug.trim() !== editingTenant.slug ||
       editName.trim() !== editingTenant.name ||
       editEmail.trim() !== editingTenant.adminEmail ||
       editStatus.toLowerCase() !== editingTenant.status.toLowerCase() ||
-      editPaystackSecretKey.trim().length >= 10;
+      isPaystackSecretKey(editPaystackSecretKey);
 
     return changed;
   }, [editingTenant, loading, editSlug, editName, editEmail, editStatus, editPaystackSecretKey]);
@@ -523,7 +524,7 @@ export function AdminTenantsPanel() {
               <Input
                 className="mt-2"
                 type="password"
-                placeholder="New Paystack secret (optional)"
+                placeholder="New Paystack secret (sk_test_... or sk_live_...)"
                 value={editPaystackSecretKey}
                 onChange={(event) => setEditPaystackSecretKey(event.target.value)}
               />

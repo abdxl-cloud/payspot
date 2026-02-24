@@ -42,9 +42,20 @@ export async function initializeTransaction(params: {
     }),
   });
 
-  const data = await response.json();
+  let data: { status?: boolean; message?: string; data?: unknown } | null = null;
+  let rawText = "";
+  try {
+    data = await response.json();
+  } catch {
+    rawText = await response.text();
+  }
+
   if (!response.ok || !data?.status) {
-    throw new Error(data?.message || "Paystack initialization failed.");
+    const details =
+      data?.message?.trim() ||
+      rawText.trim() ||
+      `Paystack initialization failed (HTTP ${response.status}).`;
+    throw new Error(details);
   }
 
   return data.data as PaystackInitResponse;
@@ -63,9 +74,20 @@ export async function verifyTransaction(params: {
   },
   );
 
-  const data = await response.json();
+  let data: { status?: boolean; message?: string; data?: unknown } | null = null;
+  let rawText = "";
+  try {
+    data = await response.json();
+  } catch {
+    rawText = await response.text();
+  }
+
   if (!response.ok || !data?.status) {
-    throw new Error(data?.message || "Paystack verification failed.");
+    const details =
+      data?.message?.trim() ||
+      rawText.trim() ||
+      `Paystack verification failed (HTTP ${response.status}).`;
+    throw new Error(details);
   }
 
   return data.data as PaystackVerifyResponse;

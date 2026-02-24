@@ -41,7 +41,7 @@ assigned to customers only after successful payment verification.
 3. Approve: the tenant receives login details by email (email + temporary password).
 4. Tenant signs in at `/login` and is forced to complete setup at `/t/<slug>/setup`:
    - set a new password (required for newly-approved tenants)
-   - add their Paystack secret key (required before `/t/<slug>` goes live)
+  - add their Paystack secret key (`sk_test_...` for testing or `sk_live_...` for production)
 
 ## Admin Dashboard
 In `/admin` you can:

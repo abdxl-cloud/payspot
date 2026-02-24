@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { provisionOmadaVouchers } from "@/lib/omada";
+import { isPaystackSecretKey } from "@/lib/paystack-key";
 import { hashPassword } from "@/lib/password";
 import { decryptSecret, encryptSecret } from "@/lib/secrets";
 import { generateToken, hashToken } from "@/lib/tokens";
@@ -803,7 +804,11 @@ export async function requireTenantPaystackSecretKey(tenantId: string) {
   if (!tenant.paystack_secret_enc) {
     throw new Error("Tenant Paystack key not configured");
   }
-  return decryptSecret(tenant.paystack_secret_enc);
+  const key = decryptSecret(tenant.paystack_secret_enc);
+  if (!isPaystackSecretKey(key)) {
+    throw new Error("Tenant Paystack key is invalid");
+  }
+  return key;
 }
 
 export async function setTenantPaystackSecret(params: {

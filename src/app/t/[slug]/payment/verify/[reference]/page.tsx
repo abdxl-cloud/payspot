@@ -39,13 +39,17 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
     let paystackSecretKey: string;
     try {
       paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message === "Tenant Paystack key is invalid"
+          ? "Tenant payment key is invalid. Use a Paystack secret key (sk_test_... or sk_live_...)."
+          : "Payments are not configured for this tenant.";
       return (
         <div className="app-shell">
           <div className="app-container max-w-3xl py-12 sm:py-20">
             <div className="status-card">
               <h1 className="status-title">Unable to verify payment</h1>
-              <p className="status-copy">Payments are not configured for this tenant.</p>
+              <p className="status-copy">{message}</p>
             </div>
           </div>
         </div>

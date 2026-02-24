@@ -60,9 +60,13 @@ export async function POST(request: Request, { params }: Props) {
     let paystackSecretKey: string;
     try {
       paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message === "Tenant Paystack key is invalid"
+          ? "Tenant payment key is invalid. Use a Paystack secret key (sk_test_... or sk_live_...)."
+          : "Tenant payments are not configured";
       return Response.json(
-        { error: "Tenant payments are not configured" },
+        { error: message },
         { status: 409 },
       );
     }

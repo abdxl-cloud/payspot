@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { readJsonResponse } from "@/lib/http";
+import { isPaystackSecretKey } from "@/lib/paystack-key";
 
 type Props = {
   tenantSlug: string;
@@ -205,7 +206,7 @@ export function TenantSetupPanel({
       if (validatePassword(newPassword)) return false;
     }
     if (requirePaystackKey) {
-      if (paystackSecretKey.trim().length < 10) return false;
+      if (!isPaystackSecretKey(paystackSecretKey)) return false;
     }
     return true;
   }, [
@@ -242,7 +243,7 @@ export function TenantSetupPanel({
       built.push({
         key: "paystack",
         label: "Paystack",
-        complete: paystackSecretKey.trim().length >= 10,
+        complete: isPaystackSecretKey(paystackSecretKey),
       });
     }
 
@@ -473,13 +474,13 @@ export function TenantSetupPanel({
                 id="paystackKey"
                 type="password"
                 className="h-11"
-                placeholder="sk_live_..."
+                placeholder="sk_test_... or sk_live_..."
                 value={paystackSecretKey}
                 onChange={(event) => setPaystackSecretKey(event.target.value)}
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Stored securely and required to accept payments.
+                Stored securely. Test keys (`sk_test_...`) are supported.
               </p>
             </div>
           ) : null}

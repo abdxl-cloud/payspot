@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getSessionUserFromRequest } from "@/lib/auth";
+import { isPaystackSecretKey } from "@/lib/paystack-key";
 import {
   getTenantBySlug,
   getUserById,
@@ -100,6 +101,13 @@ export async function POST(request: Request, { params }: Props) {
 
   if (requirePaystackKey && !parsed.data.paystackSecretKey) {
     return Response.json({ error: "Paystack secret key is required" }, { status: 400 });
+  }
+
+  if (parsed.data.paystackSecretKey && !isPaystackSecretKey(parsed.data.paystackSecretKey)) {
+    return Response.json(
+      { error: "Use a valid Paystack secret key (sk_test_... or sk_live_...)." },
+      { status: 400 },
+    );
   }
 
   if (parsed.data.architecture?.voucherSourceMode === "omada_openapi") {
