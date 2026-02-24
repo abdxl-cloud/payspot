@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCw, X } from "lucide-react";
+import { Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -782,36 +782,56 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">Assigned: {plan.assignedCount}</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-2">
-                  <label className="inline-flex items-center gap-2 text-xs text-slate-600">
-                    <input
-                      type="checkbox"
-                      checked={draft.active}
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], active: event.target.checked },
-                        }))
-                      }
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={draft.active}
+                    aria-label={`Set ${plan.name} active`}
+                    title={draft.active ? "Active" : "Inactive"}
+                    onClick={() =>
+                      setPlanDrafts((prev) => ({
+                        ...prev,
+                        [plan.id]: { ...prev[plan.id], active: !prev[plan.id].active },
+                      }))
+                    }
+                    className={[
+                      "relative inline-flex h-6 w-10 items-center rounded-full border transition",
+                      draft.active
+                        ? "border-emerald-600 bg-emerald-600/90"
+                        : "border-slate-300 bg-slate-200",
+                    ].join(" ")}
+                  >
+                    <span
+                      className={[
+                        "inline-block size-4 rounded-full bg-white shadow-sm transition",
+                        draft.active ? "translate-x-5" : "translate-x-1",
+                      ].join(" ")}
                     />
-                    {draft.active ? "Active" : "Inactive"}
-                  </label>
+                  </button>
                   <div className="flex items-center gap-2">
                     <Button
                       type="button"
-                      size="sm"
+                      size="icon"
+                      variant="outline"
                       onClick={() => savePlan(plan)}
                       disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
+                      aria-label="Save plan"
+                      title="Save plan"
+                      className="size-8"
                     >
-                      {savingPlanIds[plan.id] ? "Saving..." : "Save"}
+                      <Save className="size-3.5" />
                     </Button>
                     <Button
                       type="button"
-                      size="sm"
+                      size="icon"
                       variant="destructive"
                       onClick={() => deletePlan(plan)}
                       disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
+                      aria-label="Delete plan"
+                      title="Delete plan"
+                      className="size-8"
                     >
-                      {deletingPlanIds[plan.id] ? "Deleting..." : "Delete"}
+                      <Trash2 className="size-3.5" />
                     </Button>
                   </div>
                 </div>
@@ -823,7 +843,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           ) : null}
         </div>
 
-        <div className="mt-3 hidden overflow-x-auto rounded-2xl border border-slate-200/85 bg-white xl:block">
+        <div className="mt-3 hidden overflow-x-auto border border-slate-200/85 bg-white xl:block">
           <table className="w-full min-w-[940px] text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
               <tr>
@@ -892,38 +912,58 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                     <td className="px-3 py-2">{plan.unusedCount}</td>
                     <td className="px-3 py-2">{plan.assignedCount}</td>
                     <td className="px-3 py-2">
-                      <label className="inline-flex items-center gap-2 text-xs text-slate-600">
-                        <input
-                          type="checkbox"
-                          checked={draft.active}
-                          onChange={(event) =>
-                            setPlanDrafts((prev) => ({
-                              ...prev,
-                              [plan.id]: { ...prev[plan.id], active: event.target.checked },
-                            }))
-                          }
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={draft.active}
+                        aria-label={`Set ${plan.name} active`}
+                        title={draft.active ? "Active" : "Inactive"}
+                        onClick={() =>
+                          setPlanDrafts((prev) => ({
+                            ...prev,
+                            [plan.id]: { ...prev[plan.id], active: !prev[plan.id].active },
+                          }))
+                        }
+                        className={[
+                          "relative inline-flex h-6 w-10 items-center rounded-full border transition",
+                          draft.active
+                            ? "border-emerald-600 bg-emerald-600/90"
+                            : "border-slate-300 bg-slate-200",
+                        ].join(" ")}
+                      >
+                        <span
+                          className={[
+                            "inline-block size-4 rounded-full bg-white shadow-sm transition",
+                            draft.active ? "translate-x-5" : "translate-x-1",
+                          ].join(" ")}
                         />
-                        {draft.active ? "Active" : "Inactive"}
-                      </label>
+                      </button>
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <Button
                           type="button"
-                          size="sm"
+                          size="icon"
+                          variant="outline"
                           onClick={() => savePlan(plan)}
                           disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
+                          aria-label="Save plan"
+                          title="Save plan"
+                          className="size-8"
                         >
-                          {savingPlanIds[plan.id] ? "Saving..." : "Save"}
+                          <Save className="size-3.5" />
                         </Button>
                         <Button
                           type="button"
-                          size="sm"
+                          size="icon"
                           variant="destructive"
                           onClick={() => deletePlan(plan)}
                           disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
+                          aria-label="Delete plan"
+                          title="Delete plan"
+                          className="size-8"
                         >
-                          {deletingPlanIds[plan.id] ? "Deleting..." : "Delete"}
+                          <Trash2 className="size-3.5" />
                         </Button>
                       </div>
                     </td>
@@ -1053,7 +1093,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           ) : null}
         </div>
 
-        <div className="mt-3 hidden overflow-x-auto rounded-2xl border border-slate-200/85 bg-white xl:block">
+        <div className="mt-3 hidden overflow-x-auto border border-slate-200/85 bg-white xl:block">
           <table className="w-full min-w-[1060px] text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
               <tr>

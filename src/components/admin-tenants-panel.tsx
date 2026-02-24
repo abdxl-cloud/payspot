@@ -380,7 +380,7 @@ export function AdminTenantsPanel() {
             )}
           </div>
 
-          <div className="mt-3 hidden overflow-x-auto rounded-lg border border-slate-200/85 bg-white lg:block">
+          <div className="mt-3 hidden overflow-x-auto border border-slate-200/85 bg-white lg:block">
             <table className="w-full min-w-[860px] text-sm">
               <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
                 <tr>
@@ -576,17 +576,41 @@ function TenantRow(props: {
       </td>
       <td className="px-3 py-2 align-top">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={props.onEdit} disabled={props.disabled}>
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={props.onEdit}
+            disabled={props.disabled}
+            aria-label="Edit tenant"
+            title="Edit tenant"
+            className="size-8"
+          >
             <PencilLine className="size-3.5" />
-            Edit
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={props.onResetPassword} disabled={props.disabled}>
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={props.onResetPassword}
+            disabled={props.disabled}
+            aria-label="Reset tenant password"
+            title="Reset tenant password"
+            className="size-8"
+          >
             <ShieldCheck className="size-3.5" />
-            Reset
           </Button>
-          <Button type="button" size="sm" variant="destructive" onClick={props.onDelete} disabled={props.disabled}>
+          <Button
+            type="button"
+            size="icon"
+            variant="destructive"
+            onClick={props.onDelete}
+            disabled={props.disabled}
+            aria-label="Delete tenant"
+            title="Delete tenant"
+            className="size-8"
+          >
             <Trash2 className="size-3.5" />
-            Delete
           </Button>
         </div>
       </td>

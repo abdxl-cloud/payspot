@@ -4,12 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   CircleAlert,
-  Clock3,
   Lock,
   MessageSquareText,
   RefreshCcw,
   Search,
-  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
 import { readJsonResponse } from "@/lib/http";
 
 type Package = {
@@ -194,7 +191,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(reference);
         setCopyMessage("Reference copied.");
-        return;
+        return true;
       }
     } catch {
       // Fallback below.
@@ -213,8 +210,10 @@ export function Checkout({ tenantSlug, packages }: Props) {
       document.body.removeChild(textarea);
       if (!ok) throw new Error("copy failed");
       setCopyMessage("Reference copied.");
+      return true;
     } catch {
       setCopyMessage("Copy failed. Please write it down manually.");
+      return false;
     }
   }
 
@@ -249,6 +248,12 @@ export function Checkout({ tenantSlug, packages }: Props) {
       if (data?.reference) {
         setPaymentReference(data.reference);
         setResumeReference(data.reference);
+        const copied = await copyReference(data.reference);
+        if (copied) {
+          window.alert(`Reference copied to clipboard: ${data.reference}`);
+        } else {
+          window.alert(`Reference: ${data.reference}\nCopy failed, please save it manually.`);
+        }
       }
       setAuthorizationUrl(data.authorizationUrl);
       setResumePhone(phone.trim());
@@ -304,27 +309,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
   }
 
   return (
-    <div className="grid gap-5 sm:gap-6">
-      <Card className="border-slate-200/80 bg-white/90">
-        <CardHeader className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="section-kicker">Purchase flow</p>
-              <CardTitle className="section-title">Buy Wi-Fi Access Voucher</CardTitle>
-            </div>
-            <div className="hidden items-center gap-2 text-xs sm:flex">
-              <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
-                <ShieldCheck className="size-3.5" /> Secure checkout
-              </Badge>
-              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                <Clock3 className="size-3.5" /> Instant SMS delivery
-              </Badge>
-            </div>
-          </div>
-          <Stepper step={step} />
-        </CardHeader>
-      </Card>
-
+    <div className="grid gap-4 sm:gap-5">
       {packages.length === 0 ? (
         <Alert>
           <AlertTitle>No plans imported yet</AlertTitle>
@@ -364,6 +349,31 @@ export function Checkout({ tenantSlug, packages }: Props) {
 
       <Card className="border-slate-200/80 bg-white/90">
         <CardHeader className="space-y-3 pb-3">
+          <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-white p-1">
+            <button
+              type="button"
+              onClick={() => setFlowMode("purchase")}
+              className={[
+                "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+                flowMode === "purchase" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
+              ].join(" ")}
+              aria-pressed={flowMode === "purchase"}
+            >
+              New purchase
+            </button>
+            <button
+              type="button"
+              onClick={() => setFlowMode("resume")}
+              className={[
+                "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+                flowMode === "resume" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
+              ].join(" ")}
+              aria-pressed={flowMode === "resume"}
+            >
+              Resume payment
+            </button>
+          </div>
+          <Stepper step={step} />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
               1. Choose a plan
@@ -522,33 +532,6 @@ export function Checkout({ tenantSlug, packages }: Props) {
         </CardContent>
       </Card>
 
-      <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-2">
-        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-          <button
-            type="button"
-            onClick={() => setFlowMode("purchase")}
-            className={[
-              "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
-              flowMode === "purchase" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
-            ].join(" ")}
-            aria-pressed={flowMode === "purchase"}
-          >
-            New purchase
-          </button>
-          <button
-            type="button"
-            onClick={() => setFlowMode("resume")}
-            className={[
-              "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
-              flowMode === "resume" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
-            ].join(" ")}
-            aria-pressed={flowMode === "resume"}
-          >
-            Resume payment
-          </button>
-        </div>
-      </div>
-
       {!allSoldOut && flowMode === "purchase" ? (
         <Card className="max-w-4xl border-slate-200/80 bg-white/90">
           <CardHeader className="space-y-2 pb-2">
@@ -630,15 +613,10 @@ export function Checkout({ tenantSlug, packages }: Props) {
                 </Alert>
               ) : null}
 
-              <div className="grid gap-2 text-xs text-slate-600 lg:col-span-2 sm:grid-cols-2">
-                <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <Lock className="size-4 text-slate-500" />
-                  Secured by Paystack
-                </div>
-                <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <MessageSquareText className="size-4 text-slate-500" />
-                  Voucher delivered via SMS in seconds
-                </div>
+              <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 lg:col-span-2">
+                <Lock className="size-4 text-slate-500" />
+                <MessageSquareText className="size-4 text-slate-500" />
+                Paystack-secured checkout with instant SMS voucher delivery.
               </div>
             </form>
           </CardContent>
@@ -693,7 +671,6 @@ export function Checkout({ tenantSlug, packages }: Props) {
         </Card>
       ) : null}
 
-      <Separator />
     </div>
   );
 }
