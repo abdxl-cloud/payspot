@@ -92,17 +92,17 @@ export async function GET(request: Request, { params }: Props) {
       `
       SELECT
         v.id,
-        v.voucher_code as voucherCode,
+        v.voucher_code as "voucherCode",
         v.status,
-        v.duration_minutes as durationMinutes,
-        v.package_id as packageId,
-        v.created_at as createdAt,
-        v.assigned_at as assignedAt,
-        v.assigned_to_email as assignedToEmail,
-        v.assigned_to_phone as assignedToPhone,
-        v.assigned_to_transaction as assignedToTransaction,
-        p.code as packageCode,
-        p.name as packageName
+        v.duration_minutes as "durationMinutes",
+        v.package_id as "packageId",
+        v.created_at as "createdAt",
+        v.assigned_at as "assignedAt",
+        v.assigned_to_email as "assignedToEmail",
+        v.assigned_to_phone as "assignedToPhone",
+        v.assigned_to_transaction as "assignedToTransaction",
+        p.code as "packageCode",
+        p.name as "packageName"
       FROM voucher_pool v
       JOIN voucher_packages p ON p.id = v.package_id
       WHERE ${whereSql}

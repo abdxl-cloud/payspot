@@ -32,15 +32,15 @@ export async function GET(request: Request, { params }: Props) {
         p.id,
         p.code,
         p.name,
-        p.duration_minutes as durationMinutes,
-        p.price_ngn as priceNgn,
+        p.duration_minutes as "durationMinutes",
+        p.price_ngn as "priceNgn",
         p.active,
         p.description,
-        p.created_at as createdAt,
-        p.updated_at as updatedAt,
-        COALESCE(SUM(CASE WHEN v.status = 'UNUSED' THEN 1 ELSE 0 END), 0) as unusedCount,
-        COALESCE(SUM(CASE WHEN v.status = 'ASSIGNED' THEN 1 ELSE 0 END), 0) as assignedCount,
-        COALESCE(COUNT(v.id), 0) as totalCount
+        p.created_at as "createdAt",
+        p.updated_at as "updatedAt",
+        COALESCE(SUM(CASE WHEN v.status = 'UNUSED' THEN 1 ELSE 0 END), 0) as "unusedCount",
+        COALESCE(SUM(CASE WHEN v.status = 'ASSIGNED' THEN 1 ELSE 0 END), 0) as "assignedCount",
+        COALESCE(COUNT(v.id), 0) as "totalCount"
       FROM voucher_packages p
       LEFT JOIN voucher_pool v
         ON v.tenant_id = p.tenant_id AND v.package_id = p.id
