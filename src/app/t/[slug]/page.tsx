@@ -75,24 +75,6 @@ export default async function TenantPurchasePage({ params }: Props) {
         />
 
         <div className="mx-auto grid w-full max-w-5xl gap-4 sm:gap-5">
-          <section className="workspace-rail p-4 sm:p-5">
-            <h3 className="text-base sm:text-lg">Checkout steps</h3>
-            <ol className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-              <li className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                1. Select a voucher plan.
-              </li>
-              <li className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                2. Enter your active phone number.
-              </li>
-              <li className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                3. Pay securely with Paystack.
-              </li>
-              <li className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                4. Receive your voucher instantly by SMS.
-              </li>
-            </ol>
-          </section>
-
           <Checkout tenantSlug={tenant.slug} packages={packages} />
         </div>
       </div>

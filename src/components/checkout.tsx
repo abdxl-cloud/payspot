@@ -249,20 +249,13 @@ export function Checkout({ tenantSlug, packages }: Props) {
         setPaymentReference(data.reference);
         setResumeReference(data.reference);
         const copied = await copyReference(data.reference);
-        if (copied) {
-          window.alert(`Reference copied to clipboard: ${data.reference}`);
-        } else {
-          window.alert(`Reference: ${data.reference}\nCopy failed, please save it manually.`);
+        if (!copied) {
+          setCopyMessage(`Reference: ${data.reference}. Copy failed, please save it manually.`);
         }
       }
       setAuthorizationUrl(data.authorizationUrl);
       setResumePhone(phone.trim());
-      setTimeout(() => {
-        redirectToPaystack(data.authorizationUrl!);
-      }, 350);
-      setTimeout(() => {
-        redirectToPaystack(data.authorizationUrl!);
-      }, 5000);
+      setLoading(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong.";
       setError(message);
@@ -349,30 +342,6 @@ export function Checkout({ tenantSlug, packages }: Props) {
 
       <Card className="border-slate-200/80 bg-white/90">
         <CardHeader className="space-y-3 pb-3">
-          <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-white p-1">
-            <button
-              type="button"
-              onClick={() => setFlowMode("purchase")}
-              className={[
-                "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
-                flowMode === "purchase" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
-              ].join(" ")}
-              aria-pressed={flowMode === "purchase"}
-            >
-              New purchase
-            </button>
-            <button
-              type="button"
-              onClick={() => setFlowMode("resume")}
-              className={[
-                "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
-                flowMode === "resume" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
-              ].join(" ")}
-              aria-pressed={flowMode === "resume"}
-            >
-              Resume payment
-            </button>
-          </div>
           <Stepper step={step} />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
@@ -535,6 +504,30 @@ export function Checkout({ tenantSlug, packages }: Props) {
       {!allSoldOut && flowMode === "purchase" ? (
         <Card className="max-w-4xl border-slate-200/80 bg-white/90">
           <CardHeader className="space-y-2 pb-2">
+            <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-white p-1">
+              <button
+                type="button"
+                onClick={() => setFlowMode("purchase")}
+                className={[
+                  "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+                  flowMode === "purchase" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
+                ].join(" ")}
+                aria-pressed={flowMode === "purchase"}
+              >
+                New purchase
+              </button>
+              <button
+                type="button"
+                onClick={() => setFlowMode("resume")}
+                className={[
+                  "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+                  flowMode === "resume" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
+                ].join(" ")}
+                aria-pressed={flowMode === "resume"}
+              >
+                Resume payment
+              </button>
+            </div>
             <p className="section-kicker">Customer details</p>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
@@ -607,7 +600,9 @@ export function Checkout({ tenantSlug, packages }: Props) {
                         </Button>
                       ) : null}
                     </div>
-                    <p className="text-xs text-slate-600">Redirecting to Paystack automatically...</p>
+                    <p className="text-xs text-slate-600">
+                      Continue to Paystack when you are ready.
+                    </p>
                     {copyMessage ? <p className="text-xs text-slate-600">{copyMessage}</p> : null}
                   </AlertDescription>
                 </Alert>
@@ -626,6 +621,30 @@ export function Checkout({ tenantSlug, packages }: Props) {
       {flowMode === "resume" ? (
         <Card className="max-w-3xl border-slate-200/80 bg-white/90">
           <CardHeader className="space-y-2 pb-2">
+            <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-white p-1">
+              <button
+                type="button"
+                onClick={() => setFlowMode("purchase")}
+                className={[
+                  "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+                  flowMode === "purchase" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
+                ].join(" ")}
+                aria-pressed={flowMode === "purchase"}
+              >
+                New purchase
+              </button>
+              <button
+                type="button"
+                onClick={() => setFlowMode("resume")}
+                className={[
+                  "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+                  flowMode === "resume" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
+                ].join(" ")}
+                aria-pressed={flowMode === "resume"}
+              >
+                Resume payment
+              </button>
+            </div>
             <p className="section-kicker">Recover interrupted checkout</p>
             <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
               Resume a payment

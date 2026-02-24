@@ -66,7 +66,13 @@ export async function verifyAndProcess(params: {
     secretKey: params.paystackSecretKey,
     reference: params.reference,
   });
-  if (verification.status !== "success") {
+  const paystackStatus = verification.status?.toLowerCase();
+  if (paystackStatus !== "success") {
+    // Keep checkout resumable while payment is still in-flight on Paystack.
+    if (paystackStatus === "pending" || paystackStatus === "ongoing") {
+      return { status: "pending" as const };
+    }
+
     await markTransactionFailed({
       tenantId: params.tenantId,
       reference: params.reference,
