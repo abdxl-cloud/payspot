@@ -8,7 +8,7 @@ DB_SERVICE := postgres
 BACKUP_DIR := backups
 ENV_FILE := .env
 
-.PHONY: help info version install env-setup ssl-env setup bootstrap up down restart start stop ps logs logs-app logs-db build rebuild wait-for-services health urls db-migrate db-seed seed-admin-reset db-shell db-reset db-reset-force db-backup db-restore shell-app shell-db clean prune
+.PHONY: help info version install env-setup ssl-env setup bootstrap up down restart start stop ps logs logs-app logs-db build rebuild wait-for-services health urls db-migrate db-seed seed-admin-reset db-shell db-remove-default-plans db-reset db-reset-force db-backup db-restore shell-app shell-db clean prune
 
 help:
 	@printf "\n"
@@ -41,6 +41,7 @@ help:
 	@printf "  db-seed              Ensure seed data exists\n"
 	@printf "  seed-admin-reset     Reset seeded admin login (set SEED_ADMIN_PASSWORD=...)\n"
 	@printf "  db-shell             Open PostgreSQL shell\n"
+	@printf "  db-remove-default-plans  Remove default plans (3h, 1day, 1week) when safe\n"
 	@printf "  db-reset             Reset database volume (with prompt)\n"
 	@printf "  db-reset-force       Reset database volume without prompt\n"
 	@printf "  db-backup            Backup database to backups/\n"
@@ -164,6 +165,61 @@ seed-admin-reset:
 
 db-shell:
 	$(COMPOSE) exec $(DB_SERVICE) psql -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-payspot}
+
+db-remove-default-plans:
+	@echo "Removing default plans (3h, 1day, 1week) where no transaction history exists..."
+	@cat <<'SQL' | $(COMPOSE) exec -T $(DB_SERVICE) psql -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-payspot}
+	WITH default_plans AS (
+	  SELECT id
+	  FROM voucher_packages
+	  WHERE code IN ('3h', '1day', '1week')
+	),
+	blocked_plans AS (
+	  SELECT DISTINCT p.id
+	  FROM voucher_packages p
+	  JOIN transactions tx ON tx.package_id = p.id
+	  WHERE p.code IN ('3h', '1day', '1week')
+	),
+	deletable_plans AS (
+	  SELECT id
+	  FROM default_plans
+	  WHERE id NOT IN (SELECT id FROM blocked_plans)
+	)
+	DELETE FROM voucher_pool
+	WHERE package_id IN (SELECT id FROM deletable_plans);
+
+	WITH default_plans AS (
+	  SELECT id
+	  FROM voucher_packages
+	  WHERE code IN ('3h', '1day', '1week')
+	),
+	blocked_plans AS (
+	  SELECT DISTINCT p.id
+	  FROM voucher_packages p
+	  JOIN transactions tx ON tx.package_id = p.id
+	  WHERE p.code IN ('3h', '1day', '1week')
+	),
+	deletable_plans AS (
+	  SELECT id
+	  FROM default_plans
+	  WHERE id NOT IN (SELECT id FROM blocked_plans)
+	)
+	DELETE FROM voucher_packages
+	WHERE id IN (SELECT id FROM deletable_plans);
+
+	SELECT
+	  t.slug,
+	  p.code,
+	  p.name,
+	  COUNT(tx.id) AS tx_count
+	FROM voucher_packages p
+	JOIN tenants t ON t.id = p.tenant_id
+	LEFT JOIN transactions tx ON tx.package_id = p.id
+	WHERE p.code IN ('3h', '1day', '1week')
+	GROUP BY t.slug, p.code, p.name
+	ORDER BY t.slug, p.code;
+	SQL
+	@echo "Done. Any rows shown above were retained because they are linked to transaction history."
 
 db-reset:
 	@read -p "This will destroy all DB data. Continue? [y/N] " ans; \

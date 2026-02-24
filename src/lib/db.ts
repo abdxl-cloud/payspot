@@ -365,51 +365,7 @@ async function seedInitialData() {
 
   const pkgCount = Number(pkgRows[0]?.count ?? 0);
   if (pkgCount === 0) {
-    const defaults = [
-      {
-        code: "3h",
-        name: "3 Hours",
-        duration: 180,
-        price: 500,
-        description: "Quick access for light browsing.",
-      },
-      {
-        code: "1day",
-        name: "1 Day",
-        duration: 1440,
-        price: 1000,
-        description: "Full-day access for work or study.",
-      },
-      {
-        code: "1week",
-        name: "1 Week",
-        duration: 10080,
-        price: 5000,
-        description: "Best value for long stays.",
-      },
-    ];
-
-    for (const pkg of defaults) {
-      await runSql(
-        `
-          INSERT INTO voucher_packages (
-            id, tenant_id, code, name, duration_minutes, price_ngn, active, description, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-        [
-          randomUUID(),
-          tenantId,
-          pkg.code,
-          pkg.name,
-          pkg.duration,
-          pkg.price,
-          1,
-          pkg.description,
-          now,
-          now,
-        ],
-      );
-    }
+    // No default plans are seeded. Tenants create plans explicitly from admin.
   }
 
   await ensureUser({

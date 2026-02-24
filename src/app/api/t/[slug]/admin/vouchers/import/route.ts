@@ -238,6 +238,16 @@ export async function POST(request: Request, { params }: Props) {
       return Response.json({ error: "Tenant not found" }, { status: 404 });
     }
 
+    if (tenant.voucher_source_mode === "omada_openapi") {
+      return Response.json(
+        {
+          error:
+            "CSV import is disabled in Omada API automation mode. Vouchers are provisioned automatically after customer payment.",
+        },
+        { status: 409 },
+      );
+    }
+
     const user = await getSessionUserFromRequest(request);
     if (!user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });

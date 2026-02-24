@@ -276,6 +276,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const isCsvMode = voucherSourceMode === "import_csv";
   const isApiAutomationMode = voucherSourceMode === "omada_openapi";
   const hasArchitectureConfigured = !!architecture;
+  const hasPlans = plans.length > 0;
 
   async function refreshAll() {
     await Promise.all([loadStats(), loadPlans(), loadVouchers(), loadArchitecture()]);
@@ -910,21 +911,25 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <p className="mt-1 text-sm text-slate-600">
               {hasArchitectureConfigured
                 ? isApiAutomationMode
-                  ? "API automation mode: generate vouchers from Omada flow."
-                  : "CSV mode: create manually, batch generate, or import CSV."
+                  ? "API automation mode: vouchers are created automatically after each successful customer payment."
+                  : hasPlans
+                    ? "CSV mode: create manually, batch generate, or import CSV."
+                    : "CSV mode active. Create at least one plan before adding or generating vouchers."
                 : "Configure architecture first to unlock voucher action flows."}
             </p>
           </div>
           {hasArchitectureConfigured ? (
             <div className="flex flex-wrap items-center gap-2">
-              {isCsvMode ? (
+              {isCsvMode && hasPlans ? (
                 <Button type="button" variant="outline" onClick={() => setShowCreateVoucherModal(true)}>
                   Add voucher
                 </Button>
               ) : null}
-              <Button type="button" variant="outline" onClick={() => setShowGenerateVoucherModal(true)}>
-                Batch generate
-              </Button>
+              {isCsvMode && hasPlans ? (
+                <Button type="button" variant="outline" onClick={() => setShowGenerateVoucherModal(true)}>
+                  Batch generate
+                </Button>
+              ) : null}
               {isCsvMode ? (
                 <Button type="button" variant="outline" onClick={() => setShowImportVoucherModal(true)}>
                   Import CSV
@@ -1116,12 +1121,12 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreatePlanModal(true); }}>
               Add plan
             </Button>
-            {hasArchitectureConfigured && isCsvMode ? (
+            {hasArchitectureConfigured && isCsvMode && hasPlans ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreateVoucherModal(true); }}>
                 Add voucher
               </Button>
             ) : null}
-            {hasArchitectureConfigured ? (
+            {hasArchitectureConfigured && isCsvMode && hasPlans ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowGenerateVoucherModal(true); }}>
                 Batch generate vouchers
               </Button>
@@ -1300,6 +1305,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <div className="flex justify-end">
               <Button type="submit" disabled={creatingPlan}>{creatingPlan ? "Creating..." : "Add plan"}</Button>
             </div>
+            {plansError ? <p className="text-sm text-red-700">{plansError}</p> : null}
           </form>
         </ModalShell>
       ) : null}
@@ -1322,11 +1328,12 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <div className="flex justify-end">
               <Button type="submit" disabled={creatingVoucher}>{creatingVoucher ? "Adding..." : "Add voucher"}</Button>
             </div>
+            {vouchersError ? <p className="text-sm text-red-700">{vouchersError}</p> : null}
           </form>
         </ModalShell>
       ) : null}
 
-      {showGenerateVoucherModal && hasArchitectureConfigured ? (
+      {showGenerateVoucherModal && isCsvMode ? (
         <ModalShell title="Batch generate vouchers" onClose={() => setShowGenerateVoucherModal(false)}>
           <form className="grid gap-2" onSubmit={generateVouchers}>
             <Input
@@ -1356,6 +1363,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <div className="flex justify-end">
               <Button type="submit" disabled={generatingVouchers}>{generatingVouchers ? "Generating..." : "Generate"}</Button>
             </div>
+            {vouchersError ? <p className="text-sm text-red-700">{vouchersError}</p> : null}
           </form>
         </ModalShell>
       ) : null}
@@ -1376,6 +1384,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <div className="flex justify-end">
               <Button type="submit" disabled={importLoading}>{importLoading ? "Importing..." : "Import"}</Button>
             </div>
+            {importError ? <p className="text-sm text-red-700">{importError}</p> : null}
           </form>
         </ModalShell>
       ) : null}

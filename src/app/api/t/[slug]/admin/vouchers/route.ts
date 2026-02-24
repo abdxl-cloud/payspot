@@ -1,8 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { getSessionUserFromRequest } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { provisionOmadaVouchers } from "@/lib/omada";
-import { getTenantBySlug, resolveTenantOmadaOpenApiConfig } from "@/lib/store";
+import { getTenantBySlug } from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -140,6 +139,20 @@ export async function POST(request: Request, { params }: Props) {
     codeLength?: number;
   };
 
+  const voucherSourceMode =
+    tenant.voucher_source_mode === "omada_openapi"
+      ? "omada_openapi"
+      : "import_csv";
+  if (voucherSourceMode === "omada_openapi") {
+    return Response.json(
+      {
+        error:
+          "Manual voucher creation is disabled in Omada API automation mode. Vouchers are provisioned automatically on customer payment.",
+      },
+      { status: 409 },
+    );
+  }
+
   const voucherCode = body.voucherCode?.trim() ?? "";
   const packageId = body.packageId?.trim();
   if (!packageId) return Response.json({ error: "packageId is required" }, { status: 400 });
@@ -229,92 +242,8 @@ export async function POST(request: Request, { params }: Props) {
     );
   }
 
-  const voucherSourceMode =
-    tenant.voucher_source_mode === "omada_openapi"
-      ? "omada_openapi"
-      : "import_csv";
-
   const createdCodes: string[] = [];
   const now = new Date().toISOString();
-
-  if (voucherSourceMode === "omada_openapi") {
-    const config = await resolveTenantOmadaOpenApiConfig(tenant.id);
-    if (!config) {
-      return Response.json(
-        {
-          error:
-            "Omada OpenAPI mode is enabled but required Omada credentials are missing. Update architecture settings first.",
-        },
-        { status: 409 },
-      );
-    }
-
-    const packageLabel = pkg.id.slice(0, 8);
-    const groupName = `PS-${packageLabel}-${Date.now()}`;
-    let omadaCodes: string[] = [];
-    try {
-      const provisioned = await provisionOmadaVouchers({
-        config,
-        amount: generateCount,
-        durationMinutes: pkg.duration_minutes,
-        groupName,
-        codeLength: parsedCodeLength,
-      });
-      omadaCodes = provisioned.codes;
-    } catch (error) {
-      return Response.json(
-        {
-          error:
-            error instanceof Error
-              ? `Omada voucher generation failed: ${error.message}`
-              : "Omada voucher generation failed",
-        },
-        { status: 502 },
-      );
-    }
-
-    const run = db.transaction(async () => {
-      for (const code of omadaCodes) {
-        const result = await db
-          .prepare(
-            `
-          INSERT INTO voucher_pool (
-            id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
-          ) VALUES (?, ?, ?, ?, 'UNUSED', ?, ?)
-          ON CONFLICT (tenant_id, voucher_code) DO NOTHING
-        `,
-          )
-          .run(
-            randomUUID(),
-            tenant.id,
-            code,
-            pkg.duration_minutes,
-            packageId,
-            now,
-          );
-        if (result.changes === 1) createdCodes.push(code);
-      }
-    });
-    await run();
-
-    if (createdCodes.length < generateCount) {
-      return Response.json(
-        {
-          error:
-            "Omada generated vouchers, but not all could be stored due duplicates in local pool.",
-        },
-        { status: 409 },
-      );
-    }
-
-    const ignoredPrefix = prefix ? " (prefix ignored in Omada mode)" : "";
-    return Response.json({
-      ok: true,
-      created: createdCodes.length,
-      source: "omada_openapi",
-      notice: `Generated via Omada${ignoredPrefix}`,
-    });
-  }
 
   const seen = new Set<string>();
   let attempts = 0;

@@ -98,7 +98,7 @@ try {
 
     if (packages.length === 0) {
       console.error(
-        "No voucher packages found for this tenant. Approve the tenant request (which seeds defaults) or insert packages manually.",
+        "No voucher packages found for this tenant. Create plans first from tenant admin, then import vouchers.",
       );
       process.exit(1);
     }

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "@/lib/db";
+import { provisionOmadaVouchers } from "@/lib/omada";
 import { hashPassword } from "@/lib/password";
 import { decryptSecret, encryptSecret } from "@/lib/secrets";
 import { generateToken, hashToken } from "@/lib/tokens";
@@ -1015,60 +1016,9 @@ export async function resolveTenantOmadaOpenApiConfigForTesting(params: {
 }
 
 async function seedDefaultPackagesForTenant(db: ReturnType<typeof getDb>, tenantId: string) {
-  const count = await db
-    .prepare("SELECT COUNT(1) as count FROM voucher_packages WHERE tenant_id = ?")
-    .get(tenantId) as { count: number };
-  if (count.count > 0) return;
-
-  const now = nowIso();
-  const insert = db.prepare(`
-    INSERT INTO voucher_packages (
-      id, tenant_id, code, name, duration_minutes, price_ngn, active, description, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const defaults = [
-    {
-      code: "3h",
-      name: "3 Hours",
-      duration: 180,
-      price: 500,
-      description: "Quick access for light browsing.",
-    },
-    {
-      code: "1day",
-      name: "1 Day",
-      duration: 1440,
-      price: 1000,
-      description: "Full-day access for work or study.",
-    },
-    {
-      code: "1week",
-      name: "1 Week",
-      duration: 10080,
-      price: 5000,
-      description: "Best value for long stays.",
-    },
-  ];
-
-  const insertMany = db.transaction(async () => {
-    for (const pkg of defaults) {
-      await insert.run(
-        randomUUID(),
-        tenantId,
-        pkg.code,
-        pkg.name,
-        pkg.duration,
-        pkg.price,
-        1,
-        pkg.description,
-        now,
-        now,
-      );
-    }
-  });
-
-  await insertMany();
+  void db;
+  void tenantId;
+  // Default package seeding has been removed. Tenants create plans explicitly.
 }
 
 export async function seedDefaultPackagesForTenantId(tenantId: string) {
@@ -1401,6 +1351,59 @@ export async function transactionAssignVoucher(params: {
 
     const voucher = await assignVoucher(params);
     if (!voucher) {
+      const tenant = await getTenantById(params.tenantId);
+      const voucherSourceMode = normalizeVoucherSourceMode(tenant?.voucher_source_mode ?? null);
+
+      if (tenant && voucherSourceMode === "omada_openapi") {
+        const pkg = await getPackageById(params.tenantId, params.packageId);
+        const config = await resolveTenantOmadaOpenApiConfig(params.tenantId);
+
+        if (pkg && config) {
+          try {
+            const provisioned = await provisionOmadaVouchers({
+              config,
+              amount: 1,
+              durationMinutes: pkg.duration_minutes,
+              groupName: `PS-OD-${pkg.id.slice(0, 8)}-${Date.now()}`,
+              codeLength: 10,
+            });
+            const code = provisioned.codes[0];
+            if (code) {
+              await db
+                .prepare(
+                  `
+                  INSERT INTO voucher_pool (
+                    id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
+                  ) VALUES (?, ?, ?, ?, 'UNUSED', ?, ?)
+                  ON CONFLICT (tenant_id, voucher_code) DO NOTHING
+                `,
+                )
+                .run(
+                  randomUUID(),
+                  params.tenantId,
+                  code,
+                  pkg.duration_minutes,
+                  pkg.id,
+                  nowIso(),
+                );
+            }
+          } catch (error) {
+            console.error("On-demand Omada voucher provisioning failed", error);
+          }
+        }
+
+        const voucherAfterProvision = await assignVoucher(params);
+        if (voucherAfterProvision) {
+          await completeTransaction({
+            tenantId: params.tenantId,
+            reference: params.reference,
+            voucherCode: voucherAfterProvision.voucherCode,
+            paidAt: voucherAfterProvision.assignedAt,
+          });
+          return { status: "assigned", voucherCode: voucherAfterProvision.voucherCode };
+        }
+      }
+
       await markTransactionFailed({
         tenantId: params.tenantId,
         reference: params.reference,
