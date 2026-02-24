@@ -362,7 +362,10 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         }),
       });
       const data = await readJsonResponse<{ error?: string; message?: string; latencyMs?: number }>(response);
-      if (!response.ok) throw new Error(data?.error || "Omada test failed.");
+      if (!response.ok) {
+        const fallback = `Omada test failed (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).`;
+        throw new Error(data?.error || fallback);
+      }
       const latency = typeof data?.latencyMs === "number" ? ` (${data.latencyMs}ms)` : "";
       setOmadaTestNotice(`${data?.message || "Omada connection successful."}${latency}`);
     } catch (error) {
