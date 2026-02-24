@@ -1,5 +1,6 @@
 import { TenantRequestForm } from "@/components/tenant-request-form";
 import { AppTopbar } from "@/components/app-topbar";
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -33,6 +34,22 @@ export default function Home() {
                 <strong>Operator-grade controls</strong>
                 <span>manage plans, imports, and architecture safely</span>
               </div>
+            </div>
+
+            <div className="soft-panel max-w-3xl p-4 sm:p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                For tenant self-onboarding
+              </p>
+              <p className="mt-2 text-sm text-slate-700 sm:text-base">
+                Share the Omada OpenAPI setup playbook with clients so they can provide the exact
+                fields you need.
+              </p>
+              <Link
+                href="/help/omada-openapi"
+                className="mt-3 inline-flex rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400"
+              >
+                Open Omada setup guide
+              </Link>
             </div>
           </section>
 

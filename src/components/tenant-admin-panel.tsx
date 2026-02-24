@@ -1,7 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import {
+  ArchiveRestore,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  Plus,
+  RefreshCw,
+  Save,
+  Settings,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -684,6 +696,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               ) : null}
             </div>
             <Button type="button" variant="outline" onClick={() => setShowArchitectureModal(true)}>
+              <Settings className="size-4" />
               Configure architecture
             </Button>
           </div>
@@ -1025,6 +1038,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             </div>
           ) : (
             <Button type="button" variant="outline" onClick={() => setShowArchitectureModal(true)}>
+              <Settings className="size-4" />
               Configure architecture
             </Button>
           )}
@@ -1150,9 +1164,11 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </p>
           <div className="flex items-center gap-2">
             <Button type="button" variant="outline" onClick={reclaimSelected} disabled={selectedVoucherIds.length === 0}>
-              Reclaim
+              <ArchiveRestore className="size-4" />
+              Unarchive
             </Button>
             <Button type="button" variant="destructive" onClick={deleteSelected} disabled={selectedVoucherIds.length === 0}>
+              <Trash2 className="size-4" />
               Delete
             </Button>
             <Button
@@ -1161,6 +1177,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               onClick={() => setVoucherPage((prev) => Math.max(1, prev - 1))}
               disabled={voucherPage <= 1}
             >
+              <ChevronLeft className="size-4" />
               Prev
             </Button>
             <span className="text-xs text-slate-600">{voucherPage} / {voucherTotalPages}</span>
@@ -1171,6 +1188,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               disabled={voucherPage >= voucherTotalPages}
             >
               Next
+              <ChevronRight className="size-4" />
             </Button>
           </div>
         </div>
@@ -1224,6 +1242,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               </Button>
             ) : null}
             <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowArchitectureModal(true); }}>
+              <Settings className="size-4" />
               Configure architecture
             </Button>
           </div>
@@ -1233,6 +1252,15 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       {showArchitectureModal && architecture ? (
         <ModalShell title="Configure architecture" onClose={() => setShowArchitectureModal(false)}>
           <form className="grid gap-3" onSubmit={saveArchitecture}>
+            <div className="flex items-center justify-end">
+              <Link
+                href="/help/omada-openapi"
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+              >
+                <CircleHelp className="size-3.5" />
+                Omada setup help
+              </Link>
+            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="grid gap-1.5">
                 <Label htmlFor="voucherSourceMode">Voucher source</Label>
