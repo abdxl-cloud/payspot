@@ -259,10 +259,10 @@ export default function OmadaOpenApiHelpPage() {
           </section>
 
           <section
-            className="space-y-6 rounded-3xl border border-slate-900/15 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 p-6 text-slate-100 shadow-[var(--shadow-md)] sm:p-8 lg:sticky lg:top-6 lg:self-start"
+            className="space-y-6 rounded-3xl border border-slate-900/15 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 p-6 text-slate-100 shadow-[var(--shadow-md)] sm:p-8"
             style={{ fontFamily: "var(--font-omada-body), sans-serif" }}
           >
-            <div>
+            <div className="rounded-2xl border border-white/20 bg-white/8 p-4 lg:sticky lg:top-6">
               <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-200">
                 <Route className="size-3.5" />
                 Step-by-Step

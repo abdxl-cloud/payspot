@@ -81,6 +81,7 @@ export function TenantSetupPanel({
   const [hasSavedOmadaClientSecret, setHasSavedOmadaClientSecret] = useState(false);
   const [omadaHotspotOperatorUsername, setOmadaHotspotOperatorUsername] = useState("");
   const [omadaHotspotOperatorPassword, setOmadaHotspotOperatorPassword] = useState("");
+  const [hasSavedOmadaHotspotOperatorPassword, setHasSavedOmadaHotspotOperatorPassword] = useState(false);
 
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
   const [voucherImporting, setVoucherImporting] = useState(false);
@@ -164,6 +165,7 @@ export function TenantSetupPanel({
         setOmadaClientId(architecture.omada.clientId || "");
         setHasSavedOmadaClientSecret(architecture.omada.hasClientSecret);
         setOmadaHotspotOperatorUsername(architecture.omada.hotspotOperatorUsername || "");
+        setHasSavedOmadaHotspotOperatorPassword(architecture.omada.hasHotspotOperatorPassword);
       } catch {
         // Keep local defaults when architecture fetch fails during setup.
       }
@@ -586,7 +588,11 @@ export function TenantSetupPanel({
                       type="password"
                       value={omadaHotspotOperatorPassword}
                       onChange={(event) => setOmadaHotspotOperatorPassword(event.target.value)}
-                      placeholder="Hotspot operator password (optional)"
+                      placeholder={
+                        hasSavedOmadaHotspotOperatorPassword
+                          ? "Hotspot operator password (leave blank to keep)"
+                          : "Hotspot operator password (optional)"
+                      }
                     />
                   </div>
                 </div>
