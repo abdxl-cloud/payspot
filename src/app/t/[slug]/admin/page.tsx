@@ -31,9 +31,6 @@ export default async function TenantAdminPage({ params }: Props) {
     redirect(`/t/${tenant.slug}/setup`);
   }
 
-  const appUrl = process.env.APP_URL?.replace(/\/+$/, "");
-  const tenantPortalUrl = appUrl ? `${appUrl}/t/${tenant.slug}` : `/t/${tenant.slug}`;
-
   return (
     <div className="app-shell">
       <div className="app-container">
@@ -43,18 +40,6 @@ export default async function TenantAdminPage({ params }: Props) {
           accountLabel={tenant.name}
           action={<LogoutButton />}
         />
-
-        <header className="dashboard-header">
-          <h1 className="dashboard-title">Voucher Commerce Operations</h1>
-          <p className="dashboard-subtitle">
-            Control plans, voucher inventory, import pipelines, and architecture mode from one console.
-          </p>
-          <div className="dashboard-meta">
-            <span>Portal: {tenantPortalUrl}</span>
-            <span>Tenant: {tenant.name}</span>
-            <span>Status: {tenant.status}</span>
-          </div>
-        </header>
 
         <TenantAdminPanel tenantSlug={tenant.slug} />
       </div>

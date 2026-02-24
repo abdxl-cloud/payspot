@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus, RefreshCw, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -142,6 +143,12 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [showArchitectureModal, setShowArchitectureModal] = useState(false);
+  const [showCreatePlanModal, setShowCreatePlanModal] = useState(false);
+  const [showCreateVoucherModal, setShowCreateVoucherModal] = useState(false);
+  const [showGenerateVoucherModal, setShowGenerateVoucherModal] = useState(false);
+  const [showImportVoucherModal, setShowImportVoucherModal] = useState(false);
+  const [showQuickActionsModal, setShowQuickActionsModal] = useState(false);
 
   const loadStats = useCallback(async () => {
     setStatsError(null);
@@ -265,8 +272,17 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     );
   }, [stats]);
 
+  const voucherSourceMode = architecture?.voucherSourceMode ?? null;
+  const isCsvMode = voucherSourceMode === "import_csv";
+  const isApiAutomationMode = voucherSourceMode === "omada_openapi";
+  const hasArchitectureConfigured = !!architecture;
+
   async function refreshAll() {
     await Promise.all([loadStats(), loadPlans(), loadVouchers(), loadArchitecture()]);
+  }
+
+  function jumpToVoucherTools() {
+    setShowQuickActionsModal(true);
   }
 
   async function saveArchitecture(event: React.FormEvent) {
@@ -300,6 +316,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setArchitectureNotice("Architecture settings saved.");
       setOmadaClientSecret("");
       setOmadaHotspotOperatorPassword("");
+      setShowArchitectureModal(false);
     } catch (error) {
       setArchitectureError(
         error instanceof Error ? error.message : "Unable to save architecture settings.",
@@ -377,6 +394,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setNewPlanName("");
       setNewPlanDuration("");
       setNewPlanPrice("");
+      setShowCreatePlanModal(false);
       await Promise.all([loadPlans(), loadStats()]);
     } catch (error) {
       setPlansError(error instanceof Error ? error.message : "Unable to create plan.");
@@ -450,6 +468,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       if (!response.ok) throw new Error(data?.error || "Unable to create voucher.");
       setVoucherNotice("Voucher created.");
       setNewVoucherCode("");
+      setShowCreateVoucherModal(false);
       await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
     } catch (error) {
       setVouchersError(error instanceof Error ? error.message : "Unable to create voucher.");
@@ -494,6 +513,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       const data = await readJsonResponse<{ error?: string; created?: number }>(response);
       if (!response.ok) throw new Error(data?.error || "Unable to auto-generate vouchers.");
       setVoucherNotice(`Generated ${data?.created ?? 0} voucher(s).`);
+      setShowGenerateVoucherModal(false);
       await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
     } catch (error) {
       setVouchersError(error instanceof Error ? error.message : "Unable to auto-generate vouchers.");
@@ -568,6 +588,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       );
       setCsvFile(null);
       setImportPackageCode("");
+      setShowImportVoucherModal(false);
       await refreshAll();
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Import failed.");
@@ -577,24 +598,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   }
 
   return (
-    <div className="grid gap-5">
-      <section className="panel-surface">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
-          <div>
-            <h2 className="section-title">Operations overview</h2>
-            <p className="mt-1 text-sm text-slate-600">Track payments, pool health, and fulfillment volume in one glance.</p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={refreshAll}
-            disabled={statsLoading || plansLoading || vouchersLoading}
-          >
-            Refresh all
-          </Button>
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <>
+      <div className="grid gap-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <StatTile label="Revenue" value={money(stats?.transactions.revenueNgn ?? 0)} />
           <StatTile label="Successful payments" value={String(stats?.transactions.success ?? 0)} />
           <StatTile label="Total vouchers" value={String(voucherTotals.total)} />
@@ -603,7 +609,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </div>
 
         {(stats?.voucherPool.length ?? 0) > 0 ? (
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {stats?.voucherPool.slice(0, 6).map((item) => (
               <div key={item.code} className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
                 <p className="font-semibold text-slate-900">{item.name}</p>
@@ -627,162 +633,38 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         ) : null}
 
         {statsError ? (
-          <Alert variant="destructive" className="mt-4">
+          <Alert variant="destructive">
             <AlertTitle>Stats failed</AlertTitle>
             <AlertDescription>{statsError}</AlertDescription>
           </Alert>
         ) : null}
-      </section>
 
-      <section id="ops-architecture" className="panel-surface">
-        <h2 className="section-title">Architecture settings</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Control voucher source and portal auth mode. Validate Omada credentials before enabling sync.
-        </p>
-
-        {architectureLoading ? (
-          <p className="mt-3 text-sm text-slate-600">Loading architecture settings...</p>
-        ) : null}
-
-        {architecture ? (
-          <form className="mt-3 grid gap-3" onSubmit={saveArchitecture}>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="voucherSourceMode">Voucher source</Label>
-                <select
-                  id="voucherSourceMode"
-                  value={architecture.voucherSourceMode}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            voucherSourceMode: event.target.value as ArchitectureConfig["voucherSourceMode"],
-                          }
-                        : prev,
-                    )
-                  }
-                >
-                  <option value="import_csv">Import CSV (default)</option>
-                  <option value="omada_openapi">Omada OpenAPI sync</option>
-                </select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="portalAuthMode">Portal auth architecture</Label>
-                <select
-                  id="portalAuthMode"
-                  value={architecture.portalAuthMode}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            portalAuthMode: event.target.value as ArchitectureConfig["portalAuthMode"],
-                          }
-                        : prev,
-                    )
-                  }
-                >
-                  <option value="omada_builtin">Omada built-in voucher portal</option>
-                  <option value="external_portal_api">External portal API</option>
-                  <option value="external_radius_portal">External RADIUS + portal</option>
-                </select>
-              </div>
+        <section id="ops-architecture" className="panel-surface">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <h2 className="section-title">Architecture settings</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Keep advanced config out of the main screen. Open the editor only when needed.
+              </p>
+              {architecture ? (
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
+                    Voucher source: {architecture.voucherSourceMode}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
+                    Portal mode: {architecture.portalAuthMode}
+                  </span>
+                </div>
+              ) : null}
             </div>
+            <Button type="button" variant="outline" onClick={() => setShowArchitectureModal(true)}>
+              Configure architecture
+            </Button>
+          </div>
 
-            <div className="rounded-2xl border border-slate-200/85 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Omada OpenAPI credentials</p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <Input
-                  value={architecture.omada.apiBaseUrl}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? { ...prev, omada: { ...prev.omada, apiBaseUrl: event.target.value } }
-                        : prev,
-                    )
-                  }
-                  placeholder="https://use1-omada-northbound.tplinkcloud.com"
-                />
-                <Input
-                  value={architecture.omada.omadacId}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev ? { ...prev, omada: { ...prev.omada, omadacId: event.target.value } } : prev,
-                    )
-                  }
-                  placeholder="Omada ID"
-                />
-                <Input
-                  value={architecture.omada.siteId}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev ? { ...prev, omada: { ...prev.omada, siteId: event.target.value } } : prev,
-                    )
-                  }
-                  placeholder="Site ID"
-                />
-                <Input
-                  value={architecture.omada.clientId}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev ? { ...prev, omada: { ...prev.omada, clientId: event.target.value } } : prev,
-                    )
-                  }
-                  placeholder="Client ID"
-                />
-                <Input
-                  type="password"
-                  value={omadaClientSecret}
-                  onChange={(event) => setOmadaClientSecret(event.target.value)}
-                  placeholder={
-                    architecture.omada.hasClientSecret
-                      ? "Client secret (leave blank to keep)"
-                      : "Client secret"
-                  }
-                />
-                <Input
-                  value={architecture.omada.hotspotOperatorUsername}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            omada: { ...prev.omada, hotspotOperatorUsername: event.target.value },
-                          }
-                        : prev,
-                    )
-                  }
-                  placeholder="Hotspot operator username"
-                />
-                <Input
-                  type="password"
-                  value={omadaHotspotOperatorPassword}
-                  onChange={(event) => setOmadaHotspotOperatorPassword(event.target.value)}
-                  placeholder={
-                    architecture.omada.hasHotspotOperatorPassword
-                      ? "Hotspot operator password (leave blank to keep)"
-                      : "Hotspot operator password"
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={testOmadaConnection}
-                disabled={omadaTestLoading || architectureSaving}
-              >
-                {omadaTestLoading ? "Testing..." : "Test Omada connection"}
-              </Button>
-              <Button type="submit" disabled={architectureSaving || omadaTestLoading}>
-                {architectureSaving ? "Saving..." : "Save architecture"}
-              </Button>
-            </div>
-          </form>
-        ) : null}
+          {architectureLoading ? (
+            <p className="mt-3 text-sm text-slate-600">Loading architecture settings...</p>
+          ) : null}
 
         {architectureError ? (
           <Alert variant="destructive" className="mt-4">
@@ -808,31 +690,17 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <AlertDescription>{omadaTestNotice}</AlertDescription>
           </Alert>
         ) : null}
-      </section>
+        </section>
 
-      <section id="ops-plans" className="panel-surface">
+        <section id="ops-plans" className="panel-surface">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
           <div>
             <h2 className="section-title">Plan management</h2>
             <p className="mt-1 text-sm text-slate-600">Create, update pricing, and toggle availability per plan.</p>
           </div>
-          <form className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5" onSubmit={createPlan}>
-            <Input value={newPlanCode} onChange={(event) => setNewPlanCode(event.target.value)} placeholder="Code" />
-            <Input value={newPlanName} onChange={(event) => setNewPlanName(event.target.value)} placeholder="Name" />
-            <Input
-              value={newPlanDuration}
-              inputMode="numeric"
-              onChange={(event) => setNewPlanDuration(event.target.value)}
-              placeholder="Minutes"
-            />
-            <Input
-              value={newPlanPrice}
-              inputMode="numeric"
-              onChange={(event) => setNewPlanPrice(event.target.value)}
-              placeholder="Price (NGN)"
-            />
-            <Button type="submit" disabled={creatingPlan}>{creatingPlan ? "Creating..." : "Add plan"}</Button>
-          </form>
+          <Button type="button" variant="outline" onClick={() => setShowCreatePlanModal(true)}>
+            Add plan
+          </Button>
         </div>
 
         <div className="mt-3 space-y-3 lg:hidden">
@@ -1033,74 +901,41 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <AlertDescription>{planNotice}</AlertDescription>
           </Alert>
         ) : null}
-      </section>
+        </section>
 
-      <section id="ops-vouchers" className="panel-surface">
-        <h2 className="section-title">Voucher operations</h2>
-        <p className="mt-1 text-sm text-slate-600">Manual create, bulk generate, import CSV, and manage voucher lifecycle.</p>
-
-        <div className="mt-4 rounded-xl border border-slate-200/85 bg-white p-3 sm:p-4">
-          <div className="grid gap-4 xl:grid-cols-3">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Manual voucher</h3>
-            <form className="mt-3 grid gap-2 sm:grid-cols-3" onSubmit={createVoucher}>
-              <Input
-                value={newVoucherCode}
-                onChange={(event) => setNewVoucherCode(event.target.value)}
-                placeholder="Voucher code"
-              />
-              <select value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
-                {plans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.name}
-                  </option>
-                ))}
-              </select>
-              <Button type="submit" disabled={creatingVoucher}>{creatingVoucher ? "Adding..." : "Add"}</Button>
-            </form>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Batch generate</h3>
-            <form className="mt-3 grid gap-2 sm:grid-cols-4" onSubmit={generateVouchers}>
-              <Input
-                value={generateCount}
-                inputMode="numeric"
-                onChange={(event) => setGenerateCount(event.target.value)}
-                placeholder="Quantity"
-              />
-              <Input
-                value={generatePrefix}
-                onChange={(event) => setGeneratePrefix(event.target.value)}
-                placeholder="Optional prefix"
-              />
-              <Input
-                value={generateCodeLength}
-                inputMode="numeric"
-                onChange={(event) => setGenerateCodeLength(event.target.value)}
-                placeholder="Code length"
-              />
-              <Button type="submit" variant="outline" disabled={generatingVouchers}>
-                {generatingVouchers ? "Generating..." : "Generate"}
-              </Button>
-            </form>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">CSV import (Omada export)</h3>
-              <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={importCsv}>
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
-                />
-                <Input
-                  value={importPackageCode}
-                  onChange={(event) => setImportPackageCode(event.target.value)}
-                  placeholder="Optional forced plan code"
-                />
-                <Button type="submit" disabled={importLoading}>{importLoading ? "Importing..." : "Import"}</Button>
-              </form>
-            </div>
+        <section id="ops-vouchers" className="panel-surface">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <h2 className="section-title">Voucher operations</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              {hasArchitectureConfigured
+                ? isApiAutomationMode
+                  ? "API automation mode: generate vouchers from Omada flow."
+                  : "CSV mode: create manually, batch generate, or import CSV."
+                : "Configure architecture first to unlock voucher action flows."}
+            </p>
           </div>
+          {hasArchitectureConfigured ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {isCsvMode ? (
+                <Button type="button" variant="outline" onClick={() => setShowCreateVoucherModal(true)}>
+                  Add voucher
+                </Button>
+              ) : null}
+              <Button type="button" variant="outline" onClick={() => setShowGenerateVoucherModal(true)}>
+                Batch generate
+              </Button>
+              {isCsvMode ? (
+                <Button type="button" variant="outline" onClick={() => setShowImportVoucherModal(true)}>
+                  Import CSV
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <Button type="button" variant="outline" onClick={() => setShowArchitectureModal(true)}>
+              Configure architecture
+            </Button>
+          )}
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_170px_170px_auto]">
@@ -1272,8 +1107,337 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <AlertDescription>{importNotice}</AlertDescription>
           </Alert>
         ) : null}
-      </section>
-    </div>
+        </section>
+      </div>
+
+      {showQuickActionsModal ? (
+        <ModalShell title="Quick actions" onClose={() => setShowQuickActionsModal(false)}>
+          <div className="grid gap-2">
+            <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreatePlanModal(true); }}>
+              Add plan
+            </Button>
+            {hasArchitectureConfigured && isCsvMode ? (
+              <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreateVoucherModal(true); }}>
+                Add voucher
+              </Button>
+            ) : null}
+            {hasArchitectureConfigured ? (
+              <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowGenerateVoucherModal(true); }}>
+                Batch generate vouchers
+              </Button>
+            ) : null}
+            {hasArchitectureConfigured && isCsvMode ? (
+              <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowImportVoucherModal(true); }}>
+                Import voucher CSV
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowArchitectureModal(true); }}>
+              Configure architecture
+            </Button>
+          </div>
+        </ModalShell>
+      ) : null}
+
+      {showArchitectureModal && architecture ? (
+        <ModalShell title="Configure architecture" onClose={() => setShowArchitectureModal(false)}>
+          <form className="grid gap-3" onSubmit={saveArchitecture}>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="voucherSourceMode">Voucher source</Label>
+                <select
+                  id="voucherSourceMode"
+                  value={architecture.voucherSourceMode}
+                  onChange={(event) =>
+                    setArchitecture((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            voucherSourceMode: event.target.value as ArchitectureConfig["voucherSourceMode"],
+                          }
+                        : prev,
+                    )
+                  }
+                >
+                  <option value="import_csv">Import CSV (default)</option>
+                  <option value="omada_openapi">Omada OpenAPI sync</option>
+                </select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="portalAuthMode">Portal auth architecture</Label>
+                <select
+                  id="portalAuthMode"
+                  value={architecture.portalAuthMode}
+                  onChange={(event) =>
+                    setArchitecture((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            portalAuthMode: event.target.value as ArchitectureConfig["portalAuthMode"],
+                          }
+                        : prev,
+                    )
+                  }
+                >
+                  <option value="omada_builtin">Omada built-in voucher portal</option>
+                  <option value="external_portal_api">External portal API</option>
+                  <option value="external_radius_portal">External RADIUS + portal</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Omada OpenAPI credentials</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <Input
+                  value={architecture.omada.apiBaseUrl}
+                  onChange={(event) =>
+                    setArchitecture((prev) =>
+                      prev
+                        ? { ...prev, omada: { ...prev.omada, apiBaseUrl: event.target.value } }
+                        : prev,
+                    )
+                  }
+                  placeholder="https://use1-omada-northbound.tplinkcloud.com"
+                />
+                <Input
+                  value={architecture.omada.omadacId}
+                  onChange={(event) =>
+                    setArchitecture((prev) =>
+                      prev ? { ...prev, omada: { ...prev.omada, omadacId: event.target.value } } : prev,
+                    )
+                  }
+                  placeholder="Omada ID"
+                />
+                <Input
+                  value={architecture.omada.siteId}
+                  onChange={(event) =>
+                    setArchitecture((prev) =>
+                      prev ? { ...prev, omada: { ...prev.omada, siteId: event.target.value } } : prev,
+                    )
+                  }
+                  placeholder="Site ID"
+                />
+                <Input
+                  value={architecture.omada.clientId}
+                  onChange={(event) =>
+                    setArchitecture((prev) =>
+                      prev ? { ...prev, omada: { ...prev.omada, clientId: event.target.value } } : prev,
+                    )
+                  }
+                  placeholder="Client ID"
+                />
+                <Input
+                  type="password"
+                  value={omadaClientSecret}
+                  onChange={(event) => setOmadaClientSecret(event.target.value)}
+                  placeholder={
+                    architecture.omada.hasClientSecret
+                      ? "Client secret (leave blank to keep)"
+                      : "Client secret"
+                  }
+                />
+                <Input
+                  value={architecture.omada.hotspotOperatorUsername}
+                  onChange={(event) =>
+                    setArchitecture((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            omada: { ...prev.omada, hotspotOperatorUsername: event.target.value },
+                          }
+                        : prev,
+                    )
+                  }
+                  placeholder="Hotspot operator username"
+                />
+                <Input
+                  type="password"
+                  value={omadaHotspotOperatorPassword}
+                  onChange={(event) => setOmadaHotspotOperatorPassword(event.target.value)}
+                  placeholder={
+                    architecture.omada.hasHotspotOperatorPassword
+                      ? "Hotspot operator password (leave blank to keep)"
+                      : "Hotspot operator password"
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={testOmadaConnection}
+                disabled={omadaTestLoading || architectureSaving}
+              >
+                {omadaTestLoading ? "Testing..." : "Test Omada connection"}
+              </Button>
+              <Button type="submit" disabled={architectureSaving || omadaTestLoading}>
+                {architectureSaving ? "Saving..." : "Save architecture"}
+              </Button>
+            </div>
+          </form>
+        </ModalShell>
+      ) : null}
+
+      {showCreatePlanModal ? (
+        <ModalShell title="Add plan" onClose={() => setShowCreatePlanModal(false)}>
+          <form className="grid gap-2" onSubmit={createPlan}>
+            <Input value={newPlanCode} onChange={(event) => setNewPlanCode(event.target.value)} placeholder="Code" />
+            <Input value={newPlanName} onChange={(event) => setNewPlanName(event.target.value)} placeholder="Name" />
+            <Input
+              value={newPlanDuration}
+              inputMode="numeric"
+              onChange={(event) => setNewPlanDuration(event.target.value)}
+              placeholder="Minutes"
+            />
+            <Input
+              value={newPlanPrice}
+              inputMode="numeric"
+              onChange={(event) => setNewPlanPrice(event.target.value)}
+              placeholder="Price (NGN)"
+            />
+            <div className="flex justify-end">
+              <Button type="submit" disabled={creatingPlan}>{creatingPlan ? "Creating..." : "Add plan"}</Button>
+            </div>
+          </form>
+        </ModalShell>
+      ) : null}
+
+      {showCreateVoucherModal && isCsvMode ? (
+        <ModalShell title="Add voucher" onClose={() => setShowCreateVoucherModal(false)}>
+          <form className="grid gap-2" onSubmit={createVoucher}>
+            <Input
+              value={newVoucherCode}
+              onChange={(event) => setNewVoucherCode(event.target.value)}
+              placeholder="Voucher code"
+            />
+            <select value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={creatingVoucher}>{creatingVoucher ? "Adding..." : "Add voucher"}</Button>
+            </div>
+          </form>
+        </ModalShell>
+      ) : null}
+
+      {showGenerateVoucherModal && hasArchitectureConfigured ? (
+        <ModalShell title="Batch generate vouchers" onClose={() => setShowGenerateVoucherModal(false)}>
+          <form className="grid gap-2" onSubmit={generateVouchers}>
+            <Input
+              value={generateCount}
+              inputMode="numeric"
+              onChange={(event) => setGenerateCount(event.target.value)}
+              placeholder="Quantity"
+            />
+            <Input
+              value={generatePrefix}
+              onChange={(event) => setGeneratePrefix(event.target.value)}
+              placeholder="Optional prefix"
+            />
+            <Input
+              value={generateCodeLength}
+              inputMode="numeric"
+              onChange={(event) => setGenerateCodeLength(event.target.value)}
+              placeholder="Code length"
+            />
+            <select value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
+              {plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={generatingVouchers}>{generatingVouchers ? "Generating..." : "Generate"}</Button>
+            </div>
+          </form>
+        </ModalShell>
+      ) : null}
+
+      {showImportVoucherModal && isCsvMode ? (
+        <ModalShell title="Import voucher CSV" onClose={() => setShowImportVoucherModal(false)}>
+          <form className="grid gap-2" onSubmit={importCsv}>
+            <Input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
+            />
+            <Input
+              value={importPackageCode}
+              onChange={(event) => setImportPackageCode(event.target.value)}
+              placeholder="Optional forced plan code"
+            />
+            <div className="flex justify-end">
+              <Button type="submit" disabled={importLoading}>{importLoading ? "Importing..." : "Import"}</Button>
+            </div>
+          </form>
+        </ModalShell>
+      ) : null}
+
+      <div className="fixed right-5 top-1/2 z-40 hidden -translate-y-1/2 lg:flex lg:flex-col lg:gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          type="button"
+          onClick={refreshAll}
+          disabled={statsLoading || plansLoading || vouchersLoading}
+          aria-label="Refresh dashboard data"
+          className="bg-white shadow-[var(--shadow-sm)]"
+        >
+          <RefreshCw
+            className={[
+              "size-4",
+              statsLoading || plansLoading || vouchersLoading ? "animate-spin" : "",
+            ].join(" ")}
+          />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          type="button"
+          onClick={jumpToVoucherTools}
+          aria-label="Go to voucher tools"
+          className="bg-white shadow-[var(--shadow-sm)]"
+        >
+          <Plus className="size-4" />
+        </Button>
+      </div>
+
+      <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 lg:hidden">
+        <Button
+          variant="outline"
+          size="icon"
+          type="button"
+          onClick={refreshAll}
+          disabled={statsLoading || plansLoading || vouchersLoading}
+          aria-label="Refresh dashboard data"
+          className="bg-white shadow-[var(--shadow-sm)]"
+        >
+          <RefreshCw
+            className={[
+              "size-4",
+              statsLoading || plansLoading || vouchersLoading ? "animate-spin" : "",
+            ].join(" ")}
+          />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          type="button"
+          onClick={jumpToVoucherTools}
+          aria-label="Go to voucher tools"
+          className="bg-white shadow-[var(--shadow-sm)]"
+        >
+          <Plus className="size-4" />
+        </Button>
+      </div>
+    </>
   );
 }
 
@@ -1282,6 +1446,38 @@ function StatTile({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-slate-200/85 bg-slate-50/80 px-3 py-2.5">
       <p className="dashboard-kpi-label">{label}</p>
       <p className="dashboard-kpi-value">{value}</p>
+    </div>
+  );
+}
+
+function ModalShell({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-xl rounded-xl border border-slate-200/90 bg-white p-5 shadow-[var(--shadow-lg)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex size-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-100"
+            aria-label="Close"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        {children}
+      </div>
     </div>
   );
 }

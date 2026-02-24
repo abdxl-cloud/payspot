@@ -301,62 +301,29 @@ export function AdminTenantsPanel() {
   return (
     <>
       <div className="grid gap-5">
-        <section className="panel-surface w-full max-w-full overflow-hidden">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <p className="section-kicker">Control center</p>
-              <h2 className="section-title mt-1">Platform overview</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Monitor tenant readiness, status distribution, and payment configuration health.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={loadTenants}
-                disabled={loading}
-                type="button"
-                aria-label="Refresh tenants"
-              >
-                <RefreshCw className={["size-4", loading ? "animate-spin" : ""].join(" ")} />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                type="button"
-                onClick={() => setShowCreateModal(true)}
-                aria-label="Create tenant"
-              >
-                <Plus className="size-4" />
-              </Button>
-            </div>
-          </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatTile label="Total tenants" value={String(tenantStats.total)} />
+          <StatTile label="Active" value={String(tenantStats.active)} />
+          <StatTile label="Pending" value={String(tenantStats.pending)} />
+          <StatTile label="Paystack configured" value={String(tenantStats.configuredPayments)} />
+        </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatTile label="Total tenants" value={String(tenantStats.total)} />
-            <StatTile label="Active" value={String(tenantStats.active)} />
-            <StatTile label="Pending" value={String(tenantStats.pending)} />
-            <StatTile label="Paystack configured" value={String(tenantStats.configuredPayments)} />
-          </div>
+        <p className="text-xs text-slate-500">
+          {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "No sync yet"}
+        </p>
 
-          <p className="mt-3 text-xs text-slate-500">
-            {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "No sync yet"}
-          </p>
-
-          {error ? (
-            <Alert variant="destructive" className="mt-4">
-              <AlertTitle>Action failed</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : null}
-          {notice ? (
-            <Alert className="mt-4">
-              <AlertTitle>Update</AlertTitle>
-              <AlertDescription className="break-words">{notice}</AlertDescription>
-            </Alert>
-          ) : null}
-        </section>
+        {error ? (
+          <Alert variant="destructive">
+            <AlertTitle>Action failed</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        {notice ? (
+          <Alert>
+            <AlertTitle>Update</AlertTitle>
+            <AlertDescription className="break-words">{notice}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <section id="tenant-directory" className="panel-surface w-full max-w-full overflow-hidden rounded-lg">
           <div className="mb-3 flex items-center gap-2">
@@ -446,6 +413,54 @@ export function AdminTenantsPanel() {
             </table>
           </div>
         </section>
+      </div>
+
+      <div className="fixed right-5 top-1/2 z-40 hidden -translate-y-1/2 lg:flex lg:flex-col lg:gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={loadTenants}
+          disabled={loading}
+          type="button"
+          aria-label="Refresh tenants"
+          className="bg-white shadow-[var(--shadow-sm)]"
+        >
+          <RefreshCw className={["size-4", loading ? "animate-spin" : ""].join(" ")} />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          type="button"
+          onClick={() => setShowCreateModal(true)}
+          aria-label="Create tenant"
+          className="bg-white shadow-[var(--shadow-sm)]"
+        >
+          <Plus className="size-4" />
+        </Button>
+      </div>
+
+      <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 lg:hidden">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={loadTenants}
+          disabled={loading}
+          type="button"
+          aria-label="Refresh tenants"
+          className="bg-white shadow-[var(--shadow-sm)]"
+        >
+          <RefreshCw className={["size-4", loading ? "animate-spin" : ""].join(" ")} />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          type="button"
+          onClick={() => setShowCreateModal(true)}
+          aria-label="Create tenant"
+          className="bg-white shadow-[var(--shadow-sm)]"
+        >
+          <Plus className="size-4" />
+        </Button>
       </div>
 
       {showCreateModal ? (

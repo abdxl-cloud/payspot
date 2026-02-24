@@ -18,7 +18,24 @@ type Props = {
 };
 
 type SlugState = "idle" | "checking" | "available" | "taken" | "invalid";
-type SetupStepKey = "slug" | "password" | "paystack" | "voucher";
+type SetupStepKey = "slug" | "password" | "paystack" | "architecture" | "voucher";
+type ArchitecturePreset = "import_csv" | "api_automation" | "external_radius_portal";
+
+type TenantArchitectureResponse = {
+  architecture?: {
+    voucherSourceMode: "import_csv" | "omada_openapi";
+    portalAuthMode: "omada_builtin" | "external_portal_api" | "external_radius_portal";
+    omada: {
+      apiBaseUrl: string;
+      omadacId: string;
+      siteId: string;
+      clientId: string;
+      hasClientSecret: boolean;
+      hotspotOperatorUsername: string;
+      hasHotspotOperatorPassword: boolean;
+    };
+  };
+};
 
 function validatePassword(pw: string) {
   if (pw.length < 8) return "Password must be at least 8 characters.";
@@ -53,6 +70,16 @@ export function TenantSetupPanel({
   const [slugMessage, setSlugMessage] = useState<string>(
     "Keep this short and brand-specific. Example: walstreet",
   );
+
+  const [architecturePreset, setArchitecturePreset] = useState<ArchitecturePreset>("import_csv");
+  const [omadaApiBaseUrl, setOmadaApiBaseUrl] = useState("");
+  const [omadaOmadacId, setOmadaOmadacId] = useState("");
+  const [omadaSiteId, setOmadaSiteId] = useState("");
+  const [omadaClientId, setOmadaClientId] = useState("");
+  const [omadaClientSecret, setOmadaClientSecret] = useState("");
+  const [hasSavedOmadaClientSecret, setHasSavedOmadaClientSecret] = useState(false);
+  const [omadaHotspotOperatorUsername, setOmadaHotspotOperatorUsername] = useState("");
+  const [omadaHotspotOperatorPassword, setOmadaHotspotOperatorPassword] = useState("");
 
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
   const [voucherImporting, setVoucherImporting] = useState(false);
@@ -113,9 +140,64 @@ export function TenantSetupPanel({
     };
   }, [portalSlug, tenantSlug, currentSlug]);
 
+  useEffect(() => {
+    let ignore = false;
+    async function loadArchitectureDefaults() {
+      try {
+        const response = await fetch(`/api/t/${tenantSlug}/admin/architecture`);
+        const data = await readJsonResponse<TenantArchitectureResponse>(response);
+        if (!response.ok || !data?.architecture || ignore) return;
+
+        const { architecture } = data;
+        if (architecture.portalAuthMode === "external_radius_portal") {
+          setArchitecturePreset("external_radius_portal");
+        } else if (architecture.voucherSourceMode === "omada_openapi") {
+          setArchitecturePreset("api_automation");
+        } else {
+          setArchitecturePreset("import_csv");
+        }
+
+        setOmadaApiBaseUrl(architecture.omada.apiBaseUrl || "");
+        setOmadaOmadacId(architecture.omada.omadacId || "");
+        setOmadaSiteId(architecture.omada.siteId || "");
+        setOmadaClientId(architecture.omada.clientId || "");
+        setHasSavedOmadaClientSecret(architecture.omada.hasClientSecret);
+        setOmadaHotspotOperatorUsername(architecture.omada.hotspotOperatorUsername || "");
+      } catch {
+        // Keep local defaults when architecture fetch fails during setup.
+      }
+    }
+
+    void loadArchitectureDefaults();
+    return () => {
+      ignore = true;
+    };
+  }, [tenantSlug]);
+
+  const requiresVoucherImport = requireVoucherImport && architecturePreset === "import_csv";
+
+  const architectureComplete = useMemo(() => {
+    if (architecturePreset !== "api_automation") return true;
+    if (!omadaApiBaseUrl.trim()) return false;
+    if (!omadaOmadacId.trim()) return false;
+    if (!omadaSiteId.trim()) return false;
+    if (!omadaClientId.trim()) return false;
+    if (!omadaClientSecret.trim() && !hasSavedOmadaClientSecret) return false;
+    return true;
+  }, [
+    architecturePreset,
+    omadaApiBaseUrl,
+    omadaOmadacId,
+    omadaSiteId,
+    omadaClientId,
+    omadaClientSecret,
+    hasSavedOmadaClientSecret,
+  ]);
+
   const canSubmit = useMemo(() => {
     if (loading) return false;
-    if (!voucherImported) return false;
+    if (!architectureComplete) return false;
+    if (requiresVoucherImport && !voucherImported) return false;
     if (slugState !== "available") return false;
     if (requirePasswordChange) {
       if (!newPassword || !confirmPassword) return false;
@@ -128,6 +210,8 @@ export function TenantSetupPanel({
     return true;
   }, [
     loading,
+    architectureComplete,
+    requiresVoucherImport,
     voucherImported,
     slugState,
     requirePasswordChange,
@@ -162,7 +246,12 @@ export function TenantSetupPanel({
       });
     }
 
-    built.push({ key: "voucher", label: "Vouchers", complete: voucherImported });
+    built.push({ key: "architecture", label: "Architecture", complete: architectureComplete });
+
+    if (requiresVoucherImport) {
+      built.push({ key: "voucher", label: "Vouchers", complete: voucherImported });
+    }
+
     return built;
   }, [
     slugState,
@@ -171,6 +260,8 @@ export function TenantSetupPanel({
     confirmPassword,
     requirePaystackKey,
     paystackSecretKey,
+    architectureComplete,
+    requiresVoucherImport,
     voucherImported,
   ]);
 
@@ -236,6 +327,27 @@ export function TenantSetupPanel({
           newPassword: newPassword ? newPassword : undefined,
           paystackSecretKey: paystackSecretKey.trim() ? paystackSecretKey.trim() : undefined,
           newSlug: normalizeSlug(portalSlug),
+          architecture: {
+            voucherSourceMode: architecturePreset === "api_automation" ? "omada_openapi" : "import_csv",
+            portalAuthMode:
+              architecturePreset === "external_radius_portal"
+                ? "external_radius_portal"
+                : "omada_builtin",
+            omada:
+              architecturePreset === "api_automation"
+                ? {
+                    apiBaseUrl: omadaApiBaseUrl.trim(),
+                    omadacId: omadaOmadacId.trim(),
+                    siteId: omadaSiteId.trim(),
+                    clientId: omadaClientId.trim(),
+                    clientSecret: omadaClientSecret.trim() ? omadaClientSecret.trim() : undefined,
+                    hotspotOperatorUsername: omadaHotspotOperatorUsername.trim() || undefined,
+                    hotspotOperatorPassword: omadaHotspotOperatorPassword.trim()
+                      ? omadaHotspotOperatorPassword.trim()
+                      : undefined,
+                  }
+                : undefined,
+          },
         }),
       });
       const data = await readJsonResponse<{ error?: string; redirectTo?: string }>(response);
@@ -369,6 +481,123 @@ export function TenantSetupPanel({
               <p className="text-xs text-muted-foreground">
                 Stored securely and required to accept payments.
               </p>
+            </div>
+          ) : null}
+
+          {currentStep?.key === "architecture" ? (
+            <div className="grid gap-3">
+              <p className="text-sm font-semibold text-slate-900">Voucher architecture</p>
+              <p className="text-xs text-slate-600">
+                Choose how voucher provisioning and portal authentication should run for your tenant.
+              </p>
+
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => setArchitecturePreset("import_csv")}
+                  className={[
+                    "rounded-xl border px-3 py-3 text-left transition",
+                    architecturePreset === "import_csv"
+                      ? "border-indigo-300 bg-indigo-50"
+                      : "border-slate-200 bg-white hover:bg-slate-50",
+                  ].join(" ")}
+                >
+                  <p className="text-sm font-semibold text-slate-900">Import voucher code (CSV)</p>
+                  <p className="mt-1 text-xs text-slate-600">Manual CSV import from Omada export files.</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setArchitecturePreset("api_automation")}
+                  className={[
+                    "rounded-xl border px-3 py-3 text-left transition",
+                    architecturePreset === "api_automation"
+                      ? "border-indigo-300 bg-indigo-50"
+                      : "border-slate-200 bg-white hover:bg-slate-50",
+                  ].join(" ")}
+                >
+                  <p className="text-sm font-semibold text-slate-900">API automation</p>
+                  <p className="mt-1 text-xs text-slate-600">Generate and sync vouchers through Omada OpenAPI.</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setArchitecturePreset("external_radius_portal")}
+                  className={[
+                    "rounded-xl border px-3 py-3 text-left transition",
+                    architecturePreset === "external_radius_portal"
+                      ? "border-indigo-300 bg-indigo-50"
+                      : "border-slate-200 bg-white hover:bg-slate-50",
+                  ].join(" ")}
+                >
+                  <p className="text-sm font-semibold text-slate-900">External RADIUS + portal</p>
+                  <p className="mt-1 text-xs text-slate-600">Use external auth and portal infrastructure.</p>
+                </button>
+              </div>
+
+              {architecturePreset === "api_automation" ? (
+                <div className="rounded-2xl border border-slate-200/85 bg-slate-50/75 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Omada OpenAPI credentials
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <Input
+                      value={omadaApiBaseUrl}
+                      onChange={(event) => setOmadaApiBaseUrl(event.target.value)}
+                      placeholder="https://use1-omada-northbound.tplinkcloud.com"
+                      required
+                    />
+                    <Input
+                      value={omadaOmadacId}
+                      onChange={(event) => setOmadaOmadacId(event.target.value)}
+                      placeholder="Omada ID"
+                      required
+                    />
+                    <Input
+                      value={omadaSiteId}
+                      onChange={(event) => setOmadaSiteId(event.target.value)}
+                      placeholder="Site ID"
+                      required
+                    />
+                    <Input
+                      value={omadaClientId}
+                      onChange={(event) => setOmadaClientId(event.target.value)}
+                      placeholder="Client ID"
+                      required
+                    />
+                    <Input
+                      type="password"
+                      value={omadaClientSecret}
+                      onChange={(event) => setOmadaClientSecret(event.target.value)}
+                      placeholder={
+                        hasSavedOmadaClientSecret
+                          ? "Client secret (leave blank to keep)"
+                          : "Client secret"
+                      }
+                      required={!hasSavedOmadaClientSecret}
+                    />
+                    <Input
+                      value={omadaHotspotOperatorUsername}
+                      onChange={(event) => setOmadaHotspotOperatorUsername(event.target.value)}
+                      placeholder="Hotspot operator username (optional)"
+                    />
+                    <Input
+                      type="password"
+                      value={omadaHotspotOperatorPassword}
+                      onChange={(event) => setOmadaHotspotOperatorPassword(event.target.value)}
+                      placeholder="Hotspot operator password (optional)"
+                    />
+                  </div>
+                </div>
+              ) : architecturePreset === "external_radius_portal" ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  External mode selected. Your auth flow will use <span className="font-semibold">external RADIUS + portal</span>.
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                  CSV mode selected. You will import vouchers from file in the next step.
+                </div>
+              )}
             </div>
           ) : null}
 

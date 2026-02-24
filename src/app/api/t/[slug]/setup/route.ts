@@ -4,8 +4,11 @@ import {
   getTenantBySlug,
   getUserById,
   isTenantSlugAvailable,
+  setTenantArchitecture,
   setTenantPaystackSecret,
+  type PortalAuthMode,
   setUserMustChangePassword,
+  type VoucherSourceMode,
   updateTenant,
   updateUserPassword,
 } from "@/lib/store";
@@ -23,6 +26,23 @@ const schema = z.object({
     .min(2)
     .max(40)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format")
+    .optional(),
+  architecture: z
+    .object({
+      voucherSourceMode: z.enum(["import_csv", "omada_openapi"]),
+      portalAuthMode: z.enum(["omada_builtin", "external_portal_api", "external_radius_portal"]),
+      omada: z
+        .object({
+          apiBaseUrl: z.string().max(300).optional(),
+          omadacId: z.string().max(200).optional(),
+          siteId: z.string().max(200).optional(),
+          clientId: z.string().max(200).optional(),
+          clientSecret: z.string().max(500).optional(),
+          hotspotOperatorUsername: z.string().max(200).optional(),
+          hotspotOperatorPassword: z.string().max(500).optional(),
+        })
+        .optional(),
+    })
     .optional(),
 });
 
@@ -82,6 +102,26 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Paystack secret key is required" }, { status: 400 });
   }
 
+  if (parsed.data.architecture?.voucherSourceMode === "omada_openapi") {
+    const omada = parsed.data.architecture.omada;
+    const hasSavedSecret = !!tenant.omada_client_secret_enc;
+    if (!omada?.apiBaseUrl?.trim()) {
+      return Response.json({ error: "Omada API base URL is required for API automation." }, { status: 400 });
+    }
+    if (!omada.omadacId?.trim()) {
+      return Response.json({ error: "Omada ID is required for API automation." }, { status: 400 });
+    }
+    if (!omada.siteId?.trim()) {
+      return Response.json({ error: "Omada site ID is required for API automation." }, { status: 400 });
+    }
+    if (!omada.clientId?.trim()) {
+      return Response.json({ error: "Omada client ID is required for API automation." }, { status: 400 });
+    }
+    if (!omada.clientSecret?.trim() && !hasSavedSecret) {
+      return Response.json({ error: "Omada client secret is required for API automation." }, { status: 400 });
+    }
+  }
+
   if (requestedSlug !== tenant.slug && !await isTenantSlugAvailable(requestedSlug)) {
     return Response.json({ error: "That link name is not available" }, { status: 409 });
   }
@@ -113,6 +153,35 @@ export async function POST(request: Request, { params }: Props) {
         { error: "Server crypto not configured" },
         { status: 500 },
       );
+    }
+  }
+
+  if (parsed.data.architecture) {
+    try {
+      const architectureResult = await setTenantArchitecture({
+        tenantId: tenant.id,
+        voucherSourceMode: parsed.data.architecture.voucherSourceMode as VoucherSourceMode,
+        portalAuthMode: parsed.data.architecture.portalAuthMode as PortalAuthMode,
+        omada: parsed.data.architecture.omada
+          ? {
+              apiBaseUrl: parsed.data.architecture.omada.apiBaseUrl?.trim(),
+              omadacId: parsed.data.architecture.omada.omadacId?.trim(),
+              siteId: parsed.data.architecture.omada.siteId?.trim(),
+              clientId: parsed.data.architecture.omada.clientId?.trim(),
+              clientSecret: parsed.data.architecture.omada.clientSecret?.trim() || undefined,
+              hotspotOperatorUsername:
+                parsed.data.architecture.omada.hotspotOperatorUsername?.trim() || undefined,
+              hotspotOperatorPassword:
+                parsed.data.architecture.omada.hotspotOperatorPassword?.trim() || undefined,
+            }
+          : undefined,
+      });
+      if (architectureResult.status !== "ok") {
+        return Response.json({ error: "Unable to save architecture settings" }, { status: 500 });
+      }
+    } catch (error) {
+      console.error("Tenant setup architecture save failed", error);
+      return Response.json({ error: "Unable to save architecture settings" }, { status: 500 });
     }
   }
 
