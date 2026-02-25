@@ -25,6 +25,13 @@ type OmadaVoucherGroupDetail = {
   data?: OmadaVoucherRow[];
 };
 
+type OmadaSiteGrid = {
+  data?: Array<{
+    siteId?: string | null;
+    name?: string | null;
+  }>;
+};
+
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_POLL_ATTEMPTS = 15;
 const POLL_INTERVAL_MS = 750;
@@ -90,6 +97,37 @@ export async function getOmadaAccessToken(config: TenantOmadaOpenApiConfig) {
   const token = data.result?.accessToken;
   if (!token) throw new Error("Omada access token missing in response");
   return token;
+}
+
+export async function listOmadaSites(params: {
+  apiBaseUrl: string;
+  omadacId: string;
+  clientId: string;
+  clientSecret: string;
+}) {
+  const baseUrl = normalizeBaseUrl(params.apiBaseUrl);
+  const token = await getOmadaAccessToken({
+    apiBaseUrl: params.apiBaseUrl,
+    omadacId: params.omadacId,
+    siteId: "__unused__",
+    clientId: params.clientId,
+    clientSecret: params.clientSecret,
+  });
+  const listUrl = `${baseUrl}/openapi/v1/${encodeURIComponent(params.omadacId)}/sites?page=1&pageSize=1000`;
+
+  const data = await omadaRequest<OmadaSiteGrid>(listUrl, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `AccessToken=${token}`,
+    },
+  });
+
+  return (data.result?.data ?? [])
+    .map((site) => ({
+      siteId: site.siteId?.trim() || "",
+      name: site.name?.trim() || "",
+    }))
+    .filter((site) => !!site.siteId);
 }
 
 type ProvisionParams = {

@@ -56,10 +56,24 @@ export type TenantOmadaOpenApiConfig = {
   clientSecret: string;
 };
 
+export type TenantOmadaOpenApiCredentials = {
+  apiBaseUrl: string;
+  omadacId: string;
+  clientId: string;
+  clientSecret: string;
+};
+
 type TenantOmadaOpenApiConfigOverrides = Partial<{
   apiBaseUrl: string;
   omadacId: string;
   siteId: string;
+  clientId: string;
+  clientSecret: string;
+}>;
+
+type TenantOmadaOpenApiCredentialsOverrides = Partial<{
+  apiBaseUrl: string;
+  omadacId: string;
   clientId: string;
   clientSecret: string;
 }>;
@@ -1033,6 +1047,47 @@ export async function resolveTenantOmadaOpenApiConfigForTesting(params: {
       clientId,
       clientSecret,
     } satisfies TenantOmadaOpenApiConfig,
+  };
+}
+
+export async function resolveTenantOmadaOpenApiCredentialsForTesting(params: {
+  tenantId: string;
+  overrides?: TenantOmadaOpenApiCredentialsOverrides;
+}) {
+  const tenant = await getTenantById(params.tenantId);
+  if (!tenant) return { status: "missing" as const };
+
+  const apiBaseUrl = params.overrides?.apiBaseUrl?.trim() || tenant.omada_api_base_url || "";
+  const omadacId = params.overrides?.omadacId?.trim() || tenant.omada_omadac_id || "";
+  const clientId = params.overrides?.clientId?.trim() || tenant.omada_client_id || "";
+  const overrideSecret = params.overrides?.clientSecret?.trim() || "";
+  const clientSecret = overrideSecret || (
+    tenant.omada_client_secret_enc
+      ? decryptSecret(tenant.omada_client_secret_enc)
+      : ""
+  );
+
+  const missing: Array<"apiBaseUrl" | "omadacId" | "clientId" | "clientSecret"> = [];
+  if (!apiBaseUrl) missing.push("apiBaseUrl");
+  if (!omadacId) missing.push("omadacId");
+  if (!clientId) missing.push("clientId");
+  if (!clientSecret) missing.push("clientSecret");
+
+  if (missing.length > 0) {
+    return {
+      status: "incomplete" as const,
+      missing,
+    };
+  }
+
+  return {
+    status: "ok" as const,
+    credentials: {
+      apiBaseUrl,
+      omadacId,
+      clientId,
+      clientSecret,
+    } satisfies TenantOmadaOpenApiCredentials,
   };
 }
 

@@ -81,6 +81,11 @@ type ArchitectureConfig = {
   };
 };
 
+type OmadaSiteOption = {
+  siteId: string;
+  name: string;
+};
+
 type Props = {
   tenantSlug: string;
 };
@@ -116,6 +121,10 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [omadaTestLoading, setOmadaTestLoading] = useState(false);
   const [omadaTestNotice, setOmadaTestNotice] = useState<string | null>(null);
   const [omadaTestError, setOmadaTestError] = useState<string | null>(null);
+  const [omadaSitesLoading, setOmadaSitesLoading] = useState(false);
+  const [omadaSitesError, setOmadaSitesError] = useState<string | null>(null);
+  const [omadaSitesNotice, setOmadaSitesNotice] = useState<string | null>(null);
+  const [omadaSiteOptions, setOmadaSiteOptions] = useState<OmadaSiteOption[]>([]);
   const [omadaClientSecret, setOmadaClientSecret] = useState("");
   const [omadaHotspotOperatorPassword, setOmadaHotspotOperatorPassword] = useState("");
 
@@ -372,6 +381,67 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setOmadaTestError(error instanceof Error ? error.message : "Omada test failed.");
     } finally {
       setOmadaTestLoading(false);
+    }
+  }
+
+  async function discoverOmadaSites() {
+    if (!architecture) return;
+
+    setOmadaSitesLoading(true);
+    setOmadaSitesError(null);
+    setOmadaSitesNotice(null);
+
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/architecture/discover-sites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          omada: {
+            apiBaseUrl: architecture.omada.apiBaseUrl.trim(),
+            omadacId: architecture.omada.omadacId.trim(),
+            clientId: architecture.omada.clientId.trim(),
+            clientSecret: omadaClientSecret || undefined,
+          },
+        }),
+      });
+
+      const data = await readJsonResponse<{
+        error?: string;
+        sites?: OmadaSiteOption[];
+        omadacId?: string;
+      }>(response);
+      if (!response.ok) {
+        const fallback = `Omada site discovery failed (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).`;
+        throw new Error(data?.error || fallback);
+      }
+
+      const sites = (data?.sites ?? []).filter((site) => site?.siteId);
+      setOmadaSiteOptions(sites);
+      if (sites.length === 0) {
+        setOmadaSitesNotice("No sites were returned by Omada for the supplied Omada ID.");
+        return;
+      }
+
+      if (sites.length === 1) {
+        setArchitecture((prev) =>
+          prev
+            ? {
+                ...prev,
+                omada: { ...prev.omada, siteId: sites[0].siteId },
+              }
+            : prev,
+        );
+      }
+
+      setOmadaSitesNotice(
+        sites.length === 1
+          ? `Found 1 site and selected it automatically (${sites[0].siteId}).`
+          : `Found ${sites.length} sites. Select one below to fill Site ID.`,
+      );
+    } catch (error) {
+      setOmadaSitesError(error instanceof Error ? error.message : "Unable to discover Omada sites.");
+    } finally {
+      setOmadaSitesLoading(false);
     }
   }
 
@@ -1383,6 +1453,40 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                       : "Hotspot operator password"
                   }
                 />
+              </div>
+              <div className="mt-3 grid gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-slate-600">
+                    Need Site ID? Fetch available sites from Omada using the current credentials.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={discoverOmadaSites}
+                    disabled={omadaSitesLoading || architectureSaving || omadaTestLoading}
+                  >
+                    {omadaSitesLoading ? "Fetching sites..." : "Fetch sites"}
+                  </Button>
+                </div>
+                {omadaSiteOptions.length > 0 ? (
+                  <select
+                    value={architecture.omada.siteId}
+                    onChange={(event) =>
+                      setArchitecture((prev) =>
+                        prev ? { ...prev, omada: { ...prev.omada, siteId: event.target.value } } : prev,
+                      )
+                    }
+                  >
+                    <option value="">Select discovered site</option>
+                    {omadaSiteOptions.map((site) => (
+                      <option key={site.siteId} value={site.siteId}>
+                        {site.name ? `${site.name} (${site.siteId})` : site.siteId}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {omadaSitesError ? <p className="text-sm text-red-700">{omadaSitesError}</p> : null}
+                {omadaSitesNotice ? <p className="text-sm text-slate-600">{omadaSitesNotice}</p> : null}
               </div>
             </div>
 
