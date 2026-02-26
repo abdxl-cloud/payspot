@@ -154,7 +154,6 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [omadaSiteOptions, setOmadaSiteOptions] = useState<OmadaSiteOption[]>([]);
   const [omadaClientSecret, setOmadaClientSecret] = useState("");
   const [omadaHotspotOperatorPassword, setOmadaHotspotOperatorPassword] = useState("");
-  const [radiusAdapterSecret, setRadiusAdapterSecret] = useState("");
 
   const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
   const [vouchersError, setVouchersError] = useState<string | null>(null);
@@ -404,9 +403,6 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             hotspotOperatorUsername: architecture.omada.hotspotOperatorUsername.trim(),
             hotspotOperatorPassword: omadaHotspotOperatorPassword || undefined,
           },
-          radius: {
-            adapterSecret: radiusAdapterSecret || undefined,
-          },
         }),
       });
       const data = await readJsonResponse<{ error?: string; architecture?: ArchitectureConfig }>(response);
@@ -415,7 +411,6 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setArchitectureNotice("Architecture settings saved.");
       setOmadaClientSecret("");
       setOmadaHotspotOperatorPassword("");
-      setRadiusAdapterSecret("");
       setShowArchitectureModal(false);
     } catch (error) {
       setArchitectureError(
@@ -1561,9 +1556,13 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   Omada setup help
                 </Link>
               ) : architecture.portalAuthMode === "external_radius_portal" ? (
-                <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">
-                  Configure RADIUS adapter secret for external mode
-                </span>
+                <Link
+                  href="/help/external-radius"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                >
+                  <CircleHelp className="size-3.5" />
+                  External RADIUS help
+                </Link>
               ) : null}
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -1727,19 +1726,14 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             {architecture.portalAuthMode === "external_radius_portal" ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">External RADIUS adapter</p>
-                <Input
-                  type="password"
-                  value={radiusAdapterSecret}
-                  onChange={(event) => setRadiusAdapterSecret(event.target.value)}
-                  placeholder={
-                    architecture.radius?.hasAdapterSecret
-                      ? `Shared secret (leave blank to keep ****${architecture.radius.adapterSecretLast4})`
-                      : "Shared secret"
-                  }
-                />
                 <p className="mt-2 text-xs text-amber-900/80">
-                  This shared secret protects the `/api/t/&lt;slug&gt;/radius/*` adapter endpoints.
+                  Shared secret for `/api/t/&lt;slug&gt;/radius/*` is generated and managed automatically.
                 </p>
+                {architecture.radius?.hasAdapterSecret ? (
+                  <p className="mt-1 text-xs text-amber-900/80">
+                    Current secret fingerprint: <code>****{architecture.radius.adapterSecretLast4}</code>
+                  </p>
+                ) : null}
               </div>
             ) : null}
 

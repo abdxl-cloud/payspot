@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { BadgeCheck, Link2, LockKeyhole, Upload } from "lucide-react";
+import { BadgeCheck, CircleHelp, Link2, LockKeyhole, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -87,8 +87,6 @@ export function TenantSetupPanel({
   const [omadaHotspotOperatorUsername, setOmadaHotspotOperatorUsername] = useState("");
   const [omadaHotspotOperatorPassword, setOmadaHotspotOperatorPassword] = useState("");
   const [hasSavedOmadaHotspotOperatorPassword, setHasSavedOmadaHotspotOperatorPassword] = useState(false);
-  const [radiusAdapterSecret, setRadiusAdapterSecret] = useState("");
-  const [hasSavedRadiusAdapterSecret, setHasSavedRadiusAdapterSecret] = useState(false);
 
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
   const [voucherImporting, setVoucherImporting] = useState(false);
@@ -173,7 +171,6 @@ export function TenantSetupPanel({
         setHasSavedOmadaClientSecret(architecture.omada.hasClientSecret);
         setOmadaHotspotOperatorUsername(architecture.omada.hotspotOperatorUsername || "");
         setHasSavedOmadaHotspotOperatorPassword(architecture.omada.hasHotspotOperatorPassword);
-        setHasSavedRadiusAdapterSecret(architecture.radius?.hasAdapterSecret ?? false);
       } catch {
         // Keep local defaults when architecture fetch fails during setup.
       }
@@ -188,9 +185,7 @@ export function TenantSetupPanel({
   const requiresVoucherImport = requireVoucherImport && architecturePreset === "import_csv";
 
   const architectureComplete = useMemo(() => {
-    if (architecturePreset === "external_radius_portal") {
-      return !!radiusAdapterSecret.trim() || hasSavedRadiusAdapterSecret;
-    }
+    if (architecturePreset === "external_radius_portal") return true;
     if (architecturePreset !== "api_automation") return true;
     if (!omadaApiBaseUrl.trim()) return false;
     if (!omadaOmadacId.trim()) return false;
@@ -206,8 +201,6 @@ export function TenantSetupPanel({
     omadaClientId,
     omadaClientSecret,
     hasSavedOmadaClientSecret,
-    radiusAdapterSecret,
-    hasSavedRadiusAdapterSecret,
   ]);
 
   const canSubmit = useMemo(() => {
@@ -364,11 +357,7 @@ export function TenantSetupPanel({
                   }
                 : undefined,
             radius:
-              architecturePreset === "external_radius_portal"
-                ? {
-                    adapterSecret: radiusAdapterSecret.trim() ? radiusAdapterSecret.trim() : undefined,
-                  }
-                : undefined,
+              architecturePreset === "external_radius_portal" ? {} : undefined,
           },
         }),
       });
@@ -627,31 +616,14 @@ export function TenantSetupPanel({
                     External mode selected. Your auth flow will use{" "}
                     <span className="font-semibold">external RADIUS + portal</span>.
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="radiusAdapterSecret">RADIUS adapter shared secret</Label>
-                    <Input
-                      id="radiusAdapterSecret"
-                      type="password"
-                      value={radiusAdapterSecret}
-                      onChange={(event) => setRadiusAdapterSecret(event.target.value)}
-                      placeholder={
-                        hasSavedRadiusAdapterSecret
-                          ? "Shared secret (leave blank to keep current)"
-                          : "Shared secret"
-                      }
-                    />
-                    <p className="text-xs text-amber-900/80">
-                      Used by the RADIUS adapter endpoints to authorize calls securely.
-                    </p>
-                  </div>
                   <p className="text-xs text-amber-900/80">
-                    Next: Configure your RADIUS integration to call PaySpot
-                    authorize/accounting endpoints with this secret.
+                    Shared secret is generated and managed automatically by the system.
                   </p>
                   <Link
                     href="/help/external-radius"
-                    className="inline-flex w-fit rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                    className="inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"
                   >
+                    <CircleHelp className="size-3.5" />
                     Open External RADIUS setup guide
                   </Link>
                 </div>

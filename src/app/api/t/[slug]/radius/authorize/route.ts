@@ -54,14 +54,20 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const endsAtMs = new Date(auth.entitlement.ends_at).getTime();
-  const timeoutSeconds = Math.max(60, Math.floor((endsAtMs - Date.now()) / 1000));
+  const timeoutSeconds = Math.floor((endsAtMs - Date.now()) / 1000);
+  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+    return Response.json({
+      accept: false,
+      reason: "plan_expired",
+    });
+  }
 
   return Response.json({
     accept: true,
     subscriberId: auth.subscriber.id,
     entitlementId: auth.entitlement.id,
     reply: {
-      sessionTimeout: timeoutSeconds,
+      sessionTimeout: Math.max(1, timeoutSeconds),
       maxDevices: auth.entitlement.max_devices,
       bandwidthProfile: auth.entitlement.bandwidth_profile,
       dataLimitMb: auth.entitlement.data_limit_mb,

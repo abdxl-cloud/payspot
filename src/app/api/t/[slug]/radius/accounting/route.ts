@@ -11,12 +11,27 @@ type Props = {
 };
 
 const schema = z.object({
-  event: z.enum(["start", "interim", "stop"]),
+  event: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine(
+      (value) =>
+        value === "start" ||
+        value === "interim" ||
+        value === "interim-update" ||
+        value === "stop" ||
+        value === "accounting-on" ||
+        value === "accounting-off",
+      "Unsupported accounting event",
+    ),
   sessionId: z.string().min(3),
   subscriberId: z.string().optional(),
   entitlementId: z.string().optional(),
-  inputOctets: z.number().nonnegative().optional(),
-  outputOctets: z.number().nonnegative().optional(),
+  inputOctets: z.coerce.number().nonnegative().optional(),
+  outputOctets: z.coerce.number().nonnegative().optional(),
+  acctInputOctets: z.coerce.number().nonnegative().optional(),
+  acctOutputOctets: z.coerce.number().nonnegative().optional(),
   callingStationId: z.string().optional(),
   calledStationId: z.string().optional(),
   nasIpAddress: z.string().optional(),
@@ -47,6 +62,14 @@ export async function POST(request: Request, { params }: Props) {
   if (!parsed.success) {
     return Response.json({ error: "Invalid request" }, { status: 400 });
   }
+
+  if (parsed.data.event === "accounting-on" || parsed.data.event === "accounting-off") {
+    return Response.json({ ok: true, ignored: parsed.data.event });
+  }
+
+  const normalizedEvent = parsed.data.event === "interim-update" ? "interim" : parsed.data.event;
+  const inputOctets = parsed.data.inputOctets ?? parsed.data.acctInputOctets;
+  const outputOctets = parsed.data.outputOctets ?? parsed.data.acctOutputOctets;
 
   let subscriberId = parsed.data.subscriberId;
   let entitlementId = parsed.data.entitlementId;
@@ -80,9 +103,9 @@ export async function POST(request: Request, { params }: Props) {
     subscriberId,
     entitlementId,
     sessionId: parsed.data.sessionId,
-    event: parsed.data.event,
-    inputOctets: parsed.data.inputOctets,
-    outputOctets: parsed.data.outputOctets,
+    event: normalizedEvent as "start" | "interim" | "stop",
+    inputOctets,
+    outputOctets,
     callingStationId: parsed.data.callingStationId,
     calledStationId: parsed.data.calledStationId,
     nasIpAddress: parsed.data.nasIpAddress,

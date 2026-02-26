@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { provisionOmadaVouchers } from "@/lib/omada";
 import { isPaystackSecretKey } from "@/lib/paystack-key";
@@ -210,6 +210,10 @@ export type SubscriberEntitlementRow = {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function generateRadiusAdapterSecret() {
+  return randomBytes(32).toString("hex");
 }
 
 function normalizeUsername(username: string) {
@@ -1320,13 +1324,16 @@ export async function setTenantArchitecture(params: {
   let radiusAdapterSecretLast4 = tenant.radius_adapter_secret_last4;
   if (params.radius && "adapterSecret" in params.radius) {
     const next = params.radius.adapterSecret;
-    if (next == null || next.trim() === "") {
-      radiusAdapterSecretEnc = null;
-      radiusAdapterSecretLast4 = null;
-    } else {
+    if (typeof next === "string" && next.trim() !== "") {
       radiusAdapterSecretEnc = encryptSecret(next.trim());
       radiusAdapterSecretLast4 = next.trim().slice(-4);
     }
+  }
+
+  if (portalAuthMode === "external_radius_portal" && !radiusAdapterSecretEnc) {
+    const generated = generateRadiusAdapterSecret();
+    radiusAdapterSecretEnc = encryptSecret(generated);
+    radiusAdapterSecretLast4 = generated.slice(-4);
   }
 
   if (voucherSourceMode === "omada_openapi") {
