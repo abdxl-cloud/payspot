@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { BadgeCheck, Link2, LockKeyhole, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,10 @@ type TenantArchitectureResponse = {
       hasClientSecret: boolean;
       hotspotOperatorUsername: string;
       hasHotspotOperatorPassword: boolean;
+    };
+    radius: {
+      hasAdapterSecret: boolean;
+      adapterSecretLast4: string;
     };
   };
 };
@@ -82,6 +87,8 @@ export function TenantSetupPanel({
   const [omadaHotspotOperatorUsername, setOmadaHotspotOperatorUsername] = useState("");
   const [omadaHotspotOperatorPassword, setOmadaHotspotOperatorPassword] = useState("");
   const [hasSavedOmadaHotspotOperatorPassword, setHasSavedOmadaHotspotOperatorPassword] = useState(false);
+  const [radiusAdapterSecret, setRadiusAdapterSecret] = useState("");
+  const [hasSavedRadiusAdapterSecret, setHasSavedRadiusAdapterSecret] = useState(false);
 
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
   const [voucherImporting, setVoucherImporting] = useState(false);
@@ -166,6 +173,7 @@ export function TenantSetupPanel({
         setHasSavedOmadaClientSecret(architecture.omada.hasClientSecret);
         setOmadaHotspotOperatorUsername(architecture.omada.hotspotOperatorUsername || "");
         setHasSavedOmadaHotspotOperatorPassword(architecture.omada.hasHotspotOperatorPassword);
+        setHasSavedRadiusAdapterSecret(architecture.radius?.hasAdapterSecret ?? false);
       } catch {
         // Keep local defaults when architecture fetch fails during setup.
       }
@@ -180,6 +188,9 @@ export function TenantSetupPanel({
   const requiresVoucherImport = requireVoucherImport && architecturePreset === "import_csv";
 
   const architectureComplete = useMemo(() => {
+    if (architecturePreset === "external_radius_portal") {
+      return !!radiusAdapterSecret.trim() || hasSavedRadiusAdapterSecret;
+    }
     if (architecturePreset !== "api_automation") return true;
     if (!omadaApiBaseUrl.trim()) return false;
     if (!omadaOmadacId.trim()) return false;
@@ -195,6 +206,8 @@ export function TenantSetupPanel({
     omadaClientId,
     omadaClientSecret,
     hasSavedOmadaClientSecret,
+    radiusAdapterSecret,
+    hasSavedRadiusAdapterSecret,
   ]);
 
   const canSubmit = useMemo(() => {
@@ -348,6 +361,12 @@ export function TenantSetupPanel({
                     hotspotOperatorPassword: omadaHotspotOperatorPassword.trim()
                       ? omadaHotspotOperatorPassword.trim()
                       : undefined,
+                  }
+                : undefined,
+            radius:
+              architecturePreset === "external_radius_portal"
+                ? {
+                    adapterSecret: radiusAdapterSecret.trim() ? radiusAdapterSecret.trim() : undefined,
                   }
                 : undefined,
           },
@@ -595,14 +614,59 @@ export function TenantSetupPanel({
                       }
                     />
                   </div>
+                  <Link
+                    href="/help/omada-openapi"
+                    className="inline-flex w-fit rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-100"
+                  >
+                    Open Omada setup guide
+                  </Link>
                 </div>
               ) : architecturePreset === "external_radius_portal" ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                  External mode selected. Your auth flow will use <span className="font-semibold">external RADIUS + portal</span>.
+                <div className="grid gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="rounded-xl border border-amber-300 bg-white/70 p-3 text-xs text-amber-900">
+                    External mode selected. Your auth flow will use{" "}
+                    <span className="font-semibold">external RADIUS + portal</span>.
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="radiusAdapterSecret">RADIUS adapter shared secret</Label>
+                    <Input
+                      id="radiusAdapterSecret"
+                      type="password"
+                      value={radiusAdapterSecret}
+                      onChange={(event) => setRadiusAdapterSecret(event.target.value)}
+                      placeholder={
+                        hasSavedRadiusAdapterSecret
+                          ? "Shared secret (leave blank to keep current)"
+                          : "Shared secret"
+                      }
+                    />
+                    <p className="text-xs text-amber-900/80">
+                      Used by the RADIUS adapter endpoints to authorize calls securely.
+                    </p>
+                  </div>
+                  <p className="text-xs text-amber-900/80">
+                    Next: Configure your RADIUS integration to call PaySpot
+                    authorize/accounting endpoints with this secret.
+                  </p>
+                  <Link
+                    href="/help/external-radius"
+                    className="inline-flex w-fit rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                  >
+                    Open External RADIUS setup guide
+                  </Link>
                 </div>
               ) : (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-                  CSV mode selected. You will import vouchers from file in the next step.
+                <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                  <p>CSV mode selected. You will import vouchers from file in the next step.</p>
+                  <p>
+                    Recommended for fastest launch and lowest integration complexity.
+                  </p>
+                  <Link
+                    href="/help/csv-import"
+                    className="inline-flex w-fit rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-100"
+                  >
+                    Open CSV import guide
+                  </Link>
                 </div>
               )}
             </div>

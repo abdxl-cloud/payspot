@@ -22,6 +22,9 @@ type Package = {
   name: string;
   durationMinutes: number;
   priceNgn: number;
+  maxDevices: number;
+  bandwidthProfile?: string | null;
+  dataLimitMb?: number | null;
   description?: string | null;
   availableCount: number;
 };
@@ -29,6 +32,7 @@ type Package = {
 type Props = {
   tenantSlug: string;
   packages: Package[];
+  portalAuthMode: "omada_builtin" | "external_portal_api" | "external_radius_portal";
 };
 
 function formatDuration(minutes: number) {
@@ -105,7 +109,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
-export function Checkout({ tenantSlug, packages }: Props) {
+export function Checkout({ tenantSlug, packages, portalAuthMode }: Props) {
   const [selected, setSelected] = useState<Package | null>(null);
   const [planQuery, setPlanQuery] = useState("");
   const [visiblePlanCount, setVisiblePlanCount] = useState(8);
@@ -121,7 +125,14 @@ export function Checkout({ tenantSlug, packages }: Props) {
   const [resumeMessage, setResumeMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [flowMode, setFlowMode] = useState<"purchase" | "resume">("purchase");
+  const [subscriberEmail, setSubscriberEmail] = useState("");
+  const [subscriberPassword, setSubscriberPassword] = useState("");
+  const [subscriberToken, setSubscriberToken] = useState<string | null>(null);
+  const [subscriberAuthMessage, setSubscriberAuthMessage] = useState<string | null>(null);
+  const [subscriberAuthError, setSubscriberAuthError] = useState<string | null>(null);
+  const [subscriberAuthLoading, setSubscriberAuthLoading] = useState(false);
 
+  const isAccountAccessMode = portalAuthMode === "external_radius_portal";
   const hasAvailable = packages.some((pkg) => pkg.availableCount > 0);
   const allSoldOut = packages.length > 0 && !hasAvailable;
   const isLongPlanList = packages.length > 12;
@@ -171,8 +182,9 @@ export function Checkout({ tenantSlug, packages }: Props) {
   const step: 1 | 2 | 3 = allSoldOut ? 1 : loading ? 3 : selected ? 2 : 1;
 
   const canSubmit = useMemo(() => {
+    if (isAccountAccessMode && !subscriberToken) return false;
     return !!selected && selected.availableCount > 0 && phone.length > 6 && !loading;
-  }, [selected, phone, loading]);
+  }, [selected, phone, loading, isAccountAccessMode, subscriberToken]);
 
   function redirectToPaystack(url: string, newTab = false) {
     if (newTab) {
@@ -217,6 +229,41 @@ export function Checkout({ tenantSlug, packages }: Props) {
     }
   }
 
+  async function authenticateSubscriber(mode: "login" | "signup") {
+    setSubscriberAuthLoading(true);
+    setSubscriberAuthError(null);
+    setSubscriberAuthMessage(null);
+    try {
+      const endpoint = mode === "signup" ? "signup" : "login";
+      const response = await fetch(`/api/t/${tenantSlug}/portal/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: subscriberEmail.trim(),
+          password: subscriberPassword,
+          phone: phone.trim() || undefined,
+        }),
+      });
+      const data = await readJsonResponse<{
+        error?: string;
+        token?: string;
+      }>(response);
+      if (!response.ok || !data?.token) {
+        throw new Error(data?.error || "Authentication failed.");
+      }
+      setSubscriberToken(data.token);
+      setSubscriberAuthMessage(
+        mode === "signup"
+          ? "Account created. You can now purchase a plan."
+          : "Signed in. You can now purchase a plan.",
+      );
+    } catch (error) {
+      setSubscriberAuthError(error instanceof Error ? error.message : "Authentication failed.");
+    } finally {
+      setSubscriberAuthLoading(false);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!selected || selected.availableCount <= 0) return;
@@ -228,10 +275,14 @@ export function Checkout({ tenantSlug, packages }: Props) {
     try {
       const response = await fetch(`/api/t/${tenantSlug}/payments/init`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(subscriberToken ? { Authorization: `Bearer ${subscriberToken}` } : {}),
+        },
         body: JSON.stringify({
           phone,
           packageCode: selected.code,
+          subscriberToken: subscriberToken ?? undefined,
         }),
       });
       const data = await readJsonResponse<{
@@ -536,6 +587,61 @@ export function Checkout({ tenantSlug, packages }: Props) {
           </CardHeader>
           <CardContent>
             <form className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_230px] lg:items-end" onSubmit={handleSubmit}>
+              {isAccountAccessMode ? (
+                <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 lg:col-span-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Subscriber account
+                  </p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="subscriberEmail">Email</Label>
+                      <Input
+                        id="subscriberEmail"
+                        type="email"
+                        value={subscriberEmail}
+                        onChange={(event) => setSubscriberEmail(event.target.value)}
+                        placeholder="you@example.com"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="subscriberPassword">Password</Label>
+                      <Input
+                        id="subscriberPassword"
+                        type="password"
+                        value={subscriberPassword}
+                        onChange={(event) => setSubscriberPassword(event.target.value)}
+                        placeholder="At least 8 characters"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={subscriberAuthLoading || !subscriberEmail || subscriberPassword.length < 8}
+                      onClick={() => authenticateSubscriber("login")}
+                    >
+                      Sign in
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={subscriberAuthLoading || !subscriberEmail || subscriberPassword.length < 8}
+                      onClick={() => authenticateSubscriber("signup")}
+                    >
+                      Sign up
+                    </Button>
+                  </div>
+                  {subscriberAuthError ? (
+                    <p className="text-xs text-rose-700">{subscriberAuthError}</p>
+                  ) : null}
+                  {subscriberAuthMessage ? (
+                    <p className="text-xs text-emerald-700">{subscriberAuthMessage}</p>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div className="grid gap-2">
                 <Label htmlFor="phone">Phone number</Label>
                 <Input
@@ -548,7 +654,7 @@ export function Checkout({ tenantSlug, packages }: Props) {
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  Nigeria format (e.g. 080...). Voucher delivery and payment checks use this number.
+                  Nigeria format (e.g. 080...). Used for payment checks and support follow-up.
                 </p>
               </div>
 
@@ -605,7 +711,9 @@ export function Checkout({ tenantSlug, packages }: Props) {
               <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 lg:col-span-2">
                 <Lock className="size-4 text-slate-500" />
                 <MessageSquareText className="size-4 text-slate-500" />
-                Paystack-secured checkout with instant SMS voucher delivery.
+                {isAccountAccessMode
+                  ? "Paystack-secured checkout with instant account plan activation."
+                  : "Paystack-secured checkout with instant SMS voucher delivery."}
               </div>
             </form>
           </CardContent>

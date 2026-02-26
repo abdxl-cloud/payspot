@@ -13,7 +13,9 @@ export async function GET(_request: Request, { params }: Props) {
 
   const packages = (await getPackagesWithAvailability(tenant.id))
     .filter((pkg) =>
-      tenant.voucher_source_mode === "omada_openapi"
+      tenant.portal_auth_mode === "external_radius_portal"
+        ? pkg.price_ngn > 0
+        : tenant.voucher_source_mode === "omada_openapi"
         ? pkg.price_ngn > 0
         : pkg.price_ngn > 0 && pkg.total_count > 0,
     )
@@ -22,12 +24,20 @@ export async function GET(_request: Request, { params }: Props) {
       name: pkg.name,
       durationMinutes: pkg.duration_minutes,
       priceNgn: pkg.price_ngn,
+      maxDevices: pkg.max_devices,
+      bandwidthProfile: pkg.bandwidth_profile,
+      dataLimitMb: pkg.data_limit_mb,
       description: pkg.description,
       availableCount:
-        tenant.voucher_source_mode === "omada_openapi"
+        tenant.portal_auth_mode === "external_radius_portal"
+          ? 999999
+          : tenant.voucher_source_mode === "omada_openapi"
           ? Math.max(1, pkg.available_count)
           : pkg.available_count,
     }));
 
-  return Response.json({ packages });
+  return Response.json({
+    packages,
+    portalAuthMode: tenant.portal_auth_mode,
+  });
 }

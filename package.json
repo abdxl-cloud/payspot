@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "import:vouchers": "node scripts/import-vouchers.mjs"
+    "import:vouchers": "node scripts/import-vouchers.mjs",
+    "migrate:account-access": "node scripts/migrate-account-access.mjs",
+    "test:integration": "node scripts/integration-smoke.mjs"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",

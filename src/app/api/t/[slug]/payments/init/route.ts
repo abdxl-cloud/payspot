@@ -5,6 +5,7 @@ import {
   createTransaction,
   getAvailableCount,
   getPackageByCode,
+  getPortalSubscriberSession,
   getTenantBySlug,
   markTransactionFailed,
   requireTenantPaystackSecretKey,
@@ -19,6 +20,7 @@ type Props = {
 const schema = z.object({
   phone: z.string().min(7),
   packageCode: z.string().min(1),
+  subscriberToken: z.string().min(10).optional(),
 });
 
 function buildCheckoutEmailFromPhone(phone: string) {
@@ -57,8 +59,34 @@ export async function POST(request: Request, { params }: Props) {
     );
   }
 
-  const { phone, packageCode } = parsed.data;
-  const email = buildCheckoutEmailFromPhone(phone);
+  const { phone, packageCode, subscriberToken } = parsed.data;
+  const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
+  const bearer = request.headers.get("authorization");
+  const headerToken =
+    bearer && bearer.toLowerCase().startsWith("bearer ")
+      ? bearer.slice(7).trim()
+      : null;
+  const effectiveSubscriberToken = subscriberToken ?? headerToken ?? undefined;
+
+  let subscriberId: string | null = null;
+  let email = buildCheckoutEmailFromPhone(phone);
+  let normalizedPhone = phone;
+  if (accountAccessMode) {
+    if (!effectiveSubscriberToken) {
+      return Response.json(
+        { error: "Subscriber authentication is required for account access mode." },
+        { status: 401 },
+      );
+    }
+    const session = await getPortalSubscriberSession(effectiveSubscriberToken);
+    if (!session || session.tenant_id !== tenant.id) {
+      return Response.json({ error: "Invalid subscriber session" }, { status: 401 });
+    }
+    subscriberId = session.subscriber_id;
+    email = session.email;
+    normalizedPhone = session.phone || phone;
+  }
+
   const pkg = await getPackageByCode(tenant.id, packageCode);
   if (!pkg) {
     return Response.json({ error: "Package not found" }, { status: 404 });
@@ -66,7 +94,7 @@ export async function POST(request: Request, { params }: Props) {
 
   const available = await getAvailableCount(tenant.id, pkg.id);
   const isOmadaOpenApiMode = tenant.voucher_source_mode === "omada_openapi";
-  if (!isOmadaOpenApiMode && available <= 0) {
+  if (!accountAccessMode && !isOmadaOpenApiMode && available <= 0) {
     return Response.json(
       { error: "No vouchers available for this package" },
       { status: 409 },
@@ -81,9 +109,11 @@ export async function POST(request: Request, { params }: Props) {
       tenantId: tenant.id,
       reference,
       email,
-      phone,
+      phone: normalizedPhone,
       amountNgn: pkg.price_ngn,
       packageId: pkg.id,
+      subscriberId,
+      deliveryMode: accountAccessMode ? "account_access" : "voucher",
       authorizationUrl: null,
       expiresAt,
     });
@@ -98,7 +128,9 @@ export async function POST(request: Request, { params }: Props) {
       metadata: {
         tenant: tenant.slug,
         packageCode: pkg.code,
-        phone,
+        phone: normalizedPhone,
+        subscriberId: subscriberId ?? undefined,
+        deliveryMode: accountAccessMode ? "account_access" : "voucher",
       },
     });
     await updateTransactionAuthUrl({

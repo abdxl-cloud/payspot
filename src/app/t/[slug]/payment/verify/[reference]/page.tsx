@@ -66,31 +66,56 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
   const updated = await getTransaction(tenant.id, reference);
   const pkg = updated ? await getPackageById(tenant.id, updated.package_id) : null;
 
-  if (updated?.payment_status === "success" && updated.voucher_code) {
+  if (updated?.payment_status === "success") {
+    const isAccountAccess = updated.delivery_mode === "account_access";
     return (
       <div className="app-shell">
         <div className="app-container max-w-3xl py-12 sm:py-20">
           <div className="status-card">
             <p className="section-kicker">Payment confirmed</p>
-            <h1 className="mt-2 status-title">Your voucher is ready</h1>
+            <h1 className="mt-2 status-title">
+              {isAccountAccess ? "Your internet plan is active" : "Your voucher is ready"}
+            </h1>
             <p className="mt-2 break-all text-slate-600">
               {pkg?.name ?? "WiFi Access"} | Reference: {reference}
             </p>
 
-            <div className="mt-6 rounded-2xl border border-slate-300/90 bg-slate-50/85 px-5 py-7 text-center sm:px-6 sm:py-8">
-              <p className="text-sm text-slate-500">Voucher code</p>
-              <p className="mt-2 break-all text-2xl font-semibold tracking-[0.14em] text-slate-950 sm:text-3xl sm:tracking-[0.2em]">
-                {updated.voucher_code}
-              </p>
-            </div>
+            {isAccountAccess ? (
+              <div className="mt-6 rounded-2xl border border-emerald-300/80 bg-emerald-50/80 px-5 py-7 text-center sm:px-6 sm:py-8">
+                <p className="text-sm text-emerald-700">
+                  Sign in to the captive portal with your account credentials to start browsing.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-2xl border border-slate-300/90 bg-slate-50/85 px-5 py-7 text-center sm:px-6 sm:py-8">
+                <p className="text-sm text-slate-500">Voucher code</p>
+                <p className="mt-2 break-all text-2xl font-semibold tracking-[0.14em] text-slate-950 sm:text-3xl sm:tracking-[0.2em]">
+                  {updated.voucher_code}
+                </p>
+              </div>
+            )}
 
             <div className="mt-6 space-y-2 text-sm text-slate-700">
-              <p>1. Connect to the Wi-Fi network.</p>
-              <p>2. Open the login page in your browser.</p>
-              <p>3. Enter this voucher code to begin browsing.</p>
+              {isAccountAccess ? (
+                <>
+                  <p>1. Connect to the Wi-Fi network.</p>
+                  <p>2. Open the login page in your browser.</p>
+                  <p>3. Sign in with your subscriber account to start browsing.</p>
+                </>
+              ) : (
+                <>
+                  <p>1. Connect to the Wi-Fi network.</p>
+                  <p>2. Open the login page in your browser.</p>
+                  <p>3. Enter this voucher code to begin browsing.</p>
+                </>
+              )}
             </div>
 
-            <p className="mt-6 text-xs text-slate-500">This voucher was also delivered to your phone by SMS.</p>
+            {!isAccountAccess ? (
+              <p className="mt-6 text-xs text-slate-500">
+                This voucher was also delivered to your phone by SMS.
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -107,6 +132,8 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
         "We received a payment in an unsupported currency.",
       init_failed: "We could not start this payment. Please try again.",
       voucher_unavailable: "Payment succeeded but no voucher was available. Contact support.",
+      access_activation_failed:
+        "Payment succeeded but account access could not be activated. Contact support.",
     };
 
     const message =

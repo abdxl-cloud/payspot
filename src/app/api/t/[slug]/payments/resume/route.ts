@@ -49,10 +49,11 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Transaction not found" }, { status: 404 });
   }
 
-  if (transaction.payment_status === "success" && transaction.voucher_code) {
+  if (transaction.payment_status === "success") {
     return Response.json({
       status: "success",
       reference,
+      mode: transaction.delivery_mode,
     });
   }
 
@@ -84,10 +85,11 @@ export async function POST(request: Request, { params }: Props) {
 
   const refreshed = await getTransaction(tenant.id, reference) ?? transaction;
 
-  if (refreshed.payment_status === "success" && refreshed.voucher_code) {
+  if (refreshed.payment_status === "success") {
     return Response.json({
       status: "success",
       reference,
+      mode: refreshed.delivery_mode,
     });
   }
 
@@ -99,6 +101,8 @@ export async function POST(request: Request, { params }: Props) {
       init_failed: "Payment could not be initialized. Please try again.",
       voucher_unavailable:
         "Payment succeeded but no voucher was available. Please contact support.",
+      access_activation_failed:
+        "Payment succeeded but access activation failed. Please contact support.",
     };
 
     const message =

@@ -37,10 +37,11 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Transaction not found" }, { status: 404 });
   }
 
-  if (transaction.payment_status === "success" && transaction.voucher_code) {
+  if (transaction.payment_status === "success") {
     return Response.json({
       status: "success",
       reference,
+      mode: transaction.delivery_mode,
     });
   }
 

@@ -37,6 +37,11 @@ const schema = z.object({
       hotspotOperatorPassword: z.string().max(500).optional(),
     })
     .optional(),
+  radius: z
+    .object({
+      adapterSecret: z.string().max(500).optional(),
+    })
+    .optional(),
 });
 
 export async function GET(request: Request, { params }: Props) {
@@ -90,6 +95,14 @@ export async function PATCH(request: Request, { params }: Props) {
             : undefined,
       }
     : undefined;
+  const radiusPatch = parsed.data.radius
+    ? {
+        adapterSecret:
+          parsed.data.radius.adapterSecret !== undefined
+            ? parsed.data.radius.adapterSecret.trim()
+            : undefined,
+      }
+    : undefined;
 
   try {
     const result = await setTenantArchitecture({
@@ -97,6 +110,7 @@ export async function PATCH(request: Request, { params }: Props) {
       voucherSourceMode: parsed.data.voucherSourceMode as VoucherSourceMode | undefined,
       portalAuthMode: parsed.data.portalAuthMode as PortalAuthMode | undefined,
       omada: omadaPatch,
+      radius: radiusPatch,
     });
 
     if (result.status === "missing") {

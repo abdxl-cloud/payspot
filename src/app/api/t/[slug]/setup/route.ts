@@ -43,6 +43,11 @@ const schema = z.object({
           hotspotOperatorPassword: z.string().max(500).optional(),
         })
         .optional(),
+      radius: z
+        .object({
+          adapterSecret: z.string().max(500).optional(),
+        })
+        .optional(),
     })
     .optional(),
 });
@@ -181,6 +186,11 @@ export async function POST(request: Request, { params }: Props) {
                 parsed.data.architecture.omada.hotspotOperatorUsername?.trim() || undefined,
               hotspotOperatorPassword:
                 parsed.data.architecture.omada.hotspotOperatorPassword?.trim() || undefined,
+            }
+          : undefined,
+        radius: parsed.data.architecture.radius
+          ? {
+              adapterSecret: parsed.data.architecture.radius.adapterSecret?.trim() || undefined,
             }
           : undefined,
       });

@@ -1,6 +1,8 @@
 import { getAppEnv, getEnv } from "@/lib/env";
 import {
+  activateSubscriberAccessForTransaction,
   getPackageById,
+  getTenantById,
   getTransaction,
   markTransactionFailed,
   transactionAssignVoucher,
@@ -12,15 +14,39 @@ export async function handleSuccessfulPayment(params: {
   tenantId: string;
   reference: string;
 }) {
+  const tenant = await getTenantById(params.tenantId);
   const transaction = await getTransaction(params.tenantId, params.reference);
   if (!transaction) {
     return { status: "missing" as const };
+  }
+  if (transaction.payment_status === "success" && transaction.delivery_mode === "account_access") {
+    return { status: "already_access" as const };
   }
   if (transaction.payment_status === "success" && transaction.voucher_code) {
     return {
       status: "already" as const,
       voucherCode: transaction.voucher_code,
     };
+  }
+
+  const shouldActivateAccess =
+    transaction.delivery_mode === "account_access" ||
+    tenant?.portal_auth_mode === "external_radius_portal";
+  if (shouldActivateAccess) {
+    const activation = await activateSubscriberAccessForTransaction({
+      tenantId: params.tenantId,
+      reference: params.reference,
+    });
+    if (activation.status === "activated" || activation.status === "already") {
+      return { status: "access_activated" as const };
+    }
+
+    await markTransactionFailed({
+      tenantId: params.tenantId,
+      reference: params.reference,
+      status: "access_activation_failed",
+    });
+    return { status: "access_failed" as const };
   }
 
   const result = await transactionAssignVoucher({

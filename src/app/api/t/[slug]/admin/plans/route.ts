@@ -34,6 +34,9 @@ export async function GET(request: Request, { params }: Props) {
         p.name,
         p.duration_minutes as "durationMinutes",
         p.price_ngn as "priceNgn",
+        p.max_devices as "maxDevices",
+        p.bandwidth_profile as "bandwidthProfile",
+        p.data_limit_mb as "dataLimitMb",
         p.active,
         p.description,
         p.created_at as "createdAt",
@@ -67,6 +70,9 @@ export async function POST(request: Request, { params }: Props) {
     name?: string;
     durationMinutes?: number;
     priceNgn?: number;
+    maxDevices?: number;
+    bandwidthProfile?: string | null;
+    dataLimitMb?: number | null;
     active?: boolean;
     description?: string;
   };
@@ -75,6 +81,9 @@ export async function POST(request: Request, { params }: Props) {
   const name = body.name?.trim();
   const durationMinutes = body.durationMinutes;
   const priceNgn = body.priceNgn;
+  const maxDevices = typeof body.maxDevices === "number" ? body.maxDevices : 1;
+  const bandwidthProfile = body.bandwidthProfile?.trim() || null;
+  const dataLimitMb = body.dataLimitMb ?? null;
   const description = body.description?.trim() || null;
 
   if (!code || code.length < 2) {
@@ -89,6 +98,17 @@ export async function POST(request: Request, { params }: Props) {
   if (typeof priceNgn !== "number" || !Number.isFinite(priceNgn) || priceNgn < 0) {
     return Response.json({ error: "Invalid priceNgn" }, { status: 400 });
   }
+  if (
+    typeof maxDevices !== "number" ||
+    !Number.isFinite(maxDevices) ||
+    maxDevices < 1 ||
+    maxDevices > 32
+  ) {
+    return Response.json({ error: "Invalid maxDevices" }, { status: 400 });
+  }
+  if (dataLimitMb !== null && (!Number.isFinite(dataLimitMb) || dataLimitMb <= 0)) {
+    return Response.json({ error: "Invalid dataLimitMb" }, { status: 400 });
+  }
 
   const db = getDb();
   const now = new Date().toISOString();
@@ -96,8 +116,10 @@ export async function POST(request: Request, { params }: Props) {
     await db.prepare(
       `
       INSERT INTO voucher_packages (
-        id, tenant_id, code, name, duration_minutes, price_ngn, active, description, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, tenant_id, code, name, duration_minutes, price_ngn,
+        max_devices, bandwidth_profile, data_limit_mb,
+        active, description, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     ).run(
       randomUUID(),
@@ -106,6 +128,9 @@ export async function POST(request: Request, { params }: Props) {
       name,
       Math.round(durationMinutes),
       Math.round(priceNgn),
+      Math.round(maxDevices),
+      bandwidthProfile,
+      dataLimitMb === null ? null : Math.round(dataLimitMb),
       body.active === false ? 0 : 1,
       description,
       now,
@@ -132,6 +157,9 @@ export async function PATCH(request: Request, { params }: Props) {
     name?: string;
     durationMinutes?: number;
     priceNgn?: number;
+    maxDevices?: number;
+    bandwidthProfile?: string | null;
+    dataLimitMb?: number | null;
     active?: boolean;
     description?: string;
   };
@@ -177,6 +205,27 @@ export async function PATCH(request: Request, { params }: Props) {
     }
     fields.push("price_ngn = ?");
     args.push(Math.round(body.priceNgn));
+  }
+  if (typeof body.maxDevices === "number") {
+    if (!Number.isFinite(body.maxDevices) || body.maxDevices < 1 || body.maxDevices > 32) {
+      return Response.json({ error: "Invalid maxDevices" }, { status: 400 });
+    }
+    fields.push("max_devices = ?");
+    args.push(Math.round(body.maxDevices));
+  }
+  if (body.bandwidthProfile !== undefined) {
+    if (body.bandwidthProfile !== null && typeof body.bandwidthProfile !== "string") {
+      return Response.json({ error: "Invalid bandwidthProfile" }, { status: 400 });
+    }
+    fields.push("bandwidth_profile = ?");
+    args.push(body.bandwidthProfile?.trim() || null);
+  }
+  if (body.dataLimitMb !== undefined) {
+    if (body.dataLimitMb !== null && (!Number.isFinite(body.dataLimitMb) || body.dataLimitMb <= 0)) {
+      return Response.json({ error: "Invalid dataLimitMb" }, { status: 400 });
+    }
+    fields.push("data_limit_mb = ?");
+    args.push(body.dataLimitMb === null ? null : Math.round(body.dataLimitMb));
   }
   if (typeof body.active === "boolean") {
     fields.push("active = ?");

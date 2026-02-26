@@ -120,6 +120,8 @@ async function initSchema() {
       omada_client_secret_enc TEXT,
       omada_hotspot_operator_username TEXT,
       omada_hotspot_operator_password_enc TEXT,
+      radius_adapter_secret_enc TEXT,
+      radius_adapter_secret_last4 TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -195,6 +197,9 @@ async function initSchema() {
       name TEXT NOT NULL,
       duration_minutes INTEGER NOT NULL,
       price_ngn INTEGER NOT NULL,
+      max_devices INTEGER NOT NULL DEFAULT 1,
+      bandwidth_profile TEXT,
+      data_limit_mb INTEGER,
       active INTEGER NOT NULL DEFAULT 1,
       description TEXT,
       created_at TEXT NOT NULL,
@@ -226,11 +231,69 @@ async function initSchema() {
       amount_ngn INTEGER NOT NULL,
       voucher_code TEXT,
       package_id TEXT NOT NULL REFERENCES voucher_packages(id),
+      subscriber_id TEXT,
+      delivery_mode TEXT NOT NULL DEFAULT 'voucher',
       authorization_url TEXT,
       payment_status TEXT NOT NULL,
       created_at TEXT NOT NULL,
       expires_at TEXT,
       paid_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS portal_subscribers (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      email TEXT NOT NULL,
+      phone TEXT,
+      full_name TEXT,
+      password_hash TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (tenant_id, email)
+    );
+
+    CREATE TABLE IF NOT EXISTS portal_subscriber_sessions (
+      id TEXT PRIMARY KEY,
+      subscriber_id TEXT NOT NULL REFERENCES portal_subscribers(id),
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      revoked_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS subscriber_entitlements (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      subscriber_id TEXT NOT NULL REFERENCES portal_subscribers(id),
+      package_id TEXT NOT NULL REFERENCES voucher_packages(id),
+      transaction_reference TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'active',
+      starts_at TEXT NOT NULL,
+      ends_at TEXT NOT NULL,
+      max_devices INTEGER NOT NULL DEFAULT 1,
+      bandwidth_profile TEXT,
+      data_limit_mb INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS radius_accounting_sessions (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      subscriber_id TEXT NOT NULL REFERENCES portal_subscribers(id),
+      entitlement_id TEXT NOT NULL REFERENCES subscriber_entitlements(id),
+      session_id TEXT NOT NULL,
+      calling_station_id TEXT,
+      called_station_id TEXT,
+      nas_ip_address TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      input_octets BIGINT NOT NULL DEFAULT 0,
+      output_octets BIGINT NOT NULL DEFAULT 0,
+      started_at TEXT NOT NULL,
+      last_update_at TEXT NOT NULL,
+      stopped_at TEXT,
+      UNIQUE (tenant_id, session_id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_voucher_packages_tenant_active
@@ -243,6 +306,20 @@ async function initSchema() {
       ON transactions(tenant_id, payment_status);
     CREATE INDEX IF NOT EXISTS idx_transactions_tenant_reference
       ON transactions(tenant_id, reference);
+    CREATE INDEX IF NOT EXISTS idx_portal_subscribers_tenant_email
+      ON portal_subscribers(tenant_id, email);
+    CREATE INDEX IF NOT EXISTS idx_portal_subscriber_sessions_subscriber
+      ON portal_subscriber_sessions(subscriber_id);
+    CREATE INDEX IF NOT EXISTS idx_portal_subscriber_sessions_expires
+      ON portal_subscriber_sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_subscriber_entitlements_subscriber_status
+      ON subscriber_entitlements(subscriber_id, status);
+    CREATE INDEX IF NOT EXISTS idx_subscriber_entitlements_tenant_status
+      ON subscriber_entitlements(tenant_id, status);
+    CREATE INDEX IF NOT EXISTS idx_radius_accounting_tenant_subscriber_status
+      ON radius_accounting_sessions(tenant_id, subscriber_id, status);
+    CREATE INDEX IF NOT EXISTS idx_radius_accounting_tenant_entitlement
+      ON radius_accounting_sessions(tenant_id, entitlement_id);
   `);
 
   await p.query(`
@@ -264,6 +341,20 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS omada_hotspot_operator_username TEXT;
     ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS omada_hotspot_operator_password_enc TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS radius_adapter_secret_enc TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS radius_adapter_secret_last4 TEXT;
+    ALTER TABLE voucher_packages
+      ADD COLUMN IF NOT EXISTS max_devices INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE voucher_packages
+      ADD COLUMN IF NOT EXISTS bandwidth_profile TEXT;
+    ALTER TABLE voucher_packages
+      ADD COLUMN IF NOT EXISTS data_limit_mb INTEGER;
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS subscriber_id TEXT;
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS delivery_mode TEXT NOT NULL DEFAULT 'voucher';
   `);
 }
 

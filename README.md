@@ -68,6 +68,35 @@ Tenant admins can set architecture options in `/t/<slug>/admin`:
   - `external_portal_api`
   - `external_radius_portal`
 
+### Account-based External Portal (In Progress)
+For `external_radius_portal`, PaySpot now supports an account-style flow foundation:
+- Tenant-scoped subscriber signup/login APIs:
+  - `POST /api/t/<slug>/portal/signup`
+  - `POST /api/t/<slug>/portal/login`
+  - `GET /api/t/<slug>/portal/me` (Bearer token)
+- Payment init can run in `account_access` mode (no voucher assignment)
+- Successful payments create subscriber entitlements with:
+  - `starts_at`, `ends_at`
+  - `max_devices`
+  - optional `bandwidth_profile`
+  - optional `data_limit_mb`
+- Plan policy fields (`max_devices`, `bandwidth_profile`, `data_limit_mb`) are managed via tenant plan APIs.
+
+RADIUS adapter endpoints (tenant-scoped):
+- `POST /api/t/<slug>/radius/authorize`
+- `POST /api/t/<slug>/radius/accounting`
+
+Each endpoint requires `x-radius-adapter-secret` that you set in architecture config for `external_radius_portal`.
+
+Subscriber monitoring:
+- `GET /api/t/<slug>/admin/subscribers`
+
+Migration/backfill + smoke checks:
+```bash
+npm run migrate:account-access
+npm run test:integration
+```
+
 When `omada_openapi` is enabled, voucher generation in admin uses Omada OpenAPI:
 - `POST /openapi/authorize/token?grant_type=client_credentials`
 - `POST /openapi/v1/{omadacId}/sites/{siteId}/hotspot/voucher-groups`

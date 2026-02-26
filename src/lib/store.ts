@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { provisionOmadaVouchers } from "@/lib/omada";
 import { isPaystackSecretKey } from "@/lib/paystack-key";
-import { hashPassword } from "@/lib/password";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import { decryptSecret, encryptSecret } from "@/lib/secrets";
 import { generateToken, hashToken } from "@/lib/tokens";
 
@@ -24,6 +24,8 @@ export type TenantRow = {
   omada_client_secret_enc: string | null;
   omada_hotspot_operator_username: string | null;
   omada_hotspot_operator_password_enc: string | null;
+  radius_adapter_secret_enc: string | null;
+  radius_adapter_secret_last4: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -45,6 +47,10 @@ export type TenantArchitecture = {
     hasClientSecret: boolean;
     hotspotOperatorUsername: string;
     hasHotspotOperatorPassword: boolean;
+  };
+  radius: {
+    hasAdapterSecret: boolean;
+    adapterSecretLast4: string;
   };
 };
 
@@ -140,6 +146,9 @@ export type PackageRow = {
   name: string;
   duration_minutes: number;
   price_ngn: number;
+  max_devices: number;
+  bandwidth_profile: string | null;
+  data_limit_mb: number | null;
   active: number;
   description: string | null;
 };
@@ -153,11 +162,50 @@ export type TransactionRow = {
   amount_ngn: number;
   voucher_code: string | null;
   package_id: string;
+  subscriber_id: string | null;
+  delivery_mode: "voucher" | "account_access";
   authorization_url: string | null;
   payment_status: string;
   created_at: string;
   expires_at: string | null;
   paid_at: string | null;
+};
+
+export type PortalSubscriberRow = {
+  id: string;
+  tenant_id: string;
+  email: string;
+  phone: string | null;
+  full_name: string | null;
+  password_hash: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PortalSubscriberSessionRow = {
+  id: string;
+  subscriber_id: string;
+  token_hash: string;
+  expires_at: string;
+  created_at: string;
+  revoked_at: string | null;
+};
+
+export type SubscriberEntitlementRow = {
+  id: string;
+  tenant_id: string;
+  subscriber_id: string;
+  package_id: string;
+  transaction_reference: string;
+  status: string;
+  starts_at: string;
+  ends_at: string;
+  max_devices: number;
+  bandwidth_profile: string | null;
+  data_limit_mb: number | null;
+  created_at: string;
+  updated_at: string;
 };
 
 function nowIso() {
@@ -187,6 +235,10 @@ function normalizePortalAuthMode(value: string | null | undefined): PortalAuthMo
 
 function normalizePhoneForLookup(phone: string) {
   return phone.replace(/\D/g, "");
+}
+
+function parseIsoTime(value: string) {
+  return new Date(value).getTime();
 }
 
 export async function getUserByUsername(username: string) {
@@ -449,6 +501,329 @@ export async function getSessionUser(sessionToken: string) {
   } satisfies SessionUser;
 }
 
+export async function getPortalSubscriberById(subscriberId: string) {
+  const db = getDb();
+  return await db
+    .prepare("SELECT * FROM portal_subscribers WHERE id = ?")
+    .get(subscriberId) as PortalSubscriberRow | undefined;
+}
+
+export async function getPortalSubscriberByEmail(tenantId: string, email: string) {
+  const db = getDb();
+  return await db
+    .prepare("SELECT * FROM portal_subscribers WHERE tenant_id = ? AND email = ?")
+    .get(tenantId, normalizeEmail(email)) as PortalSubscriberRow | undefined;
+}
+
+export async function createPortalSubscriber(params: {
+  tenantId: string;
+  email: string;
+  password: string;
+  phone?: string | null;
+  fullName?: string | null;
+}) {
+  const db = getDb();
+  const now = nowIso();
+  const email = normalizeEmail(params.email);
+  const existing = await getPortalSubscriberByEmail(params.tenantId, email);
+  if (existing) return { status: "exists" as const, subscriber: existing };
+
+  const id = randomUUID();
+  await db.prepare(
+    `
+      INSERT INTO portal_subscribers (
+        id, tenant_id, email, phone, full_name, password_hash, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
+    `,
+  ).run(
+    id,
+    params.tenantId,
+    email,
+    params.phone?.trim() || null,
+    params.fullName?.trim() || null,
+    hashPassword(params.password),
+    now,
+    now,
+  );
+
+  return { status: "created" as const, subscriber: (await getPortalSubscriberById(id))! };
+}
+
+export async function authenticatePortalSubscriber(params: {
+  tenantId: string;
+  email: string;
+  password: string;
+}) {
+  const subscriber = await getPortalSubscriberByEmail(params.tenantId, params.email);
+  if (!subscriber) return null;
+  if (subscriber.status !== "active") return null;
+  if (!verifyPassword(params.password, subscriber.password_hash)) return null;
+  return subscriber;
+}
+
+export async function createPortalSubscriberSession(params: {
+  subscriberId: string;
+  ttlDays?: number;
+}) {
+  const db = getDb();
+  const now = new Date();
+  const ttlDays = params.ttlDays ?? 30;
+  const expires = new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000);
+  const token = `ps_${generateToken(32)}`;
+  await db.prepare(
+    `
+      INSERT INTO portal_subscriber_sessions (
+        id, subscriber_id, token_hash, expires_at, created_at
+      ) VALUES (?, ?, ?, ?, ?)
+    `,
+  ).run(randomUUID(), params.subscriberId, hashToken(token), expires.toISOString(), now.toISOString());
+  return token;
+}
+
+export async function getPortalSubscriberSession(token: string) {
+  const db = getDb();
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        s.id as id,
+        s.subscriber_id as subscriber_id,
+        s.expires_at as expires_at,
+        s.revoked_at as revoked_at,
+        p.tenant_id as tenant_id,
+        p.email as email,
+        p.phone as phone,
+        p.full_name as full_name,
+        p.status as status
+      FROM portal_subscriber_sessions s
+      JOIN portal_subscribers p ON p.id = s.subscriber_id
+      WHERE s.token_hash = ?
+    `,
+    )
+    .get(hashToken(token)) as
+    | (PortalSubscriberSessionRow & {
+        tenant_id: string;
+        email: string;
+        phone: string | null;
+        full_name: string | null;
+        status: string;
+      })
+    | undefined;
+  if (!row) return null;
+  if (row.revoked_at) return null;
+  if (row.status !== "active") return null;
+  if (parseIsoTime(row.expires_at) < Date.now()) {
+    await db
+      .prepare("UPDATE portal_subscriber_sessions SET revoked_at = ? WHERE id = ?")
+      .run(nowIso(), row.id);
+    return null;
+  }
+  return row;
+}
+
+export async function listActiveEntitlementsForSubscriber(params: {
+  tenantId: string;
+  subscriberId: string;
+}) {
+  const db = getDb();
+  return await db
+    .prepare(
+      `
+      SELECT
+        e.*,
+        p.code as package_code,
+        p.name as package_name,
+        p.duration_minutes as package_duration_minutes,
+        p.price_ngn as package_price_ngn
+      FROM subscriber_entitlements e
+      JOIN voucher_packages p ON p.id = e.package_id
+      WHERE e.tenant_id = ?
+        AND e.subscriber_id = ?
+        AND e.status = 'active'
+        AND e.ends_at > ?
+      ORDER BY e.ends_at DESC
+    `,
+    )
+    .all(params.tenantId, params.subscriberId, nowIso()) as Array<
+    SubscriberEntitlementRow & {
+      package_code: string;
+      package_name: string;
+      package_duration_minutes: number;
+      package_price_ngn: number;
+    }
+  >;
+}
+
+export async function resolveTenantRadiusAdapterSecret(tenantId: string) {
+  const tenant = await getTenantById(tenantId);
+  if (!tenant?.radius_adapter_secret_enc) return null;
+  return decryptSecret(tenant.radius_adapter_secret_enc);
+}
+
+export async function verifyTenantRadiusAdapterSecret(params: {
+  tenantId: string;
+  adapterSecret: string;
+}) {
+  const secret = await resolveTenantRadiusAdapterSecret(params.tenantId);
+  if (!secret) return false;
+  return secret === params.adapterSecret;
+}
+
+export async function authorizeSubscriberRadiusAccess(params: {
+  tenantId: string;
+  username: string;
+  password: string;
+}) {
+  const subscriber = await authenticatePortalSubscriber({
+    tenantId: params.tenantId,
+    email: params.username,
+    password: params.password,
+  });
+  if (!subscriber) return { status: "invalid_credentials" as const };
+
+  const db = getDb();
+  const now = nowIso();
+  const entitlement = await db
+    .prepare(
+      `
+      SELECT *
+      FROM subscriber_entitlements
+      WHERE tenant_id = ?
+        AND subscriber_id = ?
+        AND status = 'active'
+        AND starts_at <= ?
+        AND ends_at > ?
+      ORDER BY ends_at DESC
+      LIMIT 1
+    `,
+    )
+    .get(params.tenantId, subscriber.id, now, now) as SubscriberEntitlementRow | undefined;
+
+  if (!entitlement) return { status: "no_active_plan" as const };
+
+  const activeSessionCountRow = await db
+    .prepare(
+      `
+      SELECT COUNT(1) as count
+      FROM radius_accounting_sessions
+      WHERE tenant_id = ? AND subscriber_id = ? AND status = 'active'
+    `,
+    )
+    .get(params.tenantId, subscriber.id) as { count: number } | undefined;
+  const activeSessionCount = Number(activeSessionCountRow?.count ?? 0);
+
+  if (activeSessionCount >= Math.max(1, entitlement.max_devices)) {
+    return { status: "session_limit_reached" as const };
+  }
+
+  if (entitlement.data_limit_mb && entitlement.data_limit_mb > 0) {
+    const usageRow = await db
+      .prepare(
+        `
+        SELECT COALESCE(SUM(input_octets + output_octets), 0) as total_bytes
+        FROM radius_accounting_sessions
+        WHERE tenant_id = ? AND entitlement_id = ?
+      `,
+      )
+      .get(params.tenantId, entitlement.id) as { total_bytes: number } | undefined;
+    const usedBytes = Number(usageRow?.total_bytes ?? 0);
+    const allowedBytes = entitlement.data_limit_mb * 1024 * 1024;
+    if (usedBytes >= allowedBytes) {
+      return { status: "data_limit_reached" as const };
+    }
+  }
+
+  return {
+    status: "ok" as const,
+    subscriber,
+    entitlement,
+    activeSessionCount,
+  };
+}
+
+export async function recordRadiusAccountingEvent(params: {
+  tenantId: string;
+  subscriberId: string;
+  entitlementId: string;
+  sessionId: string;
+  event: "start" | "interim" | "stop";
+  inputOctets?: number;
+  outputOctets?: number;
+  callingStationId?: string | null;
+  calledStationId?: string | null;
+  nasIpAddress?: string | null;
+}) {
+  const db = getDb();
+  const now = nowIso();
+  const run = db.transaction(async () => {
+    const existing = await db
+      .prepare(
+        `
+        SELECT *
+        FROM radius_accounting_sessions
+        WHERE tenant_id = ? AND session_id = ?
+      `,
+      )
+      .get(params.tenantId, params.sessionId) as
+      | {
+          id: string;
+          input_octets: number;
+          output_octets: number;
+        }
+      | undefined;
+
+    if (!existing) {
+      const initialStatus = params.event === "stop" ? "stopped" : "active";
+      await db.prepare(
+        `
+        INSERT INTO radius_accounting_sessions (
+          id, tenant_id, subscriber_id, entitlement_id, session_id,
+          calling_station_id, called_station_id, nas_ip_address, status,
+          input_octets, output_octets, started_at, last_update_at, stopped_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      ).run(
+        randomUUID(),
+        params.tenantId,
+        params.subscriberId,
+        params.entitlementId,
+        params.sessionId,
+        params.callingStationId ?? null,
+        params.calledStationId ?? null,
+        params.nasIpAddress ?? null,
+        initialStatus,
+        Math.max(0, Math.floor(params.inputOctets ?? 0)),
+        Math.max(0, Math.floor(params.outputOctets ?? 0)),
+        now,
+        now,
+        params.event === "stop" ? now : null,
+      );
+      return;
+    }
+
+    await db.prepare(
+      `
+      UPDATE radius_accounting_sessions
+      SET input_octets = ?,
+          output_octets = ?,
+          status = ?,
+          last_update_at = ?,
+          stopped_at = ?
+      WHERE id = ?
+    `,
+    ).run(
+      Math.max(0, Math.floor(params.inputOctets ?? existing.input_octets ?? 0)),
+      Math.max(0, Math.floor(params.outputOctets ?? existing.output_octets ?? 0)),
+      params.event === "stop" ? "stopped" : "active",
+      now,
+      params.event === "stop" ? now : null,
+      existing.id,
+    );
+  });
+
+  await run();
+}
+
 export async function getTenantBySlug(slug: string) {
   const db = getDb();
   return await db
@@ -607,6 +982,10 @@ export async function deleteTenant(tenantId: string) {
     }
 
     await db.prepare("DELETE FROM users WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM radius_accounting_sessions WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM subscriber_entitlements WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM portal_subscriber_sessions WHERE subscriber_id IN (SELECT id FROM portal_subscribers WHERE tenant_id = ?)").run(tenantId);
+    await db.prepare("DELETE FROM portal_subscribers WHERE tenant_id = ?").run(tenantId);
     await db.prepare("DELETE FROM voucher_pool WHERE tenant_id = ?").run(tenantId);
     await db.prepare("DELETE FROM transactions WHERE tenant_id = ?").run(tenantId);
     await db.prepare("DELETE FROM voucher_packages WHERE tenant_id = ?").run(tenantId);
@@ -864,6 +1243,10 @@ export async function getTenantArchitecture(tenantId: string) {
       hotspotOperatorUsername: tenant.omada_hotspot_operator_username ?? "",
       hasHotspotOperatorPassword: !!tenant.omada_hotspot_operator_password_enc,
     },
+    radius: {
+      hasAdapterSecret: !!tenant.radius_adapter_secret_enc,
+      adapterSecretLast4: tenant.radius_adapter_secret_last4 ?? "",
+    },
   } satisfies TenantArchitecture;
 }
 
@@ -879,6 +1262,9 @@ export async function setTenantArchitecture(params: {
     clientSecret?: string | null;
     hotspotOperatorUsername?: string;
     hotspotOperatorPassword?: string | null;
+  };
+  radius?: {
+    adapterSecret?: string | null;
   };
 }) {
   const tenant = await getTenantById(params.tenantId);
@@ -930,6 +1316,19 @@ export async function setTenantArchitecture(params: {
     }
   }
 
+  let radiusAdapterSecretEnc = tenant.radius_adapter_secret_enc;
+  let radiusAdapterSecretLast4 = tenant.radius_adapter_secret_last4;
+  if (params.radius && "adapterSecret" in params.radius) {
+    const next = params.radius.adapterSecret;
+    if (next == null || next.trim() === "") {
+      radiusAdapterSecretEnc = null;
+      radiusAdapterSecretLast4 = null;
+    } else {
+      radiusAdapterSecretEnc = encryptSecret(next.trim());
+      radiusAdapterSecretLast4 = next.trim().slice(-4);
+    }
+  }
+
   if (voucherSourceMode === "omada_openapi") {
     const missing: Array<"apiBaseUrl" | "omadacId" | "siteId" | "clientId" | "clientSecret"> = [];
     if (!apiBaseUrl) missing.push("apiBaseUrl");
@@ -959,6 +1358,8 @@ export async function setTenantArchitecture(params: {
           omada_client_secret_enc = ?,
           omada_hotspot_operator_username = ?,
           omada_hotspot_operator_password_enc = ?,
+          radius_adapter_secret_enc = ?,
+          radius_adapter_secret_last4 = ?,
           updated_at = ?
       WHERE id = ?
     `,
@@ -973,6 +1374,8 @@ export async function setTenantArchitecture(params: {
       omadaClientSecretEnc,
       hotspotOperatorUsername || null,
       omadaHotspotOperatorPasswordEnc,
+      radiusAdapterSecretEnc,
+      radiusAdapterSecretLast4,
       now,
       params.tenantId,
     );
@@ -1197,6 +1600,8 @@ export async function createTransaction(params: {
   phone: string;
   amountNgn: number;
   packageId: string;
+  subscriberId?: string | null;
+  deliveryMode?: "voucher" | "account_access";
   authorizationUrl: string | null;
   expiresAt: string | null;
 }) {
@@ -1208,8 +1613,8 @@ export async function createTransaction(params: {
     `
       INSERT INTO transactions (
         id, tenant_id, reference, email, phone, amount_ngn, package_id, authorization_url,
-        payment_status, created_at, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        subscriber_id, delivery_mode, payment_status, created_at, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -1220,6 +1625,8 @@ export async function createTransaction(params: {
     params.amountNgn,
     params.packageId,
     params.authorizationUrl,
+    params.subscriberId ?? null,
+    params.deliveryMode ?? "voucher",
     "pending",
     now,
     params.expiresAt,
@@ -1343,6 +1750,118 @@ export async function completeTransaction(params: {
     )
     .run(params.voucherCode, params.paidAt, params.tenantId, params.reference);
   return result.changes;
+}
+
+export async function completeTransactionAsAccess(params: {
+  tenantId: string;
+  reference: string;
+  paidAt: string;
+}) {
+  const db = getDb();
+  const result = await db
+    .prepare(
+      `
+      UPDATE transactions
+      SET payment_status = 'success', voucher_code = NULL, paid_at = ?
+      WHERE tenant_id = ? AND reference = ?
+    `,
+    )
+    .run(params.paidAt, params.tenantId, params.reference);
+  return result.changes;
+}
+
+export async function activateSubscriberAccessForTransaction(params: {
+  tenantId: string;
+  reference: string;
+}) {
+  const db = getDb();
+  const run = db.transaction(async () => {
+    const transaction = await getTransaction(params.tenantId, params.reference);
+    if (!transaction) return { status: "missing" as const };
+    if (!transaction.subscriber_id) return { status: "missing_subscriber" as const };
+
+    const existing = await db
+      .prepare(
+        `
+        SELECT * FROM subscriber_entitlements
+        WHERE tenant_id = ? AND transaction_reference = ?
+      `,
+      )
+      .get(params.tenantId, params.reference) as SubscriberEntitlementRow | undefined;
+
+    if (existing) {
+      await completeTransactionAsAccess({
+        tenantId: params.tenantId,
+        reference: params.reference,
+        paidAt: existing.updated_at,
+      });
+      return { status: "already" as const, entitlement: existing };
+    }
+
+    const pkg = await getPackageById(params.tenantId, transaction.package_id);
+    if (!pkg) return { status: "missing_package" as const };
+
+    const active = await db
+      .prepare(
+        `
+        SELECT *
+        FROM subscriber_entitlements
+        WHERE tenant_id = ?
+          AND subscriber_id = ?
+          AND status = 'active'
+        ORDER BY ends_at DESC
+        LIMIT 1
+      `,
+      )
+      .get(params.tenantId, transaction.subscriber_id) as SubscriberEntitlementRow | undefined;
+
+    const now = new Date();
+    const baseStart = active && parseIsoTime(active.ends_at) > now.getTime()
+      ? new Date(active.ends_at)
+      : now;
+    const endsAt = new Date(baseStart.getTime() + pkg.duration_minutes * 60 * 1000);
+    const nowValue = now.toISOString();
+
+    await db.prepare(
+      `
+      INSERT INTO subscriber_entitlements (
+        id, tenant_id, subscriber_id, package_id, transaction_reference, status,
+        starts_at, ends_at, max_devices, bandwidth_profile, data_limit_mb, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+    `,
+    ).run(
+      randomUUID(),
+      params.tenantId,
+      transaction.subscriber_id,
+      transaction.package_id,
+      transaction.reference,
+      baseStart.toISOString(),
+      endsAt.toISOString(),
+      Math.max(1, pkg.max_devices ?? 1),
+      pkg.bandwidth_profile ?? null,
+      pkg.data_limit_mb ?? null,
+      nowValue,
+      nowValue,
+    );
+
+    await completeTransactionAsAccess({
+      tenantId: params.tenantId,
+      reference: params.reference,
+      paidAt: nowValue,
+    });
+
+    const created = await db
+      .prepare(
+        `
+        SELECT * FROM subscriber_entitlements
+        WHERE tenant_id = ? AND transaction_reference = ?
+      `,
+      )
+      .get(params.tenantId, params.reference) as SubscriberEntitlementRow | undefined;
+    return { status: "activated" as const, entitlement: created ?? null };
+  });
+
+  return run();
 }
 
 export async function assignVoucher(params: {
@@ -1592,4 +2111,83 @@ export async function getTenantAdminStats(tenantId: string) {
       revenueNgn: tx.revenue_ngn ?? 0,
     },
   };
+}
+
+export async function getTenantSubscriberOverview(tenantId: string) {
+  const db = getDb();
+  const rows = await db
+    .prepare(
+      `
+      SELECT
+        s.id as subscriber_id,
+        s.email,
+        s.phone,
+        s.full_name,
+        s.status as subscriber_status,
+        e.id as entitlement_id,
+        e.status as entitlement_status,
+        e.starts_at,
+        e.ends_at,
+        e.max_devices,
+        e.bandwidth_profile,
+        e.data_limit_mb,
+        p.name as plan_name,
+        p.code as plan_code,
+        (
+          SELECT COUNT(1)
+          FROM radius_accounting_sessions ras
+          WHERE ras.tenant_id = s.tenant_id
+            AND ras.subscriber_id = s.id
+            AND ras.status = 'active'
+        ) as active_sessions
+      FROM portal_subscribers s
+      LEFT JOIN subscriber_entitlements e
+        ON e.subscriber_id = s.id
+       AND e.tenant_id = s.tenant_id
+       AND e.status = 'active'
+       AND e.ends_at > ?
+      LEFT JOIN voucher_packages p ON p.id = e.package_id
+      WHERE s.tenant_id = ?
+      ORDER BY s.created_at DESC
+    `,
+    )
+    .all(nowIso(), tenantId) as Array<{
+    subscriber_id: string;
+    email: string;
+    phone: string | null;
+    full_name: string | null;
+    subscriber_status: string;
+    entitlement_id: string | null;
+    entitlement_status: string | null;
+    starts_at: string | null;
+    ends_at: string | null;
+    max_devices: number | null;
+    bandwidth_profile: string | null;
+    data_limit_mb: number | null;
+    plan_name: string | null;
+    plan_code: string | null;
+    active_sessions: number;
+  }>;
+
+  return rows.map((row) => ({
+    subscriberId: row.subscriber_id,
+    email: row.email,
+    phone: row.phone,
+    fullName: row.full_name,
+    status: row.subscriber_status,
+    activeSessions: Number(row.active_sessions ?? 0),
+    entitlement: row.entitlement_id
+      ? {
+          id: row.entitlement_id,
+          status: row.entitlement_status ?? "active",
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          maxDevices: row.max_devices ?? 1,
+          bandwidthProfile: row.bandwidth_profile,
+          dataLimitMb: row.data_limit_mb,
+          planName: row.plan_name,
+          planCode: row.plan_code,
+        }
+      : null,
+  }));
 }

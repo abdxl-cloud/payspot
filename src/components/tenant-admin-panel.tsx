@@ -48,6 +48,9 @@ type PlanRow = {
   name: string;
   durationMinutes: number;
   priceNgn: number;
+  maxDevices: number;
+  bandwidthProfile: string | null;
+  dataLimitMb: number | null;
   active: number;
   totalCount: number;
   unusedCount: number;
@@ -78,6 +81,30 @@ type ArchitectureConfig = {
     hasClientSecret: boolean;
     hotspotOperatorUsername: string;
     hasHotspotOperatorPassword: boolean;
+  };
+  radius: {
+    hasAdapterSecret: boolean;
+    adapterSecretLast4: string;
+  };
+};
+
+type SubscriberOverviewRow = {
+  subscriberId: string;
+  email: string;
+  phone: string | null;
+  fullName: string | null;
+  status: string;
+  activeSessions: number;
+  entitlement: null | {
+    id: string;
+    status: string;
+    startsAt: string | null;
+    endsAt: string | null;
+    maxDevices: number;
+    bandwidthProfile: string | null;
+    dataLimitMb: number | null;
+    planName: string | null;
+    planCode: string | null;
   };
 };
 
@@ -127,6 +154,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [omadaSiteOptions, setOmadaSiteOptions] = useState<OmadaSiteOption[]>([]);
   const [omadaClientSecret, setOmadaClientSecret] = useState("");
   const [omadaHotspotOperatorPassword, setOmadaHotspotOperatorPassword] = useState("");
+  const [radiusAdapterSecret, setRadiusAdapterSecret] = useState("");
 
   const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
   const [vouchersError, setVouchersError] = useState<string | null>(null);
@@ -144,10 +172,22 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [newPlanName, setNewPlanName] = useState("");
   const [newPlanDuration, setNewPlanDuration] = useState("");
   const [newPlanPrice, setNewPlanPrice] = useState("");
+  const [newPlanMaxDevices, setNewPlanMaxDevices] = useState("");
+  const [newPlanBandwidthProfile, setNewPlanBandwidthProfile] = useState("");
+  const [newPlanDataLimitMb, setNewPlanDataLimitMb] = useState("");
   const [creatingPlan, setCreatingPlan] = useState(false);
 
   const [planDrafts, setPlanDrafts] = useState<
-    Record<string, { name: string; code: string; duration: string; price: string; active: boolean }>
+    Record<string, {
+      name: string;
+      code: string;
+      duration: string;
+      price: string;
+      maxDevices: string;
+      bandwidthProfile: string;
+      dataLimitMb: string;
+      active: boolean;
+    }>
   >({});
   const [savingPlanIds, setSavingPlanIds] = useState<Record<string, boolean>>({});
   const [deletingPlanIds, setDeletingPlanIds] = useState<Record<string, boolean>>({});
@@ -171,6 +211,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [showGenerateVoucherModal, setShowGenerateVoucherModal] = useState(false);
   const [showImportVoucherModal, setShowImportVoucherModal] = useState(false);
   const [showQuickActionsModal, setShowQuickActionsModal] = useState(false);
+  const [subscribers, setSubscribers] = useState<SubscriberOverviewRow[]>([]);
+  const [subscribersLoading, setSubscribersLoading] = useState(false);
+  const [subscribersError, setSubscribersError] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     setStatsError(null);
@@ -222,6 +265,22 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     }
   }, [tenantSlug]);
 
+  const loadSubscribers = useCallback(async () => {
+    setSubscribersError(null);
+    setSubscribersLoading(true);
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/subscribers`);
+      const data = await readJsonResponse<{ error?: string; subscribers?: SubscriberOverviewRow[] }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to load subscribers.");
+      setSubscribers(data?.subscribers ?? []);
+    } catch (error) {
+      setSubscribers([]);
+      setSubscribersError(error instanceof Error ? error.message : "Unable to load subscribers.");
+    } finally {
+      setSubscribersLoading(false);
+    }
+  }, [tenantSlug]);
+
   const loadVouchers = useCallback(async () => {
     setVouchersError(null);
     setVouchersLoading(true);
@@ -257,7 +316,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     void loadStats();
     void loadPlans();
     void loadArchitecture();
-  }, [loadArchitecture, loadPlans, loadStats]);
+    void loadSubscribers();
+  }, [loadArchitecture, loadPlans, loadStats, loadSubscribers]);
 
   useEffect(() => {
     void loadVouchers();
@@ -268,13 +328,25 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   }, [voucherQuery, voucherStatus, voucherPlan]);
 
   useEffect(() => {
-    const drafts: Record<string, { name: string; code: string; duration: string; price: string; active: boolean }> = {};
+    const drafts: Record<string, {
+      name: string;
+      code: string;
+      duration: string;
+      price: string;
+      maxDevices: string;
+      bandwidthProfile: string;
+      dataLimitMb: string;
+      active: boolean;
+    }> = {};
     for (const plan of plans) {
       drafts[plan.id] = {
         name: plan.name,
         code: plan.code,
         duration: String(plan.durationMinutes),
         price: String(plan.priceNgn),
+        maxDevices: String(plan.maxDevices ?? 1),
+        bandwidthProfile: plan.bandwidthProfile ?? "",
+        dataLimitMb: plan.dataLimitMb ? String(plan.dataLimitMb) : "",
         active: plan.active === 1,
       };
     }
@@ -297,11 +369,12 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const voucherSourceMode = architecture?.voucherSourceMode ?? null;
   const isCsvMode = voucherSourceMode === "import_csv";
   const isApiAutomationMode = voucherSourceMode === "omada_openapi";
+  const isExternalAccessMode = architecture?.portalAuthMode === "external_radius_portal";
   const hasArchitectureConfigured = !!architecture;
   const hasPlans = plans.length > 0;
 
   async function refreshAll() {
-    await Promise.all([loadStats(), loadPlans(), loadVouchers(), loadArchitecture()]);
+    await Promise.all([loadStats(), loadPlans(), loadVouchers(), loadArchitecture(), loadSubscribers()]);
   }
 
   function jumpToVoucherTools() {
@@ -331,6 +404,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             hotspotOperatorUsername: architecture.omada.hotspotOperatorUsername.trim(),
             hotspotOperatorPassword: omadaHotspotOperatorPassword || undefined,
           },
+          radius: {
+            adapterSecret: radiusAdapterSecret || undefined,
+          },
         }),
       });
       const data = await readJsonResponse<{ error?: string; architecture?: ArchitectureConfig }>(response);
@@ -339,6 +415,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setArchitectureNotice("Architecture settings saved.");
       setOmadaClientSecret("");
       setOmadaHotspotOperatorPassword("");
+      setRadiusAdapterSecret("");
       setShowArchitectureModal(false);
     } catch (error) {
       setArchitectureError(
@@ -449,13 +526,21 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     event.preventDefault();
     const duration = Number.parseInt(newPlanDuration, 10);
     const price = Number.parseFloat(newPlanPrice);
+    const maxDevices = newPlanMaxDevices.trim()
+      ? Number.parseInt(newPlanMaxDevices, 10)
+      : undefined;
+    const dataLimitMb = newPlanDataLimitMb.trim()
+      ? Number.parseInt(newPlanDataLimitMb, 10)
+      : undefined;
     if (
       !newPlanCode.trim() ||
       !newPlanName.trim() ||
       !Number.isFinite(duration) ||
       duration <= 0 ||
       !Number.isFinite(price) ||
-      price < 0
+      price < 0 ||
+      (maxDevices !== undefined && (!Number.isFinite(maxDevices) || maxDevices < 1)) ||
+      (dataLimitMb !== undefined && (!Number.isFinite(dataLimitMb) || dataLimitMb < 1))
     ) {
       setPlansError("Provide valid plan code, name, duration, and price.");
       return;
@@ -472,6 +557,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           name: newPlanName.trim(),
           durationMinutes: duration,
           priceNgn: Math.round(price),
+          maxDevices,
+          bandwidthProfile: newPlanBandwidthProfile.trim() || undefined,
+          dataLimitMb,
         }),
       });
       const data = await readJsonResponse<{ error?: string }>(response);
@@ -481,6 +569,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setNewPlanName("");
       setNewPlanDuration("");
       setNewPlanPrice("");
+      setNewPlanMaxDevices("");
+      setNewPlanBandwidthProfile("");
+      setNewPlanDataLimitMb("");
       setShowCreatePlanModal(false);
       await Promise.all([loadPlans(), loadStats()]);
     } catch (error) {
@@ -495,13 +586,21 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     if (!draft) return;
     const duration = Number.parseInt(draft.duration, 10);
     const price = Number.parseFloat(draft.price);
+    const maxDevices = draft.maxDevices.trim()
+      ? Number.parseInt(draft.maxDevices, 10)
+      : undefined;
+    const dataLimitMb = draft.dataLimitMb.trim()
+      ? Number.parseInt(draft.dataLimitMb, 10)
+      : null;
     if (
       !draft.name.trim() ||
       !draft.code.trim() ||
       !Number.isFinite(duration) ||
       duration <= 0 ||
       !Number.isFinite(price) ||
-      price < 0
+      price < 0 ||
+      (maxDevices !== undefined && (!Number.isFinite(maxDevices) || maxDevices < 1)) ||
+      (dataLimitMb !== null && (!Number.isFinite(dataLimitMb) || dataLimitMb < 1))
     ) {
       setPlansError(`Invalid values for ${plan.name}.`);
       return;
@@ -519,6 +618,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           code: draft.code.trim(),
           durationMinutes: duration,
           priceNgn: Math.round(price),
+          maxDevices,
+          bandwidthProfile: draft.bandwidthProfile.trim() || null,
+          dataLimitMb,
           active: draft.active,
         }),
       });
@@ -750,6 +852,56 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Alert>
         ) : null}
 
+        <section id="ops-subscribers" className="panel-surface">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <h2 className="section-title">Subscriber monitoring</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Monitor active plans, live sessions, and policy limits for account-based access.
+              </p>
+            </div>
+            <Button type="button" variant="outline" onClick={loadSubscribers} disabled={subscribersLoading}>
+              {subscribersLoading ? "Refreshing..." : "Refresh subscribers"}
+            </Button>
+          </div>
+          {subscribersError ? (
+            <Alert variant="destructive" className="mt-3">
+              <AlertTitle>Subscribers failed</AlertTitle>
+              <AlertDescription>{subscribersError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="mt-3 space-y-2">
+            {subscribers.length === 0 && !subscribersLoading ? (
+              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                No subscribers yet.
+              </p>
+            ) : null}
+            {subscribers.map((row) => (
+              <div key={row.subscriberId} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold text-slate-900">{row.fullName || row.email}</p>
+                  <Badge className={row.activeSessions > 0 ? "bg-emerald-700 text-white" : "bg-slate-600 text-white"}>
+                    Sessions {row.activeSessions}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {row.email} {row.phone ? `• ${row.phone}` : ""}
+                </p>
+                {row.entitlement ? (
+                  <div className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+                    <span>Plan: {row.entitlement.planName || row.entitlement.planCode || "-"}</span>
+                    <span>Ends: {dt(row.entitlement.endsAt)}</span>
+                    <span>Max devices: {row.entitlement.maxDevices}</span>
+                    <span>Profile: {row.entitlement.bandwidthProfile || "-"}</span>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-amber-700">No active entitlement.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section id="ops-architecture" className="panel-surface">
           <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
             <div>
@@ -862,6 +1014,40 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                       }
                     />
                   </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Input
+                      value={draft.maxDevices}
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        setPlanDrafts((prev) => ({
+                          ...prev,
+                          [plan.id]: { ...prev[plan.id], maxDevices: event.target.value },
+                        }))
+                      }
+                      placeholder="Max devices"
+                    />
+                    <Input
+                      value={draft.dataLimitMb}
+                      inputMode="numeric"
+                      onChange={(event) =>
+                        setPlanDrafts((prev) => ({
+                          ...prev,
+                          [plan.id]: { ...prev[plan.id], dataLimitMb: event.target.value },
+                        }))
+                      }
+                      placeholder="Data MB"
+                    />
+                    <Input
+                      value={draft.bandwidthProfile}
+                      onChange={(event) =>
+                        setPlanDrafts((prev) => ({
+                          ...prev,
+                          [plan.id]: { ...prev[plan.id], bandwidthProfile: event.target.value },
+                        }))
+                      }
+                      placeholder="Bandwidth profile"
+                    />
+                  </div>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                   <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">Unused: {plan.unusedCount}</span>
@@ -937,6 +1123,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Minutes</th>
                 <th className="px-3 py-2">Price</th>
+                <th className="px-3 py-2">Max devices</th>
+                <th className="px-3 py-2">Bandwidth profile</th>
+                <th className="px-3 py-2">Data MB</th>
                 <th className="px-3 py-2">Unused</th>
                 <th className="px-3 py-2">Assigned</th>
                 <th className="px-3 py-2">Active</th>
@@ -991,6 +1180,41 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                           setPlanDrafts((prev) => ({
                             ...prev,
                             [plan.id]: { ...prev[plan.id], price: event.target.value },
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        value={draft.maxDevices}
+                        inputMode="numeric"
+                        onChange={(event) =>
+                          setPlanDrafts((prev) => ({
+                            ...prev,
+                            [plan.id]: { ...prev[plan.id], maxDevices: event.target.value },
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        value={draft.bandwidthProfile}
+                        onChange={(event) =>
+                          setPlanDrafts((prev) => ({
+                            ...prev,
+                            [plan.id]: { ...prev[plan.id], bandwidthProfile: event.target.value },
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        value={draft.dataLimitMb}
+                        inputMode="numeric"
+                        onChange={(event) =>
+                          setPlanDrafts((prev) => ({
+                            ...prev,
+                            [plan.id]: { ...prev[plan.id], dataLimitMb: event.target.value },
                           }))
                         }
                       />
@@ -1083,7 +1307,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <h2 className="section-title">Voucher operations</h2>
             <p className="mt-1 text-sm text-slate-600">
               {hasArchitectureConfigured
-                ? isApiAutomationMode
+                ? isExternalAccessMode
+                  ? "External account-access mode: voucher inventory is bypassed. Use subscriber monitoring and RADIUS accounting."
+                  : isApiAutomationMode
                   ? "API automation mode: vouchers are created automatically after each successful customer payment."
                   : hasPlans
                     ? "CSV mode: create manually, batch generate, or import CSV."
@@ -1093,17 +1319,17 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </div>
           {hasArchitectureConfigured ? (
             <div className="flex flex-wrap items-center gap-2">
-              {isCsvMode && hasPlans ? (
+              {isCsvMode && hasPlans && !isExternalAccessMode ? (
                 <Button type="button" variant="outline" onClick={() => setShowCreateVoucherModal(true)}>
                   Add voucher
                 </Button>
               ) : null}
-              {isCsvMode && hasPlans ? (
+              {isCsvMode && hasPlans && !isExternalAccessMode ? (
                 <Button type="button" variant="outline" onClick={() => setShowGenerateVoucherModal(true)}>
                   Batch generate
                 </Button>
               ) : null}
-              {isCsvMode ? (
+              {isCsvMode && !isExternalAccessMode ? (
                 <Button type="button" variant="outline" onClick={() => setShowImportVoucherModal(true)}>
                   Import CSV
                 </Button>
@@ -1299,17 +1525,17 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreatePlanModal(true); }}>
               Add plan
             </Button>
-            {hasArchitectureConfigured && isCsvMode && hasPlans ? (
+            {hasArchitectureConfigured && isCsvMode && hasPlans && !isExternalAccessMode ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreateVoucherModal(true); }}>
                 Add voucher
               </Button>
             ) : null}
-            {hasArchitectureConfigured && isCsvMode && hasPlans ? (
+            {hasArchitectureConfigured && isCsvMode && hasPlans && !isExternalAccessMode ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowGenerateVoucherModal(true); }}>
                 Batch generate vouchers
               </Button>
             ) : null}
-            {hasArchitectureConfigured && isCsvMode ? (
+            {hasArchitectureConfigured && isCsvMode && !isExternalAccessMode ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowImportVoucherModal(true); }}>
                 Import voucher CSV
               </Button>
@@ -1326,13 +1552,19 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         <ModalShell title="Configure architecture" onClose={() => setShowArchitectureModal(false)}>
           <form className="grid gap-3" onSubmit={saveArchitecture}>
             <div className="flex items-center justify-end">
-              <Link
-                href="/help/omada-openapi"
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-              >
-                <CircleHelp className="size-3.5" />
-                Omada setup help
-              </Link>
+              {architecture.voucherSourceMode === "omada_openapi" ? (
+                <Link
+                  href="/help/omada-openapi"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  <CircleHelp className="size-3.5" />
+                  Omada setup help
+                </Link>
+              ) : architecture.portalAuthMode === "external_radius_portal" ? (
+                <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">
+                  Configure RADIUS adapter secret for external mode
+                </span>
+              ) : null}
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="grid gap-1.5">
@@ -1378,127 +1610,150 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Omada OpenAPI credentials</p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <Input
-                  value={architecture.omada.apiBaseUrl}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? { ...prev, omada: { ...prev.omada, apiBaseUrl: event.target.value } }
-                        : prev,
-                    )
-                  }
-                  placeholder="https://use1-omada-northbound.tplinkcloud.com"
-                />
-                <Input
-                  value={architecture.omada.omadacId}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev ? { ...prev, omada: { ...prev.omada, omadacId: event.target.value } } : prev,
-                    )
-                  }
-                  placeholder="Omada ID"
-                />
-                <Input
-                  value={architecture.omada.siteId}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev ? { ...prev, omada: { ...prev.omada, siteId: event.target.value } } : prev,
-                    )
-                  }
-                  placeholder="Site ID"
-                />
-                <Input
-                  value={architecture.omada.clientId}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev ? { ...prev, omada: { ...prev.omada, clientId: event.target.value } } : prev,
-                    )
-                  }
-                  placeholder="Client ID"
-                />
-                <Input
-                  type="password"
-                  value={omadaClientSecret}
-                  onChange={(event) => setOmadaClientSecret(event.target.value)}
-                  placeholder={
-                    architecture.omada.hasClientSecret
-                      ? "Client secret (leave blank to keep)"
-                      : "Client secret"
-                  }
-                />
-                <Input
-                  value={architecture.omada.hotspotOperatorUsername}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            omada: { ...prev.omada, hotspotOperatorUsername: event.target.value },
-                          }
-                        : prev,
-                    )
-                  }
-                  placeholder="Hotspot operator username"
-                />
-                <Input
-                  type="password"
-                  value={omadaHotspotOperatorPassword}
-                  onChange={(event) => setOmadaHotspotOperatorPassword(event.target.value)}
-                  placeholder={
-                    architecture.omada.hasHotspotOperatorPassword
-                      ? "Hotspot operator password (leave blank to keep)"
-                      : "Hotspot operator password"
-                  }
-                />
-              </div>
-              <div className="mt-3 grid gap-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-slate-600">
-                    Need Site ID? Fetch available sites from Omada using the current credentials.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={discoverOmadaSites}
-                    disabled={omadaSitesLoading || architectureSaving || omadaTestLoading}
-                  >
-                    {omadaSitesLoading ? "Fetching sites..." : "Fetch sites"}
-                  </Button>
-                </div>
-                {omadaSiteOptions.length > 0 ? (
-                  <select
+            {architecture.voucherSourceMode === "omada_openapi" ? (
+              <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Omada OpenAPI credentials</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Input
+                    value={architecture.omada.apiBaseUrl}
+                    onChange={(event) =>
+                      setArchitecture((prev) =>
+                        prev
+                          ? { ...prev, omada: { ...prev.omada, apiBaseUrl: event.target.value } }
+                          : prev,
+                      )
+                    }
+                    placeholder="https://use1-omada-northbound.tplinkcloud.com"
+                  />
+                  <Input
+                    value={architecture.omada.omadacId}
+                    onChange={(event) =>
+                      setArchitecture((prev) =>
+                        prev ? { ...prev, omada: { ...prev.omada, omadacId: event.target.value } } : prev,
+                      )
+                    }
+                    placeholder="Omada ID"
+                  />
+                  <Input
                     value={architecture.omada.siteId}
                     onChange={(event) =>
                       setArchitecture((prev) =>
                         prev ? { ...prev, omada: { ...prev.omada, siteId: event.target.value } } : prev,
                       )
                     }
-                  >
-                    <option value="">Select discovered site</option>
-                    {omadaSiteOptions.map((site) => (
-                      <option key={site.siteId} value={site.siteId}>
-                        {site.name ? `${site.name} (${site.siteId})` : site.siteId}
-                      </option>
-                    ))}
-                  </select>
-                ) : null}
-                {omadaSitesError ? <p className="text-sm text-red-700">{omadaSitesError}</p> : null}
-                {omadaSitesNotice ? <p className="text-sm text-slate-600">{omadaSitesNotice}</p> : null}
+                    placeholder="Site ID"
+                  />
+                  <Input
+                    value={architecture.omada.clientId}
+                    onChange={(event) =>
+                      setArchitecture((prev) =>
+                        prev ? { ...prev, omada: { ...prev.omada, clientId: event.target.value } } : prev,
+                      )
+                    }
+                    placeholder="Client ID"
+                  />
+                  <Input
+                    type="password"
+                    value={omadaClientSecret}
+                    onChange={(event) => setOmadaClientSecret(event.target.value)}
+                    placeholder={
+                      architecture.omada.hasClientSecret
+                        ? "Client secret (leave blank to keep)"
+                        : "Client secret"
+                    }
+                  />
+                  <Input
+                    value={architecture.omada.hotspotOperatorUsername}
+                    onChange={(event) =>
+                      setArchitecture((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              omada: { ...prev.omada, hotspotOperatorUsername: event.target.value },
+                            }
+                          : prev,
+                      )
+                    }
+                    placeholder="Hotspot operator username"
+                  />
+                  <Input
+                    type="password"
+                    value={omadaHotspotOperatorPassword}
+                    onChange={(event) => setOmadaHotspotOperatorPassword(event.target.value)}
+                    placeholder={
+                      architecture.omada.hasHotspotOperatorPassword
+                        ? "Hotspot operator password (leave blank to keep)"
+                        : "Hotspot operator password"
+                    }
+                  />
+                </div>
+                <div className="mt-3 grid gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-slate-600">
+                      Need Site ID? Fetch available sites from Omada using the current credentials.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={discoverOmadaSites}
+                      disabled={omadaSitesLoading || architectureSaving || omadaTestLoading}
+                    >
+                      {omadaSitesLoading ? "Fetching sites..." : "Fetch sites"}
+                    </Button>
+                  </div>
+                  {omadaSiteOptions.length > 0 ? (
+                    <select
+                      value={architecture.omada.siteId}
+                      onChange={(event) =>
+                        setArchitecture((prev) =>
+                          prev ? { ...prev, omada: { ...prev.omada, siteId: event.target.value } } : prev,
+                        )
+                      }
+                    >
+                      <option value="">Select discovered site</option>
+                      {omadaSiteOptions.map((site) => (
+                        <option key={site.siteId} value={site.siteId}>
+                          {site.name ? `${site.name} (${site.siteId})` : site.siteId}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  {omadaSitesError ? <p className="text-sm text-red-700">{omadaSitesError}</p> : null}
+                  {omadaSitesNotice ? <p className="text-sm text-slate-600">{omadaSitesNotice}</p> : null}
+                </div>
               </div>
-            </div>
+            ) : null}
+
+            {architecture.portalAuthMode === "external_radius_portal" ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">External RADIUS adapter</p>
+                <Input
+                  type="password"
+                  value={radiusAdapterSecret}
+                  onChange={(event) => setRadiusAdapterSecret(event.target.value)}
+                  placeholder={
+                    architecture.radius?.hasAdapterSecret
+                      ? `Shared secret (leave blank to keep ****${architecture.radius.adapterSecretLast4})`
+                      : "Shared secret"
+                  }
+                />
+                <p className="mt-2 text-xs text-amber-900/80">
+                  This shared secret protects the `/api/t/&lt;slug&gt;/radius/*` adapter endpoints.
+                </p>
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={testOmadaConnection}
-                disabled={omadaTestLoading || architectureSaving}
-              >
-                {omadaTestLoading ? "Testing..." : "Test Omada connection"}
-              </Button>
+              {architecture.voucherSourceMode === "omada_openapi" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={testOmadaConnection}
+                  disabled={omadaTestLoading || architectureSaving}
+                >
+                  {omadaTestLoading ? "Testing..." : "Test Omada connection"}
+                </Button>
+              ) : null}
               <Button type="submit" disabled={architectureSaving || omadaTestLoading}>
                 {architectureSaving ? "Saving..." : "Save architecture"}
               </Button>
@@ -1523,6 +1778,23 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               inputMode="numeric"
               onChange={(event) => setNewPlanPrice(event.target.value)}
               placeholder="Price (NGN)"
+            />
+            <Input
+              value={newPlanMaxDevices}
+              inputMode="numeric"
+              onChange={(event) => setNewPlanMaxDevices(event.target.value)}
+              placeholder="Max devices (optional)"
+            />
+            <Input
+              value={newPlanBandwidthProfile}
+              onChange={(event) => setNewPlanBandwidthProfile(event.target.value)}
+              placeholder="Bandwidth profile (optional)"
+            />
+            <Input
+              value={newPlanDataLimitMb}
+              inputMode="numeric"
+              onChange={(event) => setNewPlanDataLimitMb(event.target.value)}
+              placeholder="Data limit MB (optional)"
             />
             <div className="flex justify-end">
               <Button type="submit" disabled={creatingPlan}>{creatingPlan ? "Creating..." : "Add plan"}</Button>

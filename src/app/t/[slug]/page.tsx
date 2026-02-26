@@ -3,6 +3,14 @@ import { Checkout } from "@/components/checkout";
 import { AppTopbar } from "@/components/app-topbar";
 import { getPackagesWithAvailability, getTenantBySlug } from "@/lib/store";
 
+function normalizePortalAuthMode(
+  value: string | null | undefined,
+): "omada_builtin" | "external_portal_api" | "external_radius_portal" {
+  if (value === "external_portal_api") return "external_portal_api";
+  if (value === "external_radius_portal") return "external_radius_portal";
+  return "omada_builtin";
+}
+
 type Props = {
   params: { slug: string } | Promise<{ slug: string }>;
 };
@@ -36,7 +44,9 @@ export default async function TenantPurchasePage({ params }: Props) {
 
   const packages = (await getPackagesWithAvailability(tenant.id))
     .filter((pkg) =>
-      tenant.voucher_source_mode === "omada_openapi"
+      tenant.portal_auth_mode === "external_radius_portal"
+        ? pkg.price_ngn > 0
+        : tenant.voucher_source_mode === "omada_openapi"
         ? pkg.price_ngn > 0
         : pkg.price_ngn > 0 && pkg.total_count > 0,
     )
@@ -45,9 +55,14 @@ export default async function TenantPurchasePage({ params }: Props) {
       name: pkg.name,
       durationMinutes: pkg.duration_minutes,
       priceNgn: pkg.price_ngn,
+      maxDevices: pkg.max_devices,
+      bandwidthProfile: pkg.bandwidth_profile,
+      dataLimitMb: pkg.data_limit_mb,
       description: pkg.description,
       availableCount:
-        tenant.voucher_source_mode === "omada_openapi"
+        tenant.portal_auth_mode === "external_radius_portal"
+          ? 999999
+          : tenant.voucher_source_mode === "omada_openapi"
           ? Math.max(1, pkg.available_count)
           : pkg.available_count,
     }));
@@ -82,7 +97,11 @@ export default async function TenantPurchasePage({ params }: Props) {
         />
 
         <div className="mx-auto grid w-full max-w-5xl gap-4 sm:gap-5">
-          <Checkout tenantSlug={tenant.slug} packages={packages} />
+          <Checkout
+            tenantSlug={tenant.slug}
+            packages={packages}
+            portalAuthMode={normalizePortalAuthMode(tenant.portal_auth_mode)}
+          />
         </div>
       </div>
     </div>
