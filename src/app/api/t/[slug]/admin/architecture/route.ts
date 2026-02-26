@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getSessionUserFromRequest } from "@/lib/auth";
 import {
+  type AccessMode,
   getTenantArchitecture,
   getTenantBySlug,
   setTenantArchitecture,
@@ -22,9 +23,10 @@ async function normalizeTenantAccess(request: Request, tenantId: string) {
 }
 
 const schema = z.object({
+  accessMode: z.enum(["voucher_access", "account_access"]).optional(),
   voucherSourceMode: z.enum(["import_csv", "omada_openapi"]).optional(),
   portalAuthMode: z
-    .enum(["omada_builtin", "external_portal_api", "external_radius_portal"])
+    .enum(["omada_builtin", "external_radius_portal"])
     .optional(),
   omada: z
     .object({
@@ -107,6 +109,7 @@ export async function PATCH(request: Request, { params }: Props) {
   try {
     const result = await setTenantArchitecture({
       tenantId: tenant.id,
+      accessMode: parsed.data.accessMode as AccessMode | undefined,
       voucherSourceMode: parsed.data.voucherSourceMode as VoucherSourceMode | undefined,
       portalAuthMode: parsed.data.portalAuthMode as PortalAuthMode | undefined,
       omada: omadaPatch,

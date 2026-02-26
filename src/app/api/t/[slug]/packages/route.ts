@@ -11,9 +11,12 @@ export async function GET(_request: Request, { params }: Props) {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
 
+  const accessMode = tenant.portal_auth_mode === "external_radius_portal"
+    ? "account_access"
+    : "voucher_access";
   const packages = (await getPackagesWithAvailability(tenant.id))
     .filter((pkg) =>
-      tenant.portal_auth_mode === "external_radius_portal"
+      accessMode === "account_access"
         ? pkg.price_ngn > 0
         : tenant.voucher_source_mode === "omada_openapi"
         ? pkg.price_ngn > 0
@@ -29,7 +32,7 @@ export async function GET(_request: Request, { params }: Props) {
       dataLimitMb: pkg.data_limit_mb,
       description: pkg.description,
       availableCount:
-        tenant.portal_auth_mode === "external_radius_portal"
+        accessMode === "account_access"
           ? 999999
           : tenant.voucher_source_mode === "omada_openapi"
           ? Math.max(1, pkg.available_count)
@@ -38,6 +41,6 @@ export async function GET(_request: Request, { params }: Props) {
 
   return Response.json({
     packages,
-    portalAuthMode: tenant.portal_auth_mode,
+    accessMode,
   });
 }

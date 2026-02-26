@@ -32,7 +32,7 @@ type Package = {
 type Props = {
   tenantSlug: string;
   packages: Package[];
-  portalAuthMode: "omada_builtin" | "external_portal_api" | "external_radius_portal";
+  accessMode: "voucher_access" | "account_access";
 };
 
 function formatDuration(minutes: number) {
@@ -109,7 +109,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
-export function Checkout({ tenantSlug, packages, portalAuthMode }: Props) {
+export function Checkout({ tenantSlug, packages, accessMode }: Props) {
   const [selected, setSelected] = useState<Package | null>(null);
   const [planQuery, setPlanQuery] = useState("");
   const [visiblePlanCount, setVisiblePlanCount] = useState(8);
@@ -132,7 +132,7 @@ export function Checkout({ tenantSlug, packages, portalAuthMode }: Props) {
   const [subscriberAuthError, setSubscriberAuthError] = useState<string | null>(null);
   const [subscriberAuthLoading, setSubscriberAuthLoading] = useState(false);
 
-  const isAccountAccessMode = portalAuthMode === "external_radius_portal";
+  const isAccountAccessMode = accessMode === "account_access";
   const hasAvailable = packages.some((pkg) => pkg.availableCount > 0);
   const allSoldOut = packages.length > 0 && !hasAvailable;
   const isLongPlanList = packages.length > 12;

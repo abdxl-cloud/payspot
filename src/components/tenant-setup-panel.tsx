@@ -25,8 +25,8 @@ type ArchitecturePreset = "import_csv" | "api_automation" | "external_radius_por
 
 type TenantArchitectureResponse = {
   architecture?: {
+    accessMode: "voucher_access" | "account_access";
     voucherSourceMode: "import_csv" | "omada_openapi";
-    portalAuthMode: "omada_builtin" | "external_portal_api" | "external_radius_portal";
     omada: {
       apiBaseUrl: string;
       omadacId: string;
@@ -156,7 +156,7 @@ export function TenantSetupPanel({
         if (!response.ok || !data?.architecture || ignore) return;
 
         const { architecture } = data;
-        if (architecture.portalAuthMode === "external_radius_portal") {
+        if (architecture.accessMode === "account_access") {
           setArchitecturePreset("external_radius_portal");
         } else if (architecture.voucherSourceMode === "omada_openapi") {
           setArchitecturePreset("api_automation");
@@ -337,11 +337,11 @@ export function TenantSetupPanel({
           paystackSecretKey: paystackSecretKey.trim() ? paystackSecretKey.trim() : undefined,
           newSlug: normalizeSlug(portalSlug),
           architecture: {
-            voucherSourceMode: architecturePreset === "api_automation" ? "omada_openapi" : "import_csv",
-            portalAuthMode:
+            accessMode:
               architecturePreset === "external_radius_portal"
-                ? "external_radius_portal"
-                : "omada_builtin",
+                ? "account_access"
+                : "voucher_access",
+            voucherSourceMode: architecturePreset === "api_automation" ? "omada_openapi" : "import_csv",
             omada:
               architecturePreset === "api_automation"
                 ? {
@@ -497,38 +497,30 @@ export function TenantSetupPanel({
 
           {currentStep?.key === "architecture" ? (
             <div className="grid gap-3">
-              <p className="text-sm font-semibold text-slate-900">Voucher architecture</p>
+              <p className="text-sm font-semibold text-slate-900">Access mode</p>
               <p className="text-xs text-slate-600">
-                Choose how voucher provisioning and portal authentication should run for your tenant.
+                Choose how users get online: voucher flow or account flow.
               </p>
 
               <div className="grid gap-2">
                 <button
                   type="button"
-                  onClick={() => setArchitecturePreset("import_csv")}
+                  onClick={() =>
+                    setArchitecturePreset((prev) =>
+                      prev === "api_automation" ? "api_automation" : "import_csv",
+                    )
+                  }
                   className={[
                     "rounded-xl border px-3 py-3 text-left transition",
-                    architecturePreset === "import_csv"
+                    architecturePreset !== "external_radius_portal"
                       ? "border-indigo-300 bg-indigo-50"
                       : "border-slate-200 bg-white hover:bg-slate-50",
                   ].join(" ")}
                 >
-                  <p className="text-sm font-semibold text-slate-900">Import voucher code (CSV)</p>
-                  <p className="mt-1 text-xs text-slate-600">Manual CSV import from Omada export files.</p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setArchitecturePreset("api_automation")}
-                  className={[
-                    "rounded-xl border px-3 py-3 text-left transition",
-                    architecturePreset === "api_automation"
-                      ? "border-indigo-300 bg-indigo-50"
-                      : "border-slate-200 bg-white hover:bg-slate-50",
-                  ].join(" ")}
-                >
-                  <p className="text-sm font-semibold text-slate-900">API automation</p>
-                  <p className="mt-1 text-xs text-slate-600">Generate and sync vouchers through Omada OpenAPI.</p>
+                  <p className="text-sm font-semibold text-slate-900">Voucher access</p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Users buy voucher-based plans. Choose CSV or Omada OpenAPI provisioning below.
+                  </p>
                 </button>
 
                 <button
@@ -541,10 +533,44 @@ export function TenantSetupPanel({
                       : "border-slate-200 bg-white hover:bg-slate-50",
                   ].join(" ")}
                 >
-                  <p className="text-sm font-semibold text-slate-900">External RADIUS + portal</p>
-                  <p className="mt-1 text-xs text-slate-600">Use external auth and portal infrastructure.</p>
+                  <p className="text-sm font-semibold text-slate-900">Account access (External RADIUS)</p>
+                  <p className="mt-1 text-xs text-slate-600">Users sign in with account and access is enforced via RADIUS.</p>
                 </button>
               </div>
+
+              {architecturePreset !== "external_radius_portal" ? (
+                <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Voucher provisioning
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setArchitecturePreset("import_csv")}
+                      className={[
+                        "rounded-xl border px-3 py-2 text-left transition",
+                        architecturePreset === "import_csv"
+                          ? "border-indigo-300 bg-indigo-50"
+                          : "border-slate-200 bg-white hover:bg-slate-50",
+                      ].join(" ")}
+                    >
+                      CSV import
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setArchitecturePreset("api_automation")}
+                      className={[
+                        "rounded-xl border px-3 py-2 text-left transition",
+                        architecturePreset === "api_automation"
+                          ? "border-indigo-300 bg-indigo-50"
+                          : "border-slate-200 bg-white hover:bg-slate-50",
+                      ].join(" ")}
+                    >
+                      Omada OpenAPI
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               {architecturePreset === "api_automation" ? (
                 <div className="rounded-2xl border border-slate-200/85 bg-slate-50/75 p-4">

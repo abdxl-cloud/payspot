@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getSessionUserFromRequest } from "@/lib/auth";
 import { isPaystackSecretKey } from "@/lib/paystack-key";
 import {
+  type AccessMode,
   getTenantBySlug,
   getUserById,
   isTenantSlugAvailable,
@@ -30,8 +31,9 @@ const schema = z.object({
     .optional(),
   architecture: z
     .object({
-      voucherSourceMode: z.enum(["import_csv", "omada_openapi"]),
-      portalAuthMode: z.enum(["omada_builtin", "external_portal_api", "external_radius_portal"]),
+      accessMode: z.enum(["voucher_access", "account_access"]).optional(),
+      voucherSourceMode: z.enum(["import_csv", "omada_openapi"]).optional(),
+      portalAuthMode: z.enum(["omada_builtin", "external_radius_portal"]).optional(),
       omada: z
         .object({
           apiBaseUrl: z.string().max(300).optional(),
@@ -115,7 +117,15 @@ export async function POST(request: Request, { params }: Props) {
     );
   }
 
-  if (parsed.data.architecture?.voucherSourceMode === "omada_openapi") {
+  const selectedAccessMode = parsed.data.architecture?.accessMode
+    ?? (parsed.data.architecture?.portalAuthMode === "external_radius_portal"
+      ? "account_access"
+      : "voucher_access");
+
+  if (
+    parsed.data.architecture?.voucherSourceMode === "omada_openapi" &&
+    selectedAccessMode === "voucher_access"
+  ) {
     const omada = parsed.data.architecture.omada;
     const hasSavedSecret = !!tenant.omada_client_secret_enc;
     if (!omada?.apiBaseUrl?.trim()) {
@@ -173,8 +183,9 @@ export async function POST(request: Request, { params }: Props) {
     try {
       const architectureResult = await setTenantArchitecture({
         tenantId: tenant.id,
-        voucherSourceMode: parsed.data.architecture.voucherSourceMode as VoucherSourceMode,
-        portalAuthMode: parsed.data.architecture.portalAuthMode as PortalAuthMode,
+        accessMode: parsed.data.architecture.accessMode as AccessMode | undefined,
+        voucherSourceMode: parsed.data.architecture.voucherSourceMode as VoucherSourceMode | undefined,
+        portalAuthMode: parsed.data.architecture.portalAuthMode as PortalAuthMode | undefined,
         omada: parsed.data.architecture.omada
           ? {
               apiBaseUrl: parsed.data.architecture.omada.apiBaseUrl?.trim(),

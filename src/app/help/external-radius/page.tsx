@@ -2,25 +2,46 @@ import Image from "next/image";
 import Link from "next/link";
 import { AppTopbar } from "@/components/app-topbar";
 
-const tenantSteps = [
-  "In Tenant Admin, open Configure architecture and select External RADIUS + portal.",
-  "Create your plans with the right duration and price.",
-  "Optionally set plan policy fields: maxDevices, bandwidthProfile, dataLimitMb.",
-  "Confirm your public tenant page (/t/<slug>) loads and checkout works.",
-  "Run one real payment test and verify account access activates after payment.",
+const setupSteps = [
+  "In PaySpot Tenant Admin, set architecture to External RADIUS + portal.",
+  "Create plans and set optional policy fields (maxDevices, bandwidthProfile, dataLimitMb).",
+  "In Omada Portal tab, enable portal for your hotspot SSID and set Type to RADIUS.",
+  "In Omada Access Control tab, configure External RADIUS Server profile.",
+  "Set portal redirect/landing behavior to your external portal flow.",
+  "Run full end-to-end test before opening to live users.",
 ] as const;
 
-const omadaChecklist = [
-  "Portal auth type is set to External RADIUS Server when using External Web Portal.",
-  "Omada side points users to your PaySpot tenant portal URL.",
-  "RADIUS profile on Omada/controller is mapped by your network team.",
-  "A test client can connect, purchase, and regain access with active plan.",
+const portalScreenValues = [
+  "Portal: Enable",
+  "SSID & Network: select your live hotspot SSID",
+  "Authentication Type: Hotspot",
+  "Type: check RADIUS, uncheck Voucher",
+  "HTTPS Redirection: Enable",
+  "Landing Page: The Original URL (recommended for hosted flow)",
 ] as const;
 
-const planTips = [
-  "maxDevices: number of concurrent devices allowed for a subscriber plan.",
-  "bandwidthProfile: label used by your network team to map speed policy.",
-  "dataLimitMb: optional data cap in MB for the plan.",
+const accessControlValues = [
+  "Auth type: External RADIUS Server",
+  "Authentication server: your external RADIUS endpoint",
+  "Authentication port: 1812",
+  "Accounting server/port: enable and use 1813",
+  "Shared secret: use the one provided by your admin/ops side",
+  "Apply and verify profile is attached to this portal policy",
+] as const;
+
+const cutoverValidation = [
+  "Client joins SSID and gets redirected to your external portal.",
+  "Subscriber can sign up or login.",
+  "Payment succeeds and account plan activates.",
+  "Device gets internet immediately after successful auth.",
+  "Second device obeys maxDevices rule for the plan.",
+  "Disconnect/reconnect still honors active entitlement.",
+] as const;
+
+const rollbackPlan = [
+  "If migrating from Voucher and cutover fails, switch Type back to Voucher temporarily.",
+  "Apply and confirm captive portal auth works again.",
+  "Fix RADIUS profile issues, then retry in a low-traffic window.",
 ] as const;
 
 const tenantVisuals = [
@@ -70,17 +91,17 @@ export default function ExternalRadiusHelpPage() {
 
         <main className="mt-6 grid gap-4">
           <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5">
-            <p className="section-kicker">Architecture Guide</p>
+            <p className="section-kicker">Setup Playbook</p>
             <h1 className="section-title">External RADIUS + External Portal</h1>
             <p className="mt-2 text-sm text-amber-900">
-              Tenant-facing setup for account access mode: subscribers sign in, buy a plan, and get live access.
+              Universal guide for tenant setup: works for fresh deployments and voucher-to-RADIUS migrations.
             </p>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-semibold text-slate-900">What You Set Up as Tenant</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Setup Steps (In Order)</h2>
             <ol className="mt-3 space-y-2 text-sm text-slate-700">
-              {tenantSteps.map((item, index) => (
+              {setupSteps.map((item, index) => (
                 <li key={item}>
                   {index + 1}. {item}
                 </li>
@@ -89,29 +110,66 @@ export default function ExternalRadiusHelpPage() {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-            <h2 className="text-sm font-semibold text-slate-900">Plan Policy Fields</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Omada Portal Tab Values</h2>
             <ul className="mt-3 space-y-2 text-sm text-slate-700">
-              {planTips.map((item) => (
+              {portalScreenValues.map((item) => (
                 <li key={item}>- {item}</li>
               ))}
             </ul>
             <p className="mt-3 text-xs text-slate-600">
-              If you are unsure of policy values, use default plans first and refine with your network team.
+              These values map to the Omada Portal edit form shown in the screenshots below.
             </p>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-semibold text-slate-900">Omada External Portal Checklist</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Omada Access Control Tab Values</h2>
             <ul className="mt-3 space-y-2 text-sm text-slate-700">
-              {omadaChecklist.map((item) => (
+              {accessControlValues.map((item) => (
                 <li key={item}>- {item}</li>
               ))}
             </ul>
             <p className="mt-3 text-xs text-slate-600">
-              TP-Link reference: External Web Portal in Omada requires External RADIUS Server mode.
+              Your network/admin side should provide server host, shared secret, and failover values.
             </p>
             <p className="mt-3 text-xs text-slate-600">
-              Technical adapter credentials and RADIUS wiring should be handled by your network/server administrator.
+              Tenant-side responsibility stays on plans, pricing, portal URL, and test flow.
+            </p>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <h2 className="text-sm font-semibold text-slate-900">Go-Live Validation</h2>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {cutoverValidation.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="text-sm font-semibold text-slate-900">Rollback (Migration Only)</h2>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {rollbackPlan.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="text-sm font-semibold text-slate-900">PaySpot Tenant Checklist</h2>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              <li>- Configure architecture as External RADIUS + portal.</li>
+              <li>- Create plans that reflect what you will sell publicly.</li>
+              <li>- Set plan policy fields only if your network team maps them.</li>
+              <li>- Keep one low-cost test plan for onboarding and troubleshooting.</li>
+              <li>- Test `/t/&lt;slug&gt;` as a real customer before opening traffic.</li>
+            </ul>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="text-sm font-semibold text-slate-900">Policy Fields In Plain English</h2>
+            <p className="mt-2 text-sm text-slate-700">
+              <strong>maxDevices</strong> limits concurrent devices. <strong>bandwidthProfile</strong> is a policy label your
+              network team maps to rate limits. <strong>dataLimitMb</strong> is total allowed data for the plan.
             </p>
           </section>
 

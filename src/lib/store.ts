@@ -33,12 +33,12 @@ export type TenantRow = {
 export type VoucherSourceMode = "import_csv" | "omada_openapi";
 export type PortalAuthMode =
   | "omada_builtin"
-  | "external_portal_api"
   | "external_radius_portal";
+export type AccessMode = "voucher_access" | "account_access";
 
 export type TenantArchitecture = {
+  accessMode: AccessMode;
   voucherSourceMode: VoucherSourceMode;
-  portalAuthMode: PortalAuthMode;
   omada: {
     apiBaseUrl: string;
     omadacId: string;
@@ -232,9 +232,13 @@ function normalizeVoucherSourceMode(
 }
 
 function normalizePortalAuthMode(value: string | null | undefined): PortalAuthMode {
-  if (value === "external_portal_api") return "external_portal_api";
   if (value === "external_radius_portal") return "external_radius_portal";
   return "omada_builtin";
+}
+
+function normalizeAccessMode(value: string | null | undefined): AccessMode {
+  if (value === "account_access") return "account_access";
+  return "voucher_access";
 }
 
 function normalizePhoneForLookup(phone: string) {
@@ -1235,9 +1239,16 @@ export async function getTenantArchitecture(tenantId: string) {
   const tenant = await getTenantById(tenantId);
   if (!tenant) return null;
 
+  const portalAuthMode = normalizePortalAuthMode(tenant.portal_auth_mode);
+  const accessMode: AccessMode =
+    portalAuthMode === "external_radius_portal" ? "account_access" : "voucher_access";
+  const voucherSourceMode = portalAuthMode === "external_radius_portal"
+    ? "import_csv"
+    : normalizeVoucherSourceMode(tenant.voucher_source_mode);
+
   return {
-    voucherSourceMode: normalizeVoucherSourceMode(tenant.voucher_source_mode),
-    portalAuthMode: normalizePortalAuthMode(tenant.portal_auth_mode),
+    accessMode,
+    voucherSourceMode,
     omada: {
       apiBaseUrl: tenant.omada_api_base_url ?? "",
       omadacId: tenant.omada_omadac_id ?? "",
@@ -1256,6 +1267,7 @@ export async function getTenantArchitecture(tenantId: string) {
 
 export async function setTenantArchitecture(params: {
   tenantId: string;
+  accessMode?: AccessMode;
   voucherSourceMode?: VoucherSourceMode;
   portalAuthMode?: PortalAuthMode;
   omada?: {
@@ -1280,9 +1292,19 @@ export async function setTenantArchitecture(params: {
   const voucherSourceMode = params.voucherSourceMode
     ? normalizeVoucherSourceMode(params.voucherSourceMode)
     : normalizeVoucherSourceMode(tenant.voucher_source_mode);
-  const portalAuthMode = params.portalAuthMode
-    ? normalizePortalAuthMode(params.portalAuthMode)
-    : normalizePortalAuthMode(tenant.portal_auth_mode);
+  const accessMode = params.accessMode
+    ? normalizeAccessMode(params.accessMode)
+    : normalizePortalAuthMode(tenant.portal_auth_mode) === "external_radius_portal"
+      ? "account_access"
+      : "voucher_access";
+  const portalAuthMode = accessMode === "account_access"
+    ? "external_radius_portal"
+    : params.portalAuthMode
+      ? normalizePortalAuthMode(params.portalAuthMode)
+      : "omada_builtin";
+  const effectiveVoucherSourceMode = portalAuthMode === "external_radius_portal"
+    ? "import_csv"
+    : voucherSourceMode;
 
   const apiBaseUrl = params.omada?.apiBaseUrl !== undefined
     ? params.omada.apiBaseUrl.trim()
@@ -1336,7 +1358,7 @@ export async function setTenantArchitecture(params: {
     radiusAdapterSecretLast4 = generated.slice(-4);
   }
 
-  if (voucherSourceMode === "omada_openapi") {
+  if (effectiveVoucherSourceMode === "omada_openapi") {
     const missing: Array<"apiBaseUrl" | "omadacId" | "siteId" | "clientId" | "clientSecret"> = [];
     if (!apiBaseUrl) missing.push("apiBaseUrl");
     if (!omadacId) missing.push("omadacId");
@@ -1372,7 +1394,7 @@ export async function setTenantArchitecture(params: {
     `,
     )
     .run(
-      voucherSourceMode,
+      effectiveVoucherSourceMode,
       portalAuthMode,
       apiBaseUrl || null,
       omadacId || null,
@@ -1393,6 +1415,9 @@ export async function setTenantArchitecture(params: {
 export async function resolveTenantOmadaOpenApiConfig(tenantId: string) {
   const tenant = await getTenantById(tenantId);
   if (!tenant) return null;
+  if (normalizePortalAuthMode(tenant.portal_auth_mode) === "external_radius_portal") {
+    return null;
+  }
   if (normalizeVoucherSourceMode(tenant.voucher_source_mode) !== "omada_openapi") {
     return null;
   }

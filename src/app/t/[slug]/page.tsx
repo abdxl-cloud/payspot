@@ -3,12 +3,11 @@ import { Checkout } from "@/components/checkout";
 import { AppTopbar } from "@/components/app-topbar";
 import { getPackagesWithAvailability, getTenantBySlug } from "@/lib/store";
 
-function normalizePortalAuthMode(
+function normalizeAccessMode(
   value: string | null | undefined,
-): "omada_builtin" | "external_portal_api" | "external_radius_portal" {
-  if (value === "external_portal_api") return "external_portal_api";
-  if (value === "external_radius_portal") return "external_radius_portal";
-  return "omada_builtin";
+): "voucher_access" | "account_access" {
+  if (value === "external_radius_portal") return "account_access";
+  return "voucher_access";
 }
 
 type Props = {
@@ -44,7 +43,7 @@ export default async function TenantPurchasePage({ params }: Props) {
 
   const packages = (await getPackagesWithAvailability(tenant.id))
     .filter((pkg) =>
-      tenant.portal_auth_mode === "external_radius_portal"
+      normalizeAccessMode(tenant.portal_auth_mode) === "account_access"
         ? pkg.price_ngn > 0
         : tenant.voucher_source_mode === "omada_openapi"
         ? pkg.price_ngn > 0
@@ -60,7 +59,7 @@ export default async function TenantPurchasePage({ params }: Props) {
       dataLimitMb: pkg.data_limit_mb,
       description: pkg.description,
       availableCount:
-        tenant.portal_auth_mode === "external_radius_portal"
+        normalizeAccessMode(tenant.portal_auth_mode) === "account_access"
           ? 999999
           : tenant.voucher_source_mode === "omada_openapi"
           ? Math.max(1, pkg.available_count)
@@ -100,7 +99,7 @@ export default async function TenantPurchasePage({ params }: Props) {
           <Checkout
             tenantSlug={tenant.slug}
             packages={packages}
-            portalAuthMode={normalizePortalAuthMode(tenant.portal_auth_mode)}
+            accessMode={normalizeAccessMode(tenant.portal_auth_mode)}
           />
         </div>
       </div>

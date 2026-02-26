@@ -71,8 +71,8 @@ type VoucherRow = {
 };
 
 type ArchitectureConfig = {
+  accessMode: "voucher_access" | "account_access";
   voucherSourceMode: "import_csv" | "omada_openapi";
-  portalAuthMode: "omada_builtin" | "external_portal_api" | "external_radius_portal";
   omada: {
     apiBaseUrl: string;
     omadacId: string;
@@ -368,7 +368,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const voucherSourceMode = architecture?.voucherSourceMode ?? null;
   const isCsvMode = voucherSourceMode === "import_csv";
   const isApiAutomationMode = voucherSourceMode === "omada_openapi";
-  const isExternalAccessMode = architecture?.portalAuthMode === "external_radius_portal";
+  const isExternalAccessMode = architecture?.accessMode === "account_access";
   const hasArchitectureConfigured = !!architecture;
   const hasPlans = plans.length > 0;
 
@@ -392,8 +392,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          accessMode: architecture.accessMode,
           voucherSourceMode: architecture.voucherSourceMode,
-          portalAuthMode: architecture.portalAuthMode,
           omada: {
             apiBaseUrl: architecture.omada.apiBaseUrl.trim(),
             omadacId: architecture.omada.omadacId.trim(),
@@ -907,10 +907,10 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               {architecture ? (
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
-                    Voucher source: {architecture.voucherSourceMode}
+                    Access mode: {architecture.accessMode}
                   </span>
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
-                    Portal mode: {architecture.portalAuthMode}
+                    Voucher source: {architecture.accessMode === "account_access" ? "n/a" : architecture.voucherSourceMode}
                   </span>
                 </div>
               ) : null}
@@ -1547,7 +1547,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         <ModalShell title="Configure architecture" onClose={() => setShowArchitectureModal(false)}>
           <form className="grid gap-3" onSubmit={saveArchitecture}>
             <div className="flex items-center justify-end">
-              {architecture.voucherSourceMode === "omada_openapi" ? (
+              {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "omada_openapi" ? (
                 <Link
                   href="/help/omada-openapi"
                   className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
@@ -1555,7 +1555,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   <CircleHelp className="size-3.5" />
                   Omada setup help
                 </Link>
-              ) : architecture.portalAuthMode === "external_radius_portal" ? (
+              ) : architecture.accessMode === "account_access" ? (
                 <Link
                   href="/help/external-radius"
                   className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
@@ -1567,10 +1567,36 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="grid gap-1.5">
+                <Label htmlFor="accessMode">Access mode</Label>
+                <select
+                  id="accessMode"
+                  value={architecture.accessMode}
+                  onChange={(event) =>
+                    setArchitecture((prev) =>
+                      prev
+                        ? (() => {
+                            const nextMode = event.target.value as ArchitectureConfig["accessMode"];
+                            return {
+                              ...prev,
+                              accessMode: nextMode,
+                              voucherSourceMode:
+                                nextMode === "account_access" ? "import_csv" : prev.voucherSourceMode,
+                            };
+                          })()
+                        : prev,
+                    )
+                  }
+                >
+                  <option value="voucher_access">Voucher access</option>
+                  <option value="account_access">Account access (External RADIUS)</option>
+                </select>
+              </div>
+              <div className="grid gap-1.5">
                 <Label htmlFor="voucherSourceMode">Voucher source</Label>
                 <select
                   id="voucherSourceMode"
                   value={architecture.voucherSourceMode}
+                  disabled={architecture.accessMode === "account_access"}
                   onChange={(event) =>
                     setArchitecture((prev) =>
                       prev
@@ -1585,31 +1611,15 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   <option value="import_csv">Import CSV (default)</option>
                   <option value="omada_openapi">Omada OpenAPI sync</option>
                 </select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="portalAuthMode">Portal auth architecture</Label>
-                <select
-                  id="portalAuthMode"
-                  value={architecture.portalAuthMode}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            portalAuthMode: event.target.value as ArchitectureConfig["portalAuthMode"],
-                          }
-                        : prev,
-                    )
-                  }
-                >
-                  <option value="omada_builtin">Omada built-in voucher portal</option>
-                  <option value="external_portal_api">External portal API</option>
-                  <option value="external_radius_portal">External RADIUS + portal</option>
-                </select>
+                {architecture.accessMode === "account_access" ? (
+                  <p className="text-xs text-slate-500">
+                    Voucher source is disabled in account-access mode.
+                  </p>
+                ) : null}
               </div>
             </div>
 
-            {architecture.voucherSourceMode === "omada_openapi" ? (
+            {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "omada_openapi" ? (
               <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Omada OpenAPI credentials</p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1723,7 +1733,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               </div>
             ) : null}
 
-            {architecture.portalAuthMode === "external_radius_portal" ? (
+            {architecture.accessMode === "account_access" ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">External RADIUS adapter</p>
                 <p className="mt-2 text-xs text-amber-900/80">
