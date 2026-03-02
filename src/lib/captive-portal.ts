@@ -1,8 +1,13 @@
 export type CaptivePortalContext = {
+  target?: string;
+  targetPort?: string;
   originUrl?: string;
   clientMac?: string;
+  clientIp?: string;
   apMac?: string;
   gatewayMac?: string;
+  raidusServerIp?: string;
+  scheme?: string;
   ssidName?: string;
   radioId?: string;
   vid?: string;
@@ -22,9 +27,14 @@ function hasGetter(
 
 const STRING_FIELD_LIMIT = 200;
 const QUERY_FIELDS = [
+  "target",
+  "targetPort",
   "clientMac",
+  "clientIp",
   "apMac",
   "gatewayMac",
+  "raidusServerIp",
+  "scheme",
   "ssidName",
   "radioId",
   "vid",
@@ -94,10 +104,15 @@ export function getCaptivePortalContextFromSearchParams(
   input: SearchParamsInput,
 ): CaptivePortalContext | undefined {
   return normalizeCaptivePortalContext({
+    target: getValue(input, "target"),
+    targetPort: getValue(input, "targetPort"),
     originUrl: getValue(input, "originUrl") ?? getValue(input, "url"),
     clientMac: getValue(input, "clientMac"),
+    clientIp: getValue(input, "clientIp") ?? getValue(input, "clientIP"),
     apMac: getValue(input, "apMac"),
-    gatewayMac: getValue(input, "gatewayMac"),
+    gatewayMac: getValue(input, "gatewayMac") ?? getValue(input, "GatewayMac"),
+    raidusServerIp: getValue(input, "raidusServerIp"),
+    scheme: getValue(input, "scheme"),
     ssidName: getValue(input, "ssidName"),
     radioId: getValue(input, "radioId"),
     vid: getValue(input, "vid"),

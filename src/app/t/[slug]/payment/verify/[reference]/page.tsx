@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { CaptiveBrowserAuth } from "@/components/captive-browserauth";
 import {
   createCaptivePortalSearchParams,
   getCaptivePortalContextFromSearchParams,
@@ -139,6 +140,16 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
               <p className="mt-6 text-xs text-slate-500">
                 Captive portal session details were preserved for this payment, but no original destination URL was provided by the controller.
               </p>
+            ) : null}
+
+            {isAccountAccess ? (
+              <div className="mt-6">
+                <CaptiveBrowserAuth
+                  tenantSlug={tenant.slug}
+                  portalContext={portalContext}
+                  defaultUsername={updated.email}
+                />
+              </div>
             ) : null}
 
             {!isAccountAccess ? (

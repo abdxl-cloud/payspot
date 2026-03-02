@@ -32,6 +32,8 @@ const schema = z.object({
   outputOctets: z.coerce.number().nonnegative().optional(),
   acctInputOctets: z.coerce.number().nonnegative().optional(),
   acctOutputOctets: z.coerce.number().nonnegative().optional(),
+  acctInputGigawords: z.coerce.number().int().nonnegative().optional(),
+  acctOutputGigawords: z.coerce.number().int().nonnegative().optional(),
   callingStationId: z.string().optional(),
   calledStationId: z.string().optional(),
   nasIpAddress: z.string().optional(),
@@ -39,6 +41,13 @@ const schema = z.object({
 
 function getAdapterSecret(request: Request) {
   return request.headers.get("x-radius-adapter-secret")?.trim() || "";
+}
+
+function combineOctets(lowWord?: number, highWord?: number) {
+  if (lowWord == null && highWord == null) return undefined;
+  const low = Math.max(0, Math.floor(lowWord ?? 0));
+  const high = Math.max(0, Math.floor(highWord ?? 0));
+  return high * 4_294_967_296 + low;
 }
 
 export async function POST(request: Request, { params }: Props) {
@@ -68,8 +77,14 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const normalizedEvent = parsed.data.event === "interim-update" ? "interim" : parsed.data.event;
-  const inputOctets = parsed.data.inputOctets ?? parsed.data.acctInputOctets;
-  const outputOctets = parsed.data.outputOctets ?? parsed.data.acctOutputOctets;
+  const inputOctets = combineOctets(
+    parsed.data.inputOctets ?? parsed.data.acctInputOctets,
+    parsed.data.acctInputGigawords,
+  );
+  const outputOctets = combineOctets(
+    parsed.data.outputOctets ?? parsed.data.acctOutputOctets,
+    parsed.data.acctOutputGigawords,
+  );
 
   let subscriberId = parsed.data.subscriberId;
   let entitlementId = parsed.data.entitlementId;

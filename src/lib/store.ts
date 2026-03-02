@@ -662,6 +662,48 @@ export async function listActiveEntitlementsForSubscriber(params: {
   >;
 }
 
+export async function getRadiusUsageForEntitlements(params: {
+  tenantId: string;
+  subscriberId: string;
+  entitlementIds: string[];
+}) {
+  if (params.entitlementIds.length === 0) {
+    return new Map<string, { usedBytes: number; activeSessions: number }>();
+  }
+
+  const db = getDb();
+  const placeholders = params.entitlementIds.map(() => "?").join(", ");
+  const rows = await db
+    .prepare(
+      `
+      SELECT
+        entitlement_id,
+        COALESCE(SUM(input_octets + output_octets), 0) as used_bytes,
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_sessions
+      FROM radius_accounting_sessions
+      WHERE tenant_id = ?
+        AND subscriber_id = ?
+        AND entitlement_id IN (${placeholders})
+      GROUP BY entitlement_id
+    `,
+    )
+    .all(params.tenantId, params.subscriberId, ...params.entitlementIds) as Array<{
+    entitlement_id: string;
+    used_bytes: number;
+    active_sessions: number;
+  }>;
+
+  return new Map(
+    rows.map((row) => [
+      row.entitlement_id,
+      {
+        usedBytes: Number(row.used_bytes ?? 0),
+        activeSessions: Number(row.active_sessions ?? 0),
+      },
+    ]),
+  );
+}
+
 export async function resolveTenantRadiusAdapterSecret(tenantId: string) {
   const tenant = await getTenantById(tenantId);
   if (!tenant?.radius_adapter_secret_enc) return null;

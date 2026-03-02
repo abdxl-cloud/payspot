@@ -1,4 +1,5 @@
 import {
+  getRadiusUsageForEntitlements,
   getPortalSubscriberSession,
   getTenantBySlug,
   listActiveEntitlementsForSubscriber,
@@ -33,6 +34,11 @@ export async function GET(request: Request, { params }: Props) {
     tenantId: tenant.id,
     subscriberId: session.subscriber_id,
   });
+  const usageByEntitlement = await getRadiusUsageForEntitlements({
+    tenantId: tenant.id,
+    subscriberId: session.subscriber_id,
+    entitlementIds: entitlements.map((item) => item.id),
+  });
 
   return Response.json({
     subscriber: {
@@ -42,6 +48,10 @@ export async function GET(request: Request, { params }: Props) {
       fullName: session.full_name,
     },
     entitlements: entitlements.map((item) => ({
+      usage: usageByEntitlement.get(item.id) ?? {
+        usedBytes: 0,
+        activeSessions: 0,
+      },
       id: item.id,
       status: item.status,
       startsAt: item.starts_at,
