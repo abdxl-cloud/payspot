@@ -15,6 +15,12 @@ const checklist = [
   "Enough unused vouchers exist before traffic campaigns.",
 ] as const;
 
+const navigationPaths = [
+  "PaySpot tenant admin: /t/<slug>/admin -> Quick actions -> Configure architecture.",
+  "PaySpot voucher import: /t/<slug>/admin -> Quick actions -> Import voucher CSV.",
+  "Omada export source: Omada Controller -> Hotspot/Portal -> Voucher export (CSV).",
+] as const;
+
 export default function CsvImportHelpPage() {
   return (
     <div className="app-shell">
@@ -48,6 +54,15 @@ export default function CsvImportHelpPage() {
                 </li>
               ))}
             </ol>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <h2 className="text-sm font-semibold text-slate-900">Where to Click</h2>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {navigationPaths.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">

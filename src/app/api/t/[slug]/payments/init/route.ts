@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { normalizeCaptivePortalContext } from "@/lib/captive-portal";
 import { initializeTransaction } from "@/lib/paystack";
 import {
   createTransaction,
@@ -21,6 +22,16 @@ const schema = z.object({
   phone: z.string().min(7),
   packageCode: z.string().min(1),
   subscriberToken: z.string().min(10).optional(),
+  portalContext: z.object({
+    originUrl: z.string().optional(),
+    clientMac: z.string().optional(),
+    apMac: z.string().optional(),
+    gatewayMac: z.string().optional(),
+    ssidName: z.string().optional(),
+    radioId: z.string().optional(),
+    vid: z.string().optional(),
+    previewSite: z.string().optional(),
+  }).optional(),
 });
 
 function buildCheckoutEmailFromPhone(phone: string) {
@@ -60,6 +71,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const { phone, packageCode, subscriberToken } = parsed.data;
+  const portalContext = normalizeCaptivePortalContext(parsed.data.portalContext);
   const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
   const bearer = request.headers.get("authorization");
   const headerToken =
@@ -118,7 +130,11 @@ export async function POST(request: Request, { params }: Props) {
       expiresAt,
     });
 
-    const callbackUrl = getCallbackUrl({ tenantSlug: tenant.slug, reference });
+    const callbackUrl = getCallbackUrl({
+      tenantSlug: tenant.slug,
+      reference,
+      portalContext,
+    });
     const init = await initializeTransaction({
       secretKey: paystackSecretKey,
       email,

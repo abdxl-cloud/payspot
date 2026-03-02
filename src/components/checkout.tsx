@@ -15,6 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  createCaptivePortalSearchParams,
+  type CaptivePortalContext,
+} from "@/lib/captive-portal";
 import { readJsonResponse } from "@/lib/http";
 
 type Package = {
@@ -33,6 +37,7 @@ type Props = {
   tenantSlug: string;
   packages: Package[];
   accessMode: "voucher_access" | "account_access";
+  portalContext?: CaptivePortalContext;
 };
 
 function formatDuration(minutes: number) {
@@ -109,7 +114,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
-export function Checkout({ tenantSlug, packages, accessMode }: Props) {
+export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Props) {
   const [selected, setSelected] = useState<Package | null>(null);
   const [planQuery, setPlanQuery] = useState("");
   const [visiblePlanCount, setVisiblePlanCount] = useState(8);
@@ -133,6 +138,7 @@ export function Checkout({ tenantSlug, packages, accessMode }: Props) {
   const [subscriberAuthLoading, setSubscriberAuthLoading] = useState(false);
 
   const isAccountAccessMode = accessMode === "account_access";
+  const portalQuery = createCaptivePortalSearchParams(portalContext).toString();
   const hasAvailable = packages.some((pkg) => pkg.availableCount > 0);
   const allSoldOut = packages.length > 0 && !hasAvailable;
   const isLongPlanList = packages.length > 12;
@@ -283,6 +289,7 @@ export function Checkout({ tenantSlug, packages, accessMode }: Props) {
           phone,
           packageCode: selected.code,
           subscriberToken: subscriberToken ?? undefined,
+          portalContext,
         }),
       });
       const data = await readJsonResponse<{
@@ -336,7 +343,8 @@ export function Checkout({ tenantSlug, packages, accessMode }: Props) {
         throw new Error(data?.error || "Unable to resume payment.");
       }
       if (data?.status === "success") {
-        window.location.href = `/t/${tenantSlug}/payment/verify/${resumeReference.trim()}`;
+        const verifyPath = `/t/${tenantSlug}/payment/verify/${resumeReference.trim()}`;
+        window.location.href = portalQuery ? `${verifyPath}?${portalQuery}` : verifyPath;
         return;
       }
       if (data?.authorizationUrl) {
@@ -388,6 +396,16 @@ export function Checkout({ tenantSlug, packages, accessMode }: Props) {
         <Alert variant="destructive">
           <AlertTitle>Payment setup failed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {portalContext ? (
+        <Alert>
+          <AlertTitle>Captive portal session detected</AlertTitle>
+          <AlertDescription>
+            Continue with payment here. Your network session details will be preserved so you can
+            return to the Wi-Fi sign-in flow after payment.
+          </AlertDescription>
         </Alert>
       ) : null}
 

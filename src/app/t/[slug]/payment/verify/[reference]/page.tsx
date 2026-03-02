@@ -1,4 +1,8 @@
 import { notFound } from "next/navigation";
+import {
+  createCaptivePortalSearchParams,
+  getCaptivePortalContextFromSearchParams,
+} from "@/lib/captive-portal";
 import { verifyAndProcess } from "@/lib/payments";
 import {
   getPackageById,
@@ -9,14 +13,20 @@ import {
 
 type Props = {
   params: { slug: string; reference: string } | Promise<{ slug: string; reference: string }>;
+  searchParams?:
+    | Record<string, string | string[] | undefined>
+    | Promise<Record<string, string | string[] | undefined>>;
 };
 
 export const dynamic = "force-dynamic";
 
-export default async function TenantPaymentVerifyPage({ params }: Props) {
+export default async function TenantPaymentVerifyPage({ params, searchParams }: Props) {
   const { slug, reference } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
   const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
+  const portalContext = getCaptivePortalContextFromSearchParams(resolvedSearchParams);
+  const portalReturnQuery = createCaptivePortalSearchParams(portalContext).toString();
 
   const transaction = await getTransaction(tenant.id, reference);
 
@@ -110,6 +120,26 @@ export default async function TenantPaymentVerifyPage({ params }: Props) {
                 </>
               )}
             </div>
+
+            {isAccountAccess && portalContext?.originUrl ? (
+              <div className="mt-6">
+                <a
+                  href={portalContext.originUrl}
+                  className="inline-flex items-center justify-center rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-800"
+                >
+                  Return to network sign-in
+                </a>
+                <p className="mt-2 text-xs text-slate-500">
+                  This returns you to the original page you tried to open so the captive network can continue its login flow.
+                </p>
+              </div>
+            ) : null}
+
+            {isAccountAccess && !portalContext?.originUrl && portalReturnQuery ? (
+              <p className="mt-6 text-xs text-slate-500">
+                Captive portal session details were preserved for this payment, but no original destination URL was provided by the controller.
+              </p>
+            ) : null}
 
             {!isAccountAccess ? (
               <p className="mt-6 text-xs text-slate-500">

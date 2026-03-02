@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Checkout } from "@/components/checkout";
 import { AppTopbar } from "@/components/app-topbar";
+import { getCaptivePortalContextFromSearchParams } from "@/lib/captive-portal";
 import { getPackagesWithAvailability, getTenantBySlug } from "@/lib/store";
 
 function normalizeAccessMode(
@@ -12,14 +13,19 @@ function normalizeAccessMode(
 
 type Props = {
   params: { slug: string } | Promise<{ slug: string }>;
+  searchParams?:
+    | Record<string, string | string[] | undefined>
+    | Promise<Record<string, string | string[] | undefined>>;
 };
 
 export const dynamic = "force-dynamic";
 
-export default async function TenantPurchasePage({ params }: Props) {
+export default async function TenantPurchasePage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
   const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
+  const portalContext = getCaptivePortalContextFromSearchParams(resolvedSearchParams);
 
   if (tenant.status !== "active") {
     return (
@@ -100,6 +106,7 @@ export default async function TenantPurchasePage({ params }: Props) {
             tenantSlug={tenant.slug}
             packages={packages}
             accessMode={normalizeAccessMode(tenant.portal_auth_mode)}
+            portalContext={portalContext}
           />
         </div>
       </div>

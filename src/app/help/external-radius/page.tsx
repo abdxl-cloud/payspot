@@ -2,76 +2,93 @@ import Image from "next/image";
 import Link from "next/link";
 import { AppTopbar } from "@/components/app-topbar";
 
-const setupSteps = [
-  "In PaySpot Tenant Admin, set architecture to External RADIUS + portal.",
-  "Create plans and set optional policy fields (maxDevices, bandwidthProfile, dataLimitMb).",
-  "In Omada Portal tab, enable portal for your hotspot SSID and set Type to RADIUS.",
-  "In Omada Access Control tab, configure External RADIUS Server profile.",
-  "Set portal redirect/landing behavior to your external portal flow.",
-  "Run full end-to-end test before opening to live users.",
+const prerequisites = [
+  "Omada Controller v6+ with captive portal enabled on your target SSID.",
+  "A PaySpot tenant configured with Access mode = account_access.",
+  "A RADIUS service (or adapter) that can receive Omada RADIUS requests and call HTTP APIs.",
 ] as const;
 
-const portalScreenValues = [
-  "Portal: Enable",
-  "SSID & Network: select your live hotspot SSID",
-  "Authentication Type: Hotspot",
-  "Type: check RADIUS, uncheck Voucher",
-  "HTTPS Redirection: Enable",
-  "Landing Page: The Original URL (recommended for hosted flow)",
+const navigationPaths = [
+  "PaySpot: /t/<slug>/admin -> Quick actions -> Configure architecture -> Access mode = account_access.",
+  "PaySpot plans: /t/<slug>/admin -> Plans section -> create/edit plans.",
+  "Omada portal screen: Settings (or Network Config) -> Portal -> edit portal profile.",
+  "Omada access control: Portal page -> Access Control tab -> External RADIUS Server.",
 ] as const;
 
-const accessControlValues = [
-  "Auth type: External RADIUS Server",
-  "Authentication server: your external RADIUS endpoint",
-  "Authentication port: 1812",
-  "Accounting server/port: enable and use 1813",
-  "Shared secret: use the one provided by your admin/ops side",
-  "Apply and verify profile is attached to this portal policy",
+const payspotSteps = [
+  "Go to Tenant Admin -> Configure architecture.",
+  "Set Access mode to Account access (External RADIUS).",
+  "Create plans with duration and price.",
+  "Set optional policy fields: maxDevices, bandwidthProfile, dataLimitMb.",
+  "Run one test purchase from /t/<slug> to confirm entitlement creation.",
 ] as const;
 
-const cutoverValidation = [
-  "Client joins SSID and gets redirected to your external portal.",
-  "Subscriber can sign up or login.",
-  "Payment succeeds and account plan activates.",
-  "Device gets internet immediately after successful auth.",
-  "Second device obeys maxDevices rule for the plan.",
-  "Disconnect/reconnect still honors active entitlement.",
+const omadaPortalSteps = [
+  "Portal = Enable",
+  "SSID & Network = your hotspot SSID",
+  "Authentication Type = Hotspot",
+  "Type = RADIUS (disable Voucher)",
+  "HTTPS Redirection = Enable",
+  "Landing Page = The Original URL or your required flow",
 ] as const;
 
-const rollbackPlan = [
-  "If migrating from Voucher and cutover fails, switch Type back to Voucher temporarily.",
-  "Apply and confirm captive portal auth works again.",
-  "Fix RADIUS profile issues, then retry in a low-traffic window.",
+const omadaRadiusSteps = [
+  "Access Control tab -> set Auth Type = External RADIUS Server.",
+  "Set Authentication server and port (usually 1812).",
+  "Enable Accounting server and port (usually 1813).",
+  "Set shared secret to match your RADIUS service.",
+  "Apply and bind this profile to the portal policy.",
+] as const;
+
+const adapterContract = [
+  "Authorize endpoint: POST /api/t/<slug>/radius/authorize with x-radius-adapter-secret header.",
+  "Authorize body: { username, password }.",
+  "On accept=true, use reply.maxDevices/reply.bandwidthProfile/reply.dataLimitMb/reply.sessionTimeout in policy mapping.",
+  "Accounting endpoint: POST /api/t/<slug>/radius/accounting with same header.",
+  "Accounting body: event(start|interim-update|stop), sessionId, subscriberId/entitlementId, octets.",
+] as const;
+
+const validation = [
+  "Client joins SSID and is redirected to portal/login flow.",
+  "Subscriber can sign up/login and purchase a plan.",
+  "RADIUS auth returns allow for active entitlement.",
+  "Internet access starts immediately after successful auth.",
+  "Simultaneous device limit follows maxDevices.",
+  "Usage accounting events update correctly until stop event.",
 ] as const;
 
 const tenantVisuals = [
   {
     src: "/help/external-tenant/omada-portal-create.png",
-    alt: "Omada portal configuration menu and create portal page",
-    caption:
-      "Omada portal settings page. Start by enabling Portal and creating a portal profile for your hotspot SSID.",
+    alt: "Omada portal configuration page",
+    caption: "Portal configuration entry point in Omada controller.",
     source: "https://www.tp-link.com/us/support/faq/4435/",
     sourceImage:
       "https://static.tp-link.com/upload/faq/image-20241024174056-1_20241024094058c.png",
   },
   {
     src: "/help/external-tenant/omada-external-portal-server.png",
-    alt: "Omada external portal server mode selection",
-    caption:
-      "Select External Portal Server and point Omada to your external portal URL and redirect URL.",
+    alt: "Omada external portal server configuration",
+    caption: "External portal server settings in Omada flow.",
     source: "https://www.tp-link.com/us/support/faq/2912/",
     sourceImage:
       "https://static.tp-link.com/upload/faq/image-20241024174056-8_20241024094057y.png",
   },
   {
     src: "/help/external-tenant/omada-landing-page.png",
-    alt: "Omada landing page and redirection settings",
-    caption:
-      "Configure landing page behavior so clients are redirected correctly to your external portal flow.",
+    alt: "Omada landing page and redirect settings",
+    caption: "Landing page and redirection behavior settings.",
     source: "https://www.tp-link.com/us/support/faq/2912/",
     sourceImage:
       "https://static.tp-link.com/upload/faq/image-20241024174056-9_20241024094057o.png",
   },
+] as const;
+
+const officialRefs = [
+  "https://support.omadanetworks.com/us/document/13716/",
+  "https://www.tp-link.com/us/support/faq/2912/",
+  "https://www.rfc-editor.org/rfc/rfc2865",
+  "https://www.rfc-editor.org/rfc/rfc2866",
 ] as const;
 
 export default function ExternalRadiusHelpPage() {
@@ -91,17 +108,42 @@ export default function ExternalRadiusHelpPage() {
 
         <main className="mt-6 grid gap-4">
           <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5">
-            <p className="section-kicker">Setup Playbook</p>
-            <h1 className="section-title">External RADIUS + External Portal</h1>
+            <p className="section-kicker">New Portal Setup</p>
+            <h1 className="section-title">External RADIUS + External Portal (End-to-End)</h1>
             <p className="mt-2 text-sm text-amber-900">
-              Universal guide for tenant setup: works for fresh deployments and voucher-to-RADIUS migrations.
+              This is the correct setup for a fresh deployment. Omada captive portal + external RADIUS + PaySpot account entitlements.
+            </p>
+          </section>
+
+          <section className="rounded-2xl border border-red-200 bg-red-50 p-5">
+            <h2 className="text-sm font-semibold text-red-900">Important Architecture Note</h2>
+            <p className="mt-2 text-sm text-red-900">
+              Omada External Web Portal flow requires an External RADIUS server path. PaySpot provides portal purchase/account APIs and RADIUS adapter HTTP endpoints, but your RADIUS service still needs to translate RADIUS requests/events to PaySpot API calls.
             </p>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-semibold text-slate-900">Setup Steps (In Order)</h2>
+            <h2 className="text-sm font-semibold text-slate-900">1) Prerequisites</h2>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {prerequisites.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <h2 className="text-sm font-semibold text-slate-900">Where to Click</h2>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {navigationPaths.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="text-sm font-semibold text-slate-900">2) PaySpot Tenant Setup</h2>
             <ol className="mt-3 space-y-2 text-sm text-slate-700">
-              {setupSteps.map((item, index) => (
+              {payspotSteps.map((item, index) => (
                 <li key={item}>
                   {index + 1}. {item}
                 </li>
@@ -110,71 +152,49 @@ export default function ExternalRadiusHelpPage() {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-            <h2 className="text-sm font-semibold text-slate-900">Omada Portal Tab Values</h2>
+            <h2 className="text-sm font-semibold text-slate-900">3) Omada Portal Tab Settings</h2>
             <ul className="mt-3 space-y-2 text-sm text-slate-700">
-              {portalScreenValues.map((item) => (
+              {omadaPortalSteps.map((item) => (
                 <li key={item}>- {item}</li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-slate-600">
-              These values map to the Omada Portal edit form shown in the screenshots below.
-            </p>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-semibold text-slate-900">Omada Access Control Tab Values</h2>
+            <h2 className="text-sm font-semibold text-slate-900">4) Omada Access Control (RADIUS) Settings</h2>
             <ul className="mt-3 space-y-2 text-sm text-slate-700">
-              {accessControlValues.map((item) => (
+              {omadaRadiusSteps.map((item) => (
                 <li key={item}>- {item}</li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-slate-600">
-              Your network/admin side should provide server host, shared secret, and failover values.
-            </p>
-            <p className="mt-3 text-xs text-slate-600">
-              Tenant-side responsibility stays on plans, pricing, portal URL, and test flow.
-            </p>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="text-sm font-semibold text-slate-900">5) Connect RADIUS Service to PaySpot</h2>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {adapterContract.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p className="font-semibold text-slate-900">PaySpot endpoints</p>
+              <p><code>POST /api/t/&lt;slug&gt;/radius/authorize</code></p>
+              <p><code>POST /api/t/&lt;slug&gt;/radius/accounting</code></p>
+              <p className="mt-2">Required header: <code>x-radius-adapter-secret</code></p>
+            </div>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-            <h2 className="text-sm font-semibold text-slate-900">Go-Live Validation</h2>
+            <h2 className="text-sm font-semibold text-slate-900">6) Validation Checklist</h2>
             <ul className="mt-3 space-y-2 text-sm text-slate-700">
-              {cutoverValidation.map((item) => (
+              {validation.map((item) => (
                 <li key={item}>- {item}</li>
               ))}
             </ul>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-semibold text-slate-900">Rollback (Migration Only)</h2>
-            <ul className="mt-3 space-y-2 text-sm text-slate-700">
-              {rollbackPlan.map((item) => (
-                <li key={item}>- {item}</li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-semibold text-slate-900">PaySpot Tenant Checklist</h2>
-            <ul className="mt-3 space-y-2 text-sm text-slate-700">
-              <li>- Configure architecture as External RADIUS + portal.</li>
-              <li>- Create plans that reflect what you will sell publicly.</li>
-              <li>- Set plan policy fields only if your network team maps them.</li>
-              <li>- Keep one low-cost test plan for onboarding and troubleshooting.</li>
-              <li>- Test `/t/&lt;slug&gt;` as a real customer before opening traffic.</li>
-            </ul>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-semibold text-slate-900">Policy Fields In Plain English</h2>
-            <p className="mt-2 text-sm text-slate-700">
-              <strong>maxDevices</strong> limits concurrent devices. <strong>bandwidthProfile</strong> is a policy label your
-              network team maps to rate limits. <strong>dataLimitMb</strong> is total allowed data for the plan.
-            </p>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-semibold text-slate-900">Tenant Action Screenshots</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Omada Screenshots (Official)</h2>
             <div className="mt-3 grid gap-3">
               {tenantVisuals.map((item) => (
                 <article
@@ -190,7 +210,7 @@ export default function ExternalRadiusHelpPage() {
                       rel="noreferrer"
                       className="mt-1 inline-block text-xs text-slate-500 underline underline-offset-2 hover:text-slate-900"
                     >
-                      Source (TP-Link FAQ)
+                      Source (TP-Link)
                     </a>
                     <a
                       href={item.sourceImage}
@@ -204,6 +224,17 @@ export default function ExternalRadiusHelpPage() {
                 </article>
               ))}
             </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h2 className="text-sm font-semibold text-slate-900">Official References</h2>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {officialRefs.map((item) => (
+                <li key={item}>
+                  - <a href={item} target="_blank" rel="noreferrer" className="underline underline-offset-2">{item}</a>
+                </li>
+              ))}
+            </ul>
           </section>
         </main>
       </div>

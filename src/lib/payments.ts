@@ -1,3 +1,7 @@
+import {
+  createCaptivePortalSearchParams,
+  type CaptivePortalContext,
+} from "@/lib/captive-portal";
 import { getAppEnv, getEnv } from "@/lib/env";
 import {
   activateSubscriberAccessForTransaction,
@@ -132,12 +136,21 @@ export async function verifyAndProcess(params: {
   });
 }
 
-export function getCallbackUrl(params: { tenantSlug: string; reference: string }) {
+export function getCallbackUrl(params: {
+  tenantSlug: string;
+  reference: string;
+  portalContext?: CaptivePortalContext;
+}) {
   const { APP_URL } = getAppEnv();
-  return new URL(
+  const callbackUrl = new URL(
     `/t/${params.tenantSlug}/payment/verify/${params.reference}`,
     APP_URL,
-  ).toString();
+  );
+  const portalParams = createCaptivePortalSearchParams(params.portalContext);
+  for (const [key, value] of portalParams.entries()) {
+    callbackUrl.searchParams.set(key, value);
+  }
+  return callbackUrl.toString();
 }
 
 export function getResumeTtlMs() {

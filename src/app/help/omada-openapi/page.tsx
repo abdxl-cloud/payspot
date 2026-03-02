@@ -69,6 +69,12 @@ const prerequisites = [
   "You can open PaySpot tenant admin at /t/<slug>/admin.",
 ] as const;
 
+const navigationPaths = [
+  "PaySpot: /t/<slug>/admin -> Quick actions -> Configure architecture -> Voucher source = omada_openapi.",
+  "Omada: Global View -> Settings -> Platform Integration -> Open API.",
+  "Omada app creation: Open API -> Add New App -> Client mode.",
+] as const;
+
 const stepByStep = [
   {
     title: "Open OpenAPI settings in Omada",
@@ -207,6 +213,17 @@ export default function OmadaOpenApiHelpPage() {
                     <CircleCheckBig className="mt-0.5 size-4 shrink-0 text-emerald-700" />
                     <span>{item}</span>
                   </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Where To Click
+              </p>
+              <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                {navigationPaths.map((item) => (
+                  <li key={item}>- {item}</li>
                 ))}
               </ul>
             </div>
