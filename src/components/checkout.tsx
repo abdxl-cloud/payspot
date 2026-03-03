@@ -215,6 +215,9 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const [resumeMessage, setResumeMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [flowMode, setFlowMode] = useState<"purchase" | "resume">("purchase");
+  const [purchaseStage, setPurchaseStage] = useState<"auth" | "plan" | "payment">(
+    accessMode === "account_access" ? "auth" : "plan",
+  );
   const [subscriberEmail, setSubscriberEmail] = useState("");
   const [subscriberPassword, setSubscriberPassword] = useState("");
   const [subscriberToken, setSubscriberToken] = useState<string | null>(null);
@@ -267,6 +270,38 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
     }
   }, [filteredPackages, selected, visiblePlanCount]);
 
+  useEffect(() => {
+    if (flowMode !== "purchase") {
+      return;
+    }
+
+    if (isAccountAccessMode) {
+      if (hasTrackedActivePlan) {
+        return;
+      }
+
+      if (hasAuthenticatedSubscriber && purchaseStage === "auth") {
+        setPurchaseStage("plan");
+        return;
+      }
+
+      if (!hasAuthenticatedSubscriber && purchaseStage !== "auth") {
+        setPurchaseStage("auth");
+      }
+      return;
+    }
+
+    if (purchaseStage === "auth") {
+      setPurchaseStage("plan");
+    }
+  }, [
+    flowMode,
+    hasAuthenticatedSubscriber,
+    hasTrackedActivePlan,
+    isAccountAccessMode,
+    purchaseStage,
+  ]);
+
   const bestValueCode = useMemo(() => {
     const available = packages.filter((pkg) => pkg.availableCount > 0);
     if (available.length === 0) return null;
@@ -281,11 +316,15 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       : isAccountAccessMode
         ? hasTrackedActivePlan
           ? 3
-          : hasAuthenticatedSubscriber
-          ? 2
-          : 1
+          : purchaseStage === "payment"
+            ? 3
+            : purchaseStage === "plan"
+              ? 2
+              : 1
         : selected
-          ? 2
+          ? purchaseStage === "payment"
+            ? 2
+            : 1
           : 1;
 
   const canSubmit = useMemo(() => {
@@ -306,6 +345,16 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const activePlanUsagePercent = activeEntitlement && activePlanLimitMb && activePlanLimitMb > 0
     ? Math.min(100, (activePlanUsedMb / activePlanLimitMb) * 100)
     : null;
+  const isPurchaseFlow = flowMode === "purchase";
+  const showPlanSelection =
+    !hasTrackedActivePlan &&
+    isPurchaseFlow &&
+    (!isAccountAccessMode || purchaseStage !== "auth");
+  const showPaymentStep =
+    !allSoldOut &&
+    !hasTrackedActivePlan &&
+    isPurchaseFlow &&
+    purchaseStage === "payment";
 
   function redirectToPaystack(url: string, newTab = false) {
     if (newTab) {
@@ -348,6 +397,17 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       setCopyMessage("Copy failed. Please write it down manually.");
       return false;
     }
+  }
+
+  function continueToPaymentStep() {
+    if (!selected || selected.availableCount <= 0) {
+      return;
+    }
+    if (isAccountAccessMode && !hasAuthenticatedSubscriber) {
+      return;
+    }
+    setError(null);
+    setPurchaseStage("payment");
   }
 
   async function authenticateSubscriber(mode: "login" | "signup") {
@@ -615,6 +675,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
               portalContext={portalContext}
               defaultUsername={subscriberOverview?.subscriber.email || subscriberEmail.trim()}
               defaultPassword={subscriberPassword}
+              autoSubmitWhenReady
             />
 
             <Alert>
@@ -755,6 +816,37 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       {renderAccountAccessAuthCard()}
 
       {!hasTrackedActivePlan ? (
+        <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-white p-1">
+          <button
+            type="button"
+            onClick={() => setFlowMode("purchase")}
+            className={[
+              "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+              isPurchaseFlow
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100",
+            ].join(" ")}
+            aria-pressed={isPurchaseFlow}
+          >
+            New purchase
+          </button>
+          <button
+            type="button"
+            onClick={() => setFlowMode("resume")}
+            className={[
+              "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+              !isPurchaseFlow
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100",
+            ].join(" ")}
+            aria-pressed={!isPurchaseFlow}
+          >
+            Resume payment
+          </button>
+        </div>
+      ) : null}
+
+      {showPlanSelection ? (
       <Card className="border-slate-200/80 bg-white/90">
         <CardHeader className="space-y-3 pb-3">
           <Stepper step={step} accessMode={accessMode} />
@@ -914,41 +1006,57 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
               </Button>
             </div>
           ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+            <div>
+              <p className="text-sm font-medium text-slate-900">
+                {selected ? `${selected.name} selected` : "Select a plan to continue"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {isAccountAccessMode
+                  ? "After you confirm a plan, you will move to payment details."
+                  : "Continue when you are ready to enter your phone number and start payment."}
+              </p>
+            </div>
+            <Button
+              type="button"
+              disabled={
+                !selected ||
+                selected.availableCount <= 0 ||
+                (isAccountAccessMode && !hasAuthenticatedSubscriber)
+              }
+              onClick={continueToPaymentStep}
+            >
+              Continue
+            </Button>
+          </div>
         </CardContent>
       </Card>
       ) : null}
 
-      {!allSoldOut && flowMode === "purchase" && !hasTrackedActivePlan ? (
+      {showPaymentStep ? (
         <Card className="max-w-4xl border-slate-200/80 bg-white/90">
           <CardHeader className="space-y-2 pb-2">
-            <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-white p-1">
-              <button
-                type="button"
-                onClick={() => setFlowMode("purchase")}
-                className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition sm:px-4"
-                aria-pressed={true}
-              >
-                New purchase
-              </button>
-              <button
-                type="button"
-                onClick={() => setFlowMode("resume")}
-                className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 sm:px-4"
-                aria-pressed={false}
-              >
-                Resume payment
-              </button>
-            </div>
             <p className="section-kicker">Customer details</p>
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
                 {isAccountAccessMode ? "3. Confirm phone and pay" : "2. Enter phone number"}
               </CardTitle>
-              {selected ? (
-                <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
-                  {selected.name} • NGN {selected.priceNgn.toLocaleString()}
-                </Badge>
-              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                {selected ? (
+                  <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
+                    {selected.name} • NGN {selected.priceNgn.toLocaleString()}
+                  </Badge>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPurchaseStage("plan")}
+                >
+                  Change plan
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

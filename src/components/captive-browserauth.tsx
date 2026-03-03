@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,7 @@ type Props = {
   portalContext?: CaptivePortalContext;
   defaultUsername?: string;
   defaultPassword?: string;
+  autoSubmitWhenReady?: boolean;
 };
 
 type StoredAuth = {
@@ -118,20 +119,85 @@ function submitBrowserAuth(params: {
   form.submit();
 }
 
+function resolveBrowserAuthCredentials(params: {
+  tenantSlug: string;
+  manualUsername: string;
+  manualPassword: string;
+  defaultUsername?: string;
+  defaultPassword?: string;
+}) {
+  const stored = getStoredAuth(params.tenantSlug);
+  const username = (
+    params.manualUsername.trim() ||
+    params.defaultUsername?.trim() ||
+    stored?.username?.trim() ||
+    ""
+  );
+  const password = (
+    params.manualPassword ||
+    params.defaultPassword ||
+    stored?.password ||
+    ""
+  ).trim();
+
+  return { username, password };
+}
+
 export function CaptiveBrowserAuth({
   tenantSlug,
   portalContext,
   defaultUsername,
   defaultPassword,
+  autoSubmitWhenReady = false,
 }: Props) {
   const [manualUsername, setManualUsername] = useState(defaultUsername ?? "");
   const [manualPassword, setManualPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const autoSubmittedRef = useRef(false);
 
   const actionUrl = useMemo(
     () => (portalContext ? buildBrowserAuthUrl(portalContext) : null),
     [portalContext],
   );
+
+  useEffect(() => {
+    if (!autoSubmitWhenReady || autoSubmittedRef.current) {
+      return;
+    }
+
+    if (!portalContext || !actionUrl) {
+      return;
+    }
+
+    const { username, password } = resolveBrowserAuthCredentials({
+      tenantSlug,
+      manualUsername,
+      manualPassword,
+      defaultUsername,
+      defaultPassword,
+    });
+
+    if (!username || !password) {
+      return;
+    }
+
+    autoSubmittedRef.current = true;
+    submitBrowserAuth({
+      actionUrl,
+      context: portalContext,
+      username,
+      password,
+    });
+  }, [
+    actionUrl,
+    autoSubmitWhenReady,
+    defaultPassword,
+    defaultUsername,
+    manualPassword,
+    manualUsername,
+    portalContext,
+    tenantSlug,
+  ]);
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -142,19 +208,13 @@ export function CaptiveBrowserAuth({
       return;
     }
 
-    const stored = getStoredAuth(tenantSlug);
-    const username = (
-      manualUsername.trim() ||
-      defaultUsername?.trim() ||
-      stored?.username?.trim() ||
-      ""
-    );
-    const password = (
-      manualPassword ||
-      defaultPassword ||
-      stored?.password ||
-      ""
-    ).trim();
+    const { username, password } = resolveBrowserAuthCredentials({
+      tenantSlug,
+      manualUsername,
+      manualPassword,
+      defaultUsername,
+      defaultPassword,
+    });
 
     if (!username || !password) {
       setError("Enter your account email and password to complete Wi-Fi sign-in.");
@@ -179,6 +239,11 @@ export function CaptiveBrowserAuth({
       <p className="text-xs text-slate-600">
         This sends your subscriber credentials back to the Omada controller so the captive portal can finish login.
       </p>
+      {autoSubmitWhenReady ? (
+        <p className="text-xs font-medium text-sky-700">
+          If your saved subscriber credentials are available, PaySpot will continue sign-in automatically.
+        </p>
+      ) : null}
       <form className="grid gap-3 md:grid-cols-2" onSubmit={handleSubmit}>
         <div className="grid gap-2">
           <Label htmlFor={`browserauth-email-${tenantSlug}`}>Email</Label>
@@ -208,4 +273,3 @@ export function CaptiveBrowserAuth({
     </div>
   );
 }
-

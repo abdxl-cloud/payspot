@@ -188,8 +188,13 @@ render_adapter_script() {
   local adapter_secret="$3"
   cat <<EOF
 #!/usr/bin/env python3
+import datetime
 import json
+from pathlib import Path
+import re
+import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -197,6 +202,12 @@ BASE_URL = ${base_url@Q}
 TENANT_SLUG = ${tenant_slug@Q}
 ADAPTER_SECRET = ${adapter_secret@Q}
 TIMEOUT = 10
+DISCONNECT_PORT = 3799
+CLIENTS_CONF_CANDIDATES = (
+    "/etc/freeradius/3.0/clients.conf",
+    "/etc/freeradius/clients.conf",
+    "/etc/raddb/clients.conf",
+)
 
 
 def log(message: str) -> None:
@@ -253,19 +264,135 @@ def parse_positive_int(raw: str):
     return max(0, value)
 
 
+def combine_octets(low_word, high_word):
+    low = low_word or 0
+    high = high_word or 0
+    return max(0, int(high) * 4294967296 + int(low))
+
+
+def parse_iso8601(raw: str):
+    if not raw:
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+        return parsed.astimezone(datetime.timezone.utc)
+    except ValueError:
+        return None
+
+
 def parse_class(raw: str):
     if not raw:
-        return None, None
+        return {}
     text = raw.strip().strip('"')
     if not text.startswith("payspot;"):
-        return None, None
+        return {}
     fields = {}
     for part in text.split(";")[1:]:
         if "=" not in part:
             continue
         key, value = part.split("=", 1)
         fields[key] = value
-    return fields.get("subscriber"), fields.get("entitlement")
+    return fields
+
+
+def read_radius_clients():
+    clients = []
+    for candidate in CLIENTS_CONF_CANDIDATES:
+        path = Path(candidate)
+        if not path.exists():
+            continue
+        try:
+            text = path.read_text()
+        except OSError:
+            continue
+        for match in re.finditer(r"client\\s+[^\\{]+\\{(.*?)\\}", text, re.S):
+            block = match.group(1)
+            ip_match = re.search(r"^\\s*ipaddr\\s*=\\s*(\\S+)\\s*$", block, re.M)
+            secret_match = re.search(r"^\\s*secret\\s*=\\s*(.*?)\\s*$", block, re.M)
+            if not ip_match or not secret_match:
+                continue
+            clients.append({
+                "ipaddr": ip_match.group(1).strip(),
+                "secret": secret_match.group(1).strip(),
+            })
+    return clients
+
+
+def find_radius_secret(nas_ip: str):
+    clients = read_radius_clients()
+    if not clients:
+        return None
+
+    for client in clients:
+        if client["ipaddr"] == nas_ip:
+            return client["secret"]
+
+    unique_secrets = {client["secret"] for client in clients if client["secret"]}
+    if len(unique_secrets) == 1:
+        secret = unique_secrets.pop()
+        log(f"using shared fallback secret for disconnect target {nas_ip}")
+        return secret
+
+    return None
+
+
+def send_disconnect(*, nas_ip: str, session_id: str, username: str, calling_station_id: str):
+    if not nas_ip or not session_id:
+        return
+
+    secret = find_radius_secret(nas_ip)
+    if not secret:
+        log(f"disconnect skipped: no shared secret found for {nas_ip}")
+        return
+
+    attrs = [
+        f'Acct-Session-Id = "{radius_escape(session_id)}"',
+        f"NAS-IP-Address = {nas_ip}",
+        f"Event-Timestamp = {int(time.time())}",
+    ]
+    if username:
+        attrs.append(f'User-Name = "{radius_escape(username)}"')
+    if calling_station_id:
+        attrs.append(f'Calling-Station-Id = "{radius_escape(calling_station_id)}"')
+
+    request_body = "\\n".join(attrs) + "\\n"
+
+    try:
+        completed = subprocess.run(
+            [
+                "/usr/bin/radclient",
+                "-t",
+                "3",
+                "-r",
+                "1",
+                "-x",
+                f"{nas_ip}:{DISCONNECT_PORT}",
+                "disconnect",
+                secret,
+            ],
+            input=request_body,
+            text=True,
+            capture_output=True,
+            timeout=TIMEOUT,
+            check=False,
+        )
+    except Exception as exc:
+        log(f"disconnect failed for session={session_id}: {exc}")
+        return
+
+    if completed.returncode != 0:
+        details = completed.stderr.strip() or completed.stdout.strip() or "unknown radclient failure"
+        log(f"disconnect rejected for session={session_id}: {details}")
+        return
+
+    log(f"disconnect request sent for session={session_id} to {nas_ip}")
 
 
 def map_accounting_event(raw: str) -> str:
@@ -317,6 +444,9 @@ def handle_auth(argv):
         data_limit = parse_positive_int(str(reply.get("dataLimitMb") or ""))
         if data_limit and data_limit > 0:
             class_value += f";dataLimitMb={data_limit}"
+        plan_ends_at = str(reply.get("planEndsAt") or "").strip()
+        if plan_ends_at:
+            class_value += f";planEndsAt={plan_ends_at}"
         emit_reply("Class", class_value, is_string=True)
 
     emit_reply("Reply-Message", "PaySpot access granted", is_string=True)
@@ -324,7 +454,7 @@ def handle_auth(argv):
 
 
 def handle_accounting(argv):
-    if len(argv) < 12:
+    if len(argv) < 13:
         log("accounting called without expected arguments")
         return 0
 
@@ -336,7 +466,15 @@ def handle_accounting(argv):
     acct_output = parse_positive_int(argv[5])
     acct_input_gigawords = parse_positive_int(argv[6])
     acct_output_gigawords = parse_positive_int(argv[7])
-    subscriber_id, entitlement_id = parse_class(argv[8])
+    username = argv[8]
+    class_fields = parse_class(argv[9])
+    subscriber_id = class_fields.get("subscriber")
+    entitlement_id = class_fields.get("entitlement")
+    data_limit_mb = parse_positive_int(class_fields.get("dataLimitMb", ""))
+    plan_ends_at = parse_iso8601(class_fields.get("planEndsAt", ""))
+    calling_station_id = argv[10]
+    called_station_id = argv[11]
+    nas_ip_address = argv[12]
 
     if acct_input is not None:
         payload["acctInputOctets"] = acct_input
@@ -346,20 +484,36 @@ def handle_accounting(argv):
         payload["acctInputGigawords"] = acct_input_gigawords
     if acct_output_gigawords is not None:
         payload["acctOutputGigawords"] = acct_output_gigawords
-    if argv[9]:
-        payload["callingStationId"] = argv[9]
-    if argv[10]:
-        payload["calledStationId"] = argv[10]
-    if argv[11]:
-        payload["nasIpAddress"] = argv[11]
+    if calling_station_id:
+        payload["callingStationId"] = calling_station_id
+    if called_station_id:
+        payload["calledStationId"] = called_station_id
+    if nas_ip_address:
+        payload["nasIpAddress"] = nas_ip_address
     if subscriber_id:
         payload["subscriberId"] = subscriber_id
     if entitlement_id:
         payload["entitlementId"] = entitlement_id
 
+    should_disconnect = False
+    total_bytes = combine_octets(acct_input, acct_input_gigawords) + combine_octets(acct_output, acct_output_gigawords)
+    if data_limit_mb and total_bytes >= data_limit_mb * 1024 * 1024:
+        should_disconnect = True
+    if plan_ends_at and datetime.datetime.now(datetime.timezone.utc) >= plan_ends_at:
+        should_disconnect = True
+
     status, body = api_post("/radius/accounting", payload)
     if not (200 <= status < 300):
         log(f"accounting backend status={status} body={body}")
+        return 0
+
+    if should_disconnect and payload["event"] not in {"stop", "accounting-on", "accounting-off"}:
+        send_disconnect(
+            nas_ip=nas_ip_address,
+            session_id=payload["sessionId"],
+            username=username,
+            calling_station_id=calling_station_id,
+        )
     return 0
 
 
@@ -398,7 +552,7 @@ exec payspot_accounting {
     input_pairs = request
     output_pairs = reply
     shell_escape = yes
-    program = "/usr/local/bin/payspot-radius-adapter accounting \"%{Acct-Status-Type}\" \"%{Acct-Session-Id}\" \"%{Acct-Input-Octets}\" \"%{Acct-Output-Octets}\" \"%{Acct-Input-Gigawords}\" \"%{Acct-Output-Gigawords}\" \"%{Class}\" \"%{Calling-Station-Id}\" \"%{Called-Station-Id}\" \"%{NAS-IP-Address}\""
+    program = "/usr/local/bin/payspot-radius-adapter accounting \"%{Acct-Status-Type}\" \"%{Acct-Session-Id}\" \"%{Acct-Input-Octets}\" \"%{Acct-Output-Octets}\" \"%{Acct-Input-Gigawords}\" \"%{Acct-Output-Gigawords}\" \"%{User-Name}\" \"%{Class}\" \"%{Calling-Station-Id}\" \"%{Called-Station-Id}\" \"%{NAS-IP-Address}\""
 }
 EOF
 

@@ -208,6 +208,30 @@ export type SubscriberEntitlementRow = {
   updated_at: string;
 };
 
+export type SubscriberAccessEndReason =
+  | "plan_expired"
+  | "data_limit_reached"
+  | "no_active_plan";
+
+export type SubscriberAccessUsage = {
+  usedBytes: number;
+  activeSessions: number;
+};
+
+export type SubscriberAccessState =
+  | {
+      state: "active";
+      reason: null;
+      entitlement: SubscriberEntitlementRow;
+      usage: SubscriberAccessUsage;
+    }
+  | {
+      state: "ended";
+      reason: SubscriberAccessEndReason;
+      entitlement: SubscriberEntitlementRow | null;
+      usage: SubscriberAccessUsage | null;
+    };
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -662,6 +686,137 @@ export async function listActiveEntitlementsForSubscriber(params: {
   >;
 }
 
+async function getRadiusUsageForEntitlement(params: {
+  tenantId: string;
+  subscriberId: string;
+  entitlementId: string;
+}) {
+  const db = getDb();
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        COALESCE(SUM(input_octets + output_octets), 0) as used_bytes,
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_sessions
+      FROM radius_accounting_sessions
+      WHERE tenant_id = ?
+        AND subscriber_id = ?
+        AND entitlement_id = ?
+    `,
+    )
+    .get(params.tenantId, params.subscriberId, params.entitlementId) as
+    | {
+        used_bytes: number;
+        active_sessions: number;
+      }
+    | undefined;
+
+  return {
+    usedBytes: Number(row?.used_bytes ?? 0),
+    activeSessions: Number(row?.active_sessions ?? 0),
+  };
+}
+
+export async function getSubscriberAccessState(params: {
+  tenantId: string;
+  subscriberId: string;
+}): Promise<SubscriberAccessState> {
+  const db = getDb();
+  const now = nowIso();
+  const currentOrLatestStartedEntitlement = await db
+    .prepare(
+      `
+      SELECT *
+      FROM subscriber_entitlements
+      WHERE tenant_id = ?
+        AND subscriber_id = ?
+        AND starts_at <= ?
+      ORDER BY ends_at DESC
+      LIMIT 1
+    `,
+    )
+    .get(params.tenantId, params.subscriberId, now) as SubscriberEntitlementRow | undefined;
+
+  if (!currentOrLatestStartedEntitlement) {
+    const latestEntitlement = await db
+      .prepare(
+        `
+        SELECT *
+        FROM subscriber_entitlements
+        WHERE tenant_id = ?
+          AND subscriber_id = ?
+        ORDER BY ends_at DESC
+        LIMIT 1
+      `,
+      )
+      .get(params.tenantId, params.subscriberId) as SubscriberEntitlementRow | undefined;
+
+    if (!latestEntitlement) {
+      return {
+        state: "ended",
+        reason: "no_active_plan",
+        entitlement: null,
+        usage: null,
+      };
+    }
+
+    const usage = await getRadiusUsageForEntitlement({
+      tenantId: params.tenantId,
+      subscriberId: params.subscriberId,
+      entitlementId: latestEntitlement.id,
+    });
+
+    return {
+      state: "ended",
+      reason: "no_active_plan",
+      entitlement: latestEntitlement,
+      usage,
+    };
+  }
+
+  const latestEntitlement = currentOrLatestStartedEntitlement;
+  const usage = await getRadiusUsageForEntitlement({
+    tenantId: params.tenantId,
+    subscriberId: params.subscriberId,
+    entitlementId: latestEntitlement.id,
+  });
+
+  const startsAtMs = parseIsoTime(latestEntitlement.starts_at);
+  const endsAtMs = parseIsoTime(latestEntitlement.ends_at);
+  const nowMs = Date.now();
+  const isWithinWindow = startsAtMs <= nowMs && endsAtMs > nowMs;
+  const allowedBytes =
+    latestEntitlement.data_limit_mb && latestEntitlement.data_limit_mb > 0
+      ? latestEntitlement.data_limit_mb * 1024 * 1024
+      : null;
+  const dataLimitReached = allowedBytes !== null && usage.usedBytes >= allowedBytes;
+
+  if (isWithinWindow && latestEntitlement.status === "active" && !dataLimitReached) {
+    return {
+      state: "active",
+      reason: null,
+      entitlement: latestEntitlement,
+      usage,
+    };
+  }
+
+  if (isWithinWindow && dataLimitReached) {
+    return {
+      state: "ended",
+      reason: "data_limit_reached",
+      entitlement: latestEntitlement,
+      usage,
+    };
+  }
+
+  return {
+    state: "ended",
+    reason: "plan_expired",
+    entitlement: latestEntitlement,
+    usage,
+  };
+}
+
 export async function getRadiusUsageForEntitlements(params: {
   tenantId: string;
   subscriberId: string;
@@ -731,26 +886,17 @@ export async function authorizeSubscriberRadiusAccess(params: {
   });
   if (!subscriber) return { status: "invalid_credentials" as const };
 
+  const accessState = await getSubscriberAccessState({
+    tenantId: params.tenantId,
+    subscriberId: subscriber.id,
+  });
+
+  if (accessState.state === "ended") {
+    return { status: accessState.reason };
+  }
+
   const db = getDb();
-  const now = nowIso();
-  const entitlement = await db
-    .prepare(
-      `
-      SELECT *
-      FROM subscriber_entitlements
-      WHERE tenant_id = ?
-        AND subscriber_id = ?
-        AND status = 'active'
-        AND starts_at <= ?
-        AND ends_at > ?
-      ORDER BY ends_at DESC
-      LIMIT 1
-    `,
-    )
-    .get(params.tenantId, subscriber.id, now, now) as SubscriberEntitlementRow | undefined;
-
-  if (!entitlement) return { status: "no_active_plan" as const };
-
+  const entitlement = accessState.entitlement;
   const activeSessionCountRow = await db
     .prepare(
       `
@@ -764,23 +910,6 @@ export async function authorizeSubscriberRadiusAccess(params: {
 
   if (activeSessionCount >= Math.max(1, entitlement.max_devices)) {
     return { status: "session_limit_reached" as const };
-  }
-
-  if (entitlement.data_limit_mb && entitlement.data_limit_mb > 0) {
-    const usageRow = await db
-      .prepare(
-        `
-        SELECT COALESCE(SUM(input_octets + output_octets), 0) as total_bytes
-        FROM radius_accounting_sessions
-        WHERE tenant_id = ? AND entitlement_id = ?
-      `,
-      )
-      .get(params.tenantId, entitlement.id) as { total_bytes: number } | undefined;
-    const usedBytes = Number(usageRow?.total_bytes ?? 0);
-    const allowedBytes = entitlement.data_limit_mb * 1024 * 1024;
-    if (usedBytes >= allowedBytes) {
-      return { status: "data_limit_reached" as const };
-    }
   }
 
   return {

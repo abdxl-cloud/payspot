@@ -1563,7 +1563,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   <CircleHelp className="size-3.5" />
                   External RADIUS help
                 </Link>
-              ) : null}
+                ) : null}
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="grid gap-1.5">

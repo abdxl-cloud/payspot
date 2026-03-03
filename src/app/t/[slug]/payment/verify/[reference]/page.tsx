@@ -148,6 +148,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
                   tenantSlug={tenant.slug}
                   portalContext={portalContext}
                   defaultUsername={updated.email}
+                  autoSubmitWhenReady
                 />
               </div>
             ) : null}

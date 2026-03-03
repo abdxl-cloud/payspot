@@ -29,7 +29,7 @@ const omadaPortalSteps = [
   "Authentication Type = Hotspot",
   "Type = RADIUS (disable Voucher)",
   "HTTPS Redirection = Enable",
-  "Landing Page = The Original URL or your required flow",
+  "Landing Page = The Original URL or your preferred post-auth redirect",
 ] as const;
 
 const omadaRadiusSteps = [
