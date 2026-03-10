@@ -667,6 +667,12 @@ def handle_accounting(argv):
     if entitlement_id:
         payload["entitlementId"] = entitlement_id
 
+    if payload["event"] in {"start", "interim"} and not class_fields:
+        log(
+            "accounting packet missing Class attribute; "
+            "attribution relies on username/session fallback"
+        )
+
     should_disconnect = False
     total_bytes = combine_octets(acct_input, acct_input_gigawords) + combine_octets(acct_output, acct_output_gigawords)
     if data_limit_mb and total_bytes >= data_limit_mb * 1024 * 1024:
@@ -840,6 +846,7 @@ for slug, t in tenants.items():
             f'  secret = {secret}',
             f'  shortname = {prefix}{slug}{idx}',
             '  nastype = other',
+            '  require_message_authenticator = yes',
             '}',
             '',
         ])
@@ -1036,6 +1043,7 @@ upgrade_mode() {
     backup_file "$FR_ADAPTER_BIN"
   fi
   backup_file "$FR_DEFAULT_SITE"
+  backup_file "$FR_CLIENTS"
   backup_file "$FR_AUTHORIZE_FILE"
 
   render_adapter_script "$PAYSPOT_TENANTS_FILE" > "$FR_ADAPTER_BIN"
@@ -1043,6 +1051,7 @@ upgrade_mode() {
   write_mod_files
   patch_default_site
   patch_authorize_file
+  sync_clients_from_config
 
   if ! freeradius -CX >/dev/null 2>&1; then
     fail "FreeRADIUS config test failed. Backups are in $BACKUP_DIR"
@@ -1100,6 +1109,23 @@ check_mode() {
   check_file_contains "default site contains payspot_auth auth block" "Auth-Type payspot_portal" "$FR_DEFAULT_SITE"
   check_file_contains "default site contains payspot_accounting" "payspot_accounting" "$FR_DEFAULT_SITE"
   check_file_contains "auth module passes NAS-IP-Address" "NAS-IP-Address" "$FR_MODS_AVAILABLE/payspot_auth"
+  if python3 - "$FR_CLIENTS" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+managed = re.search(r'# BEGIN PAYSPOT MANAGED CLIENTS(.*?)# END PAYSPOT MANAGED CLIENTS', text, re.S)
+if not managed:
+    sys.exit(2)
+blocks = re.findall(r'client\s+[^\{]+\{(.*?)\n\}', managed.group(1), re.S)
+if not blocks:
+    sys.exit(3)
+missing = [b for b in blocks if 'require_message_authenticator = yes' not in b]
+sys.exit(1 if missing else 0)
+PY
+  then
+    printf '[ok] Managed clients enforce Message-Authenticator (BlastRADIUS hardening)\n'
+  else
+    printf '[warn] Managed clients do not all enforce Message-Authenticator\n'
+  fi
 
   if grep -q "0.0.0.0/0" "$FR_CLIENTS"; then
     printf '[fail] Insecure wildcard RADIUS client still present\n'
