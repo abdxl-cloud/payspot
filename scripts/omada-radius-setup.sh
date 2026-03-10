@@ -1114,10 +1114,29 @@ check_mode() {
   fi
 
   if [ -x "$FR_ADAPTER_BIN" ]; then
+    # Pick the first NAS IP from tenants.json so the adapter can resolve a tenant.
+    # Without a valid NAS IP, multi-tenant setups always fail tenant lookup.
+    local smoke_nas_ip=""
+    if tenants_file_exists; then
+      smoke_nas_ip="$(python3 - "$PAYSPOT_TENANTS_FILE" <<'PY'
+import json, sys
+from pathlib import Path
+config = json.loads(Path(sys.argv[1]).read_text())
+for t in config.get("tenants", {}).values():
+    ips = t.get("nas_ips", [])
+    if ips:
+        print(ips[0])
+        break
+PY
+)"
+    fi
+
     local smoke_output
-    smoke_output="$("$FR_ADAPTER_BIN" auth invalid@example.com wrong-password 2>&1 || true)"
+    smoke_output="$("$FR_ADAPTER_BIN" auth invalid@example.com wrong-password "$smoke_nas_ip" 2>&1 || true)"
     if printf '%s' "$smoke_output" | grep -q 'invalid_credentials'; then
       printf '[ok] Adapter reached PaySpot authorize endpoint\n'
+    elif printf '%s' "$smoke_output" | grep -q 'No tenant configured for this NAS'; then
+      printf '[warn] Adapter smoke skipped: no NAS IP configured in tenants.json yet\n'
     elif printf '%s' "$smoke_output" | grep -q 'Authentication backend unavailable'; then
       printf '[fail] Adapter could not reach PaySpot authorize endpoint\n'
     else

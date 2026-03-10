@@ -948,6 +948,8 @@ export async function recordRadiusAccountingEvent(params: {
           id: string;
           input_octets: number;
           output_octets: number;
+          status: string;
+          stopped_at: string | null;
         }
       | undefined;
 
@@ -980,6 +982,10 @@ export async function recordRadiusAccountingEvent(params: {
       return;
     }
 
+    const alreadyStopped = existing.status === "stopped";
+    const newStatus = params.event === "stop" || alreadyStopped ? "stopped" : "active";
+    const newStoppedAt = params.event === "stop" ? now : (existing.stopped_at ?? null);
+
     await db.prepare(
       `
       UPDATE radius_accounting_sessions
@@ -993,9 +999,9 @@ export async function recordRadiusAccountingEvent(params: {
     ).run(
       Math.max(0, Math.floor(params.inputOctets ?? existing.input_octets ?? 0)),
       Math.max(0, Math.floor(params.outputOctets ?? existing.output_octets ?? 0)),
-      params.event === "stop" ? "stopped" : "active",
+      newStatus,
       now,
-      params.event === "stop" ? now : null,
+      newStoppedAt,
       existing.id,
     );
   });
