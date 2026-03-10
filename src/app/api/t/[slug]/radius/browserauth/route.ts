@@ -8,6 +8,7 @@ type Props = {
 const schema = z.object({
   target: z.string().min(1),
   targetPort: z.string().optional(),
+  scheme: z.string().optional(),
   username: z.string().min(1),
   password: z.string().min(1),
   clientMac: z.string().optional(),
@@ -37,26 +38,36 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const { target, targetPort, username, password, ...contextFields } = parsed.data;
+  const { target, targetPort, scheme, username, password, ...contextFields } = parsed.data;
 
   const normalizedTarget = target.trim();
-  const hasProtocol = /^https?:\/\//i.test(normalizedTarget);
   let extracted: URL | null = null;
-  if (hasProtocol) {
-    try {
-      extracted = new URL(normalizedTarget);
-    } catch {
-      extracted = null;
-    }
+  try {
+    const candidate = /^https?:\/\//i.test(normalizedTarget)
+      ? normalizedTarget
+      : `http://${normalizedTarget}`;
+    extracted = new URL(candidate);
+  } catch {
+    extracted = null;
+  }
+  if (!extracted?.hostname) {
+    return Response.json({ error: "Invalid controller target" }, { status: 400 });
   }
 
-  const host = (extracted?.hostname ?? normalizedTarget.replace(/^https?:\/\//i, "").replace(/\/+$/, "")).trim();
+  const host = extracted.hostname;
   const explicitPort = targetPort?.trim();
-  const port = explicitPort || extracted?.port || "";
+  const port = explicitPort || extracted.port || "";
 
   // Common controller TLS ports should default to HTTPS when protocol is omitted.
   const tlsPorts = new Set(["443", "8043", "8843"]);
-  const inferredProtocol = extracted?.protocol || (port && tlsPorts.has(port) ? "https:" : "http:");
+  const normalizedScheme = scheme?.trim().toLowerCase();
+  const inferredProtocol = normalizedScheme === "https" || normalizedScheme === "https:"
+    ? "https:"
+    : normalizedScheme === "http" || normalizedScheme === "http:"
+      ? "http:"
+      : port && tlsPorts.has(port)
+        ? "https:"
+        : extracted.protocol;
 
   const controllerUrl = `${inferredProtocol}//${host}${port ? `:${port}` : ""}/portal/radius/browserauth`;
 

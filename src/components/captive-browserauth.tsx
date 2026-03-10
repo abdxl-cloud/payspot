@@ -74,6 +74,7 @@ async function performBrowserAuth(params: {
     body: JSON.stringify({
       target: params.context.target,
       targetPort: params.context.targetPort,
+      scheme: params.context.scheme,
       username: params.username,
       password: params.password,
       clientMac: params.context.clientMac,
