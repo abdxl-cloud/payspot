@@ -106,14 +106,18 @@ export function getCaptivePortalContextFromSearchParams(
   return normalizeCaptivePortalContext({
     target: getValue(input, "target"),
     targetPort: getValue(input, "targetPort"),
-    originUrl: getValue(input, "originUrl") ?? getValue(input, "url"),
+    originUrl:
+      getValue(input, "originUrl") ??
+      getValue(input, "originalUrl") ??
+      getValue(input, "redirectUrl") ??
+      getValue(input, "url"),
     clientMac: getValue(input, "clientMac"),
     clientIp: getValue(input, "clientIp") ?? getValue(input, "clientIP"),
-    apMac: getValue(input, "apMac"),
+    apMac: getValue(input, "apMac") ?? getValue(input, "ap"),
     gatewayMac: getValue(input, "gatewayMac") ?? getValue(input, "GatewayMac"),
     raidusServerIp: getValue(input, "raidusServerIp"),
     scheme: getValue(input, "scheme"),
-    ssidName: getValue(input, "ssidName"),
+    ssidName: getValue(input, "ssidName") ?? getValue(input, "ssid"),
     radioId: getValue(input, "radioId"),
     vid: getValue(input, "vid"),
     previewSite: getValue(input, "previewSite"),

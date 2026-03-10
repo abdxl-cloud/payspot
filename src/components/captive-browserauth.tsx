@@ -154,13 +154,19 @@ export function CaptiveBrowserAuth({
     }
 
     autoSubmittedRef.current = true;
-    setIsSubmitting(true);
-    performBrowserAuth({ tenantSlug, context: portalContext, username, password })
-      .catch((err: unknown) => {
-        autoSubmittedRef.current = false;
-        setIsSubmitting(false);
-        setError(err instanceof Error ? err.message : "Authentication failed");
-      });
+    const timeoutId = window.setTimeout(() => {
+      setIsSubmitting(true);
+      performBrowserAuth({ tenantSlug, context: portalContext, username, password })
+        .catch((err: unknown) => {
+          autoSubmittedRef.current = false;
+          setIsSubmitting(false);
+          setError(err instanceof Error ? err.message : "Authentication failed");
+        });
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [
     hasTarget,
     autoSubmitWhenReady,

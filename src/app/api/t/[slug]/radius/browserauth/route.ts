@@ -87,12 +87,27 @@ export async function POST(request: Request, { params }: Props) {
     formFields.clientIp = contextFields.clientIp;
     formFields.clientIP = contextFields.clientIp;
   }
-  if (contextFields.apMac) formFields.apMac = contextFields.apMac;
-  if (contextFields.gatewayMac) formFields.gatewayMac = contextFields.gatewayMac;
-  if (contextFields.ssidName) formFields.ssidName = contextFields.ssidName;
+  if (contextFields.apMac) {
+    formFields.apMac = contextFields.apMac;
+    formFields.ap = contextFields.apMac;
+  }
+  if (contextFields.gatewayMac) {
+    formFields.gatewayMac = contextFields.gatewayMac;
+    formFields.GatewayMac = contextFields.gatewayMac;
+  }
+  if (contextFields.ssidName) {
+    formFields.ssidName = contextFields.ssidName;
+    formFields.ssid = contextFields.ssidName;
+  }
   if (contextFields.radioId) formFields.radioId = contextFields.radioId;
   if (contextFields.vid) formFields.vid = contextFields.vid;
-  if (contextFields.originUrl) formFields.originUrl = contextFields.originUrl;
+  if (contextFields.originUrl) {
+    formFields.originUrl = contextFields.originUrl;
+    formFields.originalUrl = contextFields.originUrl;
+    formFields.redirectUrl = contextFields.originUrl;
+    formFields.url = contextFields.originUrl;
+  }
+  if (scheme) formFields.scheme = scheme;
 
   return Response.json({ controllerUrl, formFields });
 }
