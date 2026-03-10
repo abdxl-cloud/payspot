@@ -12,6 +12,18 @@ PAYSPOT_CONFIG_DIR="/etc/payspot-radius"
 PAYSPOT_TENANTS_FILE="$PAYSPOT_CONFIG_DIR/tenants.json"
 BACKUP_DIR="${BACKUP_DIR:-}"
 
+resolve_radius_group() {
+  if getent group freerad >/dev/null 2>&1; then
+    printf 'freerad'
+    return 0
+  fi
+  if getent group radiusd >/dev/null 2>&1; then
+    printf 'radiusd'
+    return 0
+  fi
+  printf 'root'
+}
+
 bold() {
   printf '\033[1m%s\033[0m\n' "$1"
 }
@@ -165,7 +177,10 @@ backup_file() {
 }
 
 ensure_config_dir() {
+  local radius_group
+  radius_group="$(resolve_radius_group)"
   mkdir -p "$PAYSPOT_CONFIG_DIR"
+  chown root:"$radius_group" "$PAYSPOT_CONFIG_DIR"
   chmod 750 "$PAYSPOT_CONFIG_DIR"
 }
 
@@ -218,6 +233,9 @@ tenants[slug] = {
 }
 path.write_text(json.dumps(config, indent=2) + "\n")
 PY
+  local radius_group
+  radius_group="$(resolve_radius_group)"
+  chown root:"$radius_group" "$PAYSPOT_TENANTS_FILE"
   chmod 640 "$PAYSPOT_TENANTS_FILE"
 }
 
