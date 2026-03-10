@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +21,6 @@ type StoredAuth = {
 };
 
 const STORAGE_KEY_PREFIX = "payspot:captive-auth:";
-const AUTH_TYPE_EXTERNAL_RADIUS = "2";
 
 function getStorageKey(tenantSlug: string) {
   return `${STORAGE_KEY_PREFIX}${tenantSlug}`;
@@ -37,86 +36,6 @@ function getStoredAuth(tenantSlug: string): StoredAuth | null {
   } catch {
     return null;
   }
-}
-
-function buildBrowserAuthUrl(context: CaptivePortalContext) {
-  if (!context.target) return null;
-
-  const hasProtocol = /^https?:\/\//i.test(context.target);
-  if (hasProtocol) {
-    try {
-      const parsed = new URL(context.target);
-      parsed.protocol = "http:";
-      if (context.targetPort) {
-        parsed.port = context.targetPort;
-      }
-      parsed.pathname = "/portal/radius/browserauth";
-      parsed.search = "";
-      return parsed.toString();
-    } catch {
-      return null;
-    }
-  }
-
-  const host = context.target.trim();
-  if (!host) return null;
-  const port = context.targetPort?.trim();
-  return `http://${host}${port ? `:${port}` : ""}/portal/radius/browserauth`;
-}
-
-function createBrowserAuthFields(params: {
-  context: CaptivePortalContext;
-  username: string;
-  password: string;
-}) {
-  const fields: Array<[string, string]> = [
-    ["authType", AUTH_TYPE_EXTERNAL_RADIUS],
-    ["username", params.username],
-    ["password", params.password],
-  ];
-
-  if (params.context.clientMac) fields.push(["clientMac", params.context.clientMac]);
-  if (params.context.clientIp) {
-    fields.push(["clientIp", params.context.clientIp]);
-    fields.push(["clientIP", params.context.clientIp]);
-  }
-  if (params.context.apMac) fields.push(["apMac", params.context.apMac]);
-  if (params.context.gatewayMac) fields.push(["gatewayMac", params.context.gatewayMac]);
-  if (params.context.ssidName) fields.push(["ssidName", params.context.ssidName]);
-  if (params.context.radioId) fields.push(["radioId", params.context.radioId]);
-  if (params.context.vid) fields.push(["vid", params.context.vid]);
-  if (params.context.originUrl) fields.push(["originUrl", params.context.originUrl]);
-
-  return fields;
-}
-
-function submitBrowserAuth(params: {
-  actionUrl: string;
-  context: CaptivePortalContext;
-  username: string;
-  password: string;
-}) {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = params.actionUrl;
-  form.style.display = "none";
-
-  const fields = createBrowserAuthFields({
-    context: params.context,
-    username: params.username,
-    password: params.password,
-  });
-
-  for (const [name, value] of fields) {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  }
-
-  document.body.appendChild(form);
-  form.submit();
 }
 
 function resolveBrowserAuthCredentials(params: {
@@ -143,6 +62,40 @@ function resolveBrowserAuthCredentials(params: {
   return { username, password };
 }
 
+async function performBrowserAuth(params: {
+  tenantSlug: string;
+  context: CaptivePortalContext;
+  username: string;
+  password: string;
+}) {
+  const response = await fetch(`/api/t/${params.tenantSlug}/radius/browserauth`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      target: params.context.target,
+      targetPort: params.context.targetPort,
+      username: params.username,
+      password: params.password,
+      clientMac: params.context.clientMac,
+      clientIp: params.context.clientIp,
+      apMac: params.context.apMac,
+      gatewayMac: params.context.gatewayMac,
+      ssidName: params.context.ssidName,
+      radioId: params.context.radioId,
+      vid: params.context.vid,
+      originUrl: params.context.originUrl,
+    }),
+  });
+
+  const data = await response.json() as { redirectUrl?: string; error?: string };
+
+  if (!response.ok || !data.redirectUrl) {
+    throw new Error(data.error ?? "Authentication failed");
+  }
+
+  window.location.href = data.redirectUrl;
+}
+
 export function CaptiveBrowserAuth({
   tenantSlug,
   portalContext,
@@ -153,19 +106,17 @@ export function CaptiveBrowserAuth({
   const [manualUsername, setManualUsername] = useState(defaultUsername ?? "");
   const [manualPassword, setManualPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const autoSubmittedRef = useRef(false);
 
-  const actionUrl = useMemo(
-    () => (portalContext ? buildBrowserAuthUrl(portalContext) : null),
-    [portalContext],
-  );
+  const hasTarget = Boolean(portalContext?.target);
 
   useEffect(() => {
     if (!autoSubmitWhenReady || autoSubmittedRef.current) {
       return;
     }
 
-    if (!portalContext || !actionUrl) {
+    if (!portalContext || !hasTarget) {
       return;
     }
 
@@ -182,14 +133,15 @@ export function CaptiveBrowserAuth({
     }
 
     autoSubmittedRef.current = true;
-    submitBrowserAuth({
-      actionUrl,
-      context: portalContext,
-      username,
-      password,
-    });
+    setIsSubmitting(true);
+    performBrowserAuth({ tenantSlug, context: portalContext, username, password })
+      .catch((err: unknown) => {
+        autoSubmittedRef.current = false;
+        setIsSubmitting(false);
+        setError(err instanceof Error ? err.message : "Authentication failed");
+      });
   }, [
-    actionUrl,
+    hasTarget,
     autoSubmitWhenReady,
     defaultPassword,
     defaultUsername,
@@ -199,11 +151,11 @@ export function CaptiveBrowserAuth({
     tenantSlug,
   ]);
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
 
-    if (!portalContext || !actionUrl) {
+    if (!portalContext || !hasTarget) {
       setError("Omada controller redirect data is missing. Reconnect to the Wi-Fi and try again.");
       return;
     }
@@ -221,12 +173,13 @@ export function CaptiveBrowserAuth({
       return;
     }
 
-    submitBrowserAuth({
-      actionUrl,
-      context: portalContext,
-      username,
-      password,
-    });
+    setIsSubmitting(true);
+    try {
+      await performBrowserAuth({ tenantSlug, context: portalContext, username, password });
+    } catch (err) {
+      setIsSubmitting(false);
+      setError(err instanceof Error ? err.message : "Authentication failed");
+    }
   }
 
   if (!portalContext) {
@@ -253,6 +206,7 @@ export function CaptiveBrowserAuth({
             value={manualUsername}
             onChange={(event) => setManualUsername(event.target.value)}
             placeholder={defaultUsername || "you@example.com"}
+            disabled={isSubmitting}
           />
         </div>
         <div className="grid gap-2">
@@ -263,11 +217,12 @@ export function CaptiveBrowserAuth({
             value={manualPassword}
             onChange={(event) => setManualPassword(event.target.value)}
             placeholder="Your subscriber password"
+            disabled={isSubmitting}
           />
         </div>
         {error ? <p className="text-xs text-rose-700 md:col-span-2">{error}</p> : null}
-        <Button type="submit" className="md:col-span-2">
-          Complete Wi-Fi sign-in
+        <Button type="submit" className="md:col-span-2" disabled={isSubmitting}>
+          {isSubmitting ? "Signing in…" : "Complete Wi-Fi sign-in"}
         </Button>
       </form>
     </div>
