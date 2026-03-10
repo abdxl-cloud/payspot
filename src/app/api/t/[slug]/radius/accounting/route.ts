@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  getPortalSubscriberByEmail,
+  getSubscriberAccessState,
   getTenantBySlug,
   recordRadiusAccountingEvent,
   verifyTenantRadiusAdapterSecret,
@@ -28,6 +30,7 @@ const schema = z.object({
   sessionId: z.string().min(3),
   subscriberId: z.string().optional(),
   entitlementId: z.string().optional(),
+  username: z.string().optional(),
   inputOctets: z.coerce.number().nonnegative().optional(),
   outputOctets: z.coerce.number().nonnegative().optional(),
   acctInputOctets: z.coerce.number().nonnegative().optional(),
@@ -104,6 +107,37 @@ export async function POST(request: Request, { params }: Props) {
       | undefined;
     subscriberId = subscriberId ?? existing?.subscriber_id;
     entitlementId = entitlementId ?? existing?.entitlement_id;
+
+    if ((!subscriberId || !entitlementId) && parsed.data.callingStationId) {
+      const byStation = await db
+        .prepare(
+          `
+          SELECT subscriber_id, entitlement_id
+          FROM radius_accounting_sessions
+          WHERE tenant_id = ? AND calling_station_id = ?
+          ORDER BY last_update_at DESC
+          LIMIT 1
+        `,
+        )
+        .get(tenant.id, parsed.data.callingStationId) as
+        | { subscriber_id: string; entitlement_id: string }
+        | undefined;
+      subscriberId = subscriberId ?? byStation?.subscriber_id;
+      entitlementId = entitlementId ?? byStation?.entitlement_id;
+    }
+  }
+
+  if ((!subscriberId || !entitlementId) && parsed.data.username) {
+    const subscriber = await getPortalSubscriberByEmail(tenant.id, parsed.data.username);
+    if (subscriber) {
+      const access = await getSubscriberAccessState({
+        tenantId: tenant.id,
+        subscriberId: subscriber.id,
+      });
+
+      subscriberId = subscriberId ?? subscriber.id;
+      entitlementId = entitlementId ?? access.entitlement?.id;
+    }
   }
 
   if (!subscriberId || !entitlementId) {

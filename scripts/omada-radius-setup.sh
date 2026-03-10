@@ -642,6 +642,8 @@ def handle_accounting(argv):
         payload["calledStationId"] = called_station_id
     if nas_ip_address:
         payload["nasIpAddress"] = nas_ip_address
+    if username:
+        payload["username"] = username
     if subscriber_id:
         payload["subscriberId"] = subscriber_id
     if entitlement_id:
