@@ -57,11 +57,10 @@ function buildBrowserAuthUrl(context: CaptivePortalContext) {
     }
   }
 
-  const protocol = context.scheme === "http" ? "http" : "https";
   const host = context.target.trim();
   if (!host) return null;
   const port = context.targetPort?.trim();
-  return `${protocol}://${host}${port ? `:${port}` : ""}/portal/radius/browserauth`;
+  return `http://${host}${port ? `:${port}` : ""}/portal/radius/browserauth`;
 }
 
 function createBrowserAuthFields(params: {
