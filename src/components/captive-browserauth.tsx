@@ -46,6 +46,7 @@ function buildBrowserAuthUrl(context: CaptivePortalContext) {
   if (hasProtocol) {
     try {
       const parsed = new URL(context.target);
+      parsed.protocol = "http:";
       if (context.targetPort) {
         parsed.port = context.targetPort;
       }
