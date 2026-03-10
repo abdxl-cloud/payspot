@@ -8,6 +8,8 @@ FR_AUTHORIZE_FILE=""
 FR_MODS_AVAILABLE=""
 FR_MODS_ENABLED=""
 FR_ADAPTER_BIN="/usr/local/bin/payspot-radius-adapter"
+PAYSPOT_CONFIG_DIR="/etc/payspot-radius"
+PAYSPOT_TENANTS_FILE="$PAYSPOT_CONFIG_DIR/tenants.json"
 BACKUP_DIR="${BACKUP_DIR:-}"
 
 bold() {
@@ -162,30 +164,132 @@ backup_file() {
   cp "$path" "$BACKUP_DIR/${base}.$(date +%Y%m%d%H%M%S).bak"
 }
 
-read_adapter_value() {
-  local key="$1"
-  python3 - "$FR_ADAPTER_BIN" "$key" <<'PY'
+ensure_config_dir() {
+  mkdir -p "$PAYSPOT_CONFIG_DIR"
+  chmod 750 "$PAYSPOT_CONFIG_DIR"
+}
+
+# ---------------------------------------------------------------------------
+# Tenant config JSON helpers (pure Python so no jq dependency)
+# ---------------------------------------------------------------------------
+
+tenants_file_exists() {
+  [ -f "$PAYSPOT_TENANTS_FILE" ]
+}
+
+read_tenants_json() {
+  if ! tenants_file_exists; then
+    printf '{}'
+    return
+  fi
+  cat "$PAYSPOT_TENANTS_FILE"
+}
+
+# Upsert a tenant entry in tenants.json.
+# Args: slug base_url adapter_secret radius_secret client_prefix nas_ips_comma
+upsert_tenant() {
+  local slug="$1"
+  local base_url="$2"
+  local adapter_secret="$3"
+  local radius_secret="$4"
+  local client_prefix="$5"
+  local nas_ips_comma="$6"
+
+  ensure_config_dir
+  python3 - \
+    "$PAYSPOT_TENANTS_FILE" \
+    "$slug" "$base_url" "$adapter_secret" "$radius_secret" "$client_prefix" "$nas_ips_comma" <<'PY'
+import json, sys
 from pathlib import Path
-import re
-import sys
+
+path   = Path(sys.argv[1])
+slug   = sys.argv[2]
+config = json.loads(path.read_text()) if path.exists() else {}
+tenants = config.setdefault("tenants", {})
+existing_ips = tenants.get(slug, {}).get("nas_ips", [])
+new_ips = [ip.strip() for ip in sys.argv[7].split(",") if ip.strip()]
+merged_ips = list(dict.fromkeys(existing_ips + new_ips))  # deduplicate, preserve order
+tenants[slug] = {
+    "base_url":        sys.argv[3],
+    "adapter_secret":  sys.argv[4],
+    "radius_secret":   sys.argv[5],
+    "client_prefix":   sys.argv[6],
+    "nas_ips":         merged_ips,
+}
+path.write_text(json.dumps(config, indent=2) + "\n")
+PY
+  chmod 640 "$PAYSPOT_TENANTS_FILE"
+}
+
+remove_tenant() {
+  local slug="$1"
+  tenants_file_exists || fail "No tenants config found at $PAYSPOT_TENANTS_FILE"
+  python3 - "$PAYSPOT_TENANTS_FILE" "$slug" <<'PY'
+import json, sys
+from pathlib import Path
 
 path = Path(sys.argv[1])
-key = sys.argv[2]
-if not path.exists():
-    sys.exit(0)
-
-pattern = re.compile(rf'^{re.escape(key)} = ["\'](.+?)["\']$', re.M)
-text = path.read_text()
-match = pattern.search(text)
-if match:
-    print(match.group(1))
+slug = sys.argv[2]
+config = json.loads(path.read_text())
+tenants = config.get("tenants", {})
+if slug not in tenants:
+    print(f"Tenant '{slug}' not found.", file=sys.stderr)
+    sys.exit(1)
+del tenants[slug]
+path.write_text(json.dumps(config, indent=2) + "\n")
 PY
 }
 
+list_tenants_json() {
+  tenants_file_exists || return
+  python3 - "$PAYSPOT_TENANTS_FILE" <<'PY'
+import json, sys
+from pathlib import Path
+
+config  = json.loads(Path(sys.argv[1]).read_text())
+tenants = config.get("tenants", {})
+if not tenants:
+    print("  (no tenants configured)")
+    sys.exit(0)
+for slug, t in tenants.items():
+    ips = ", ".join(t.get("nas_ips", []))
+    prefix = t.get("client_prefix", "omada")
+    print(f"  {slug}")
+    print(f"    base_url      : {t.get('base_url','')}")
+    print(f"    client_prefix : {prefix}")
+    print(f"    nas_ips       : {ips or '(none)'}")
+PY
+}
+
+tenant_exists() {
+  local slug="$1"
+  tenants_file_exists || return 1
+  python3 - "$PAYSPOT_TENANTS_FILE" "$slug" <<'PY'
+import json, sys
+from pathlib import Path
+config = json.loads(Path(sys.argv[1]).read_text())
+sys.exit(0 if sys.argv[2] in config.get("tenants", {}) else 1)
+PY
+}
+
+get_tenant_field() {
+  local slug="$1"
+  local field="$2"
+  python3 - "$PAYSPOT_TENANTS_FILE" "$slug" "$field" <<'PY'
+import json, sys
+from pathlib import Path
+config = json.loads(Path(sys.argv[1]).read_text())
+tenant = config.get("tenants", {}).get(sys.argv[2], {})
+print(tenant.get(sys.argv[3], ""))
+PY
+}
+
+# ---------------------------------------------------------------------------
+# Adapter script (multi-tenant — reads tenants.json at runtime)
+# ---------------------------------------------------------------------------
+
 render_adapter_script() {
-  local base_url="$1"
-  local tenant_slug="$2"
-  local adapter_secret="$3"
+  local tenants_file="$1"
   cat <<EOF
 #!/usr/bin/env python3
 import datetime
@@ -198,9 +302,7 @@ import time
 import urllib.error
 import urllib.request
 
-BASE_URL = ${base_url@Q}
-TENANT_SLUG = ${tenant_slug@Q}
-ADAPTER_SECRET = ${adapter_secret@Q}
+TENANTS_FILE = ${tenants_file@Q}
 TIMEOUT = 10
 DISCONNECT_PORT = 3799
 CLIENTS_CONF_CANDIDATES = (
@@ -228,16 +330,53 @@ def emit_reply(attr: str, value: object, *, is_string: bool = False) -> None:
         print(f"{attr} := {value}")
 
 
-def api_post(path: str, payload: dict):
+def load_tenants():
+    path = Path(TENANTS_FILE)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text()).get("tenants", {})
+    except Exception as exc:
+        log(f"failed to load tenants config: {exc}")
+        return {}
+
+
+def resolve_tenant(nas_ip: str):
+    """Return (slug, base_url, adapter_secret) for the given NAS IP.
+
+    Lookup order:
+      1. Exact NAS IP match across all tenants.
+      2. If only one tenant is configured, use it as a fallback.
+    """
+    tenants = load_tenants()
+    if not tenants:
+        log("no tenants configured in " + TENANTS_FILE)
+        return None, None, None
+
+    for slug, t in tenants.items():
+        if nas_ip and nas_ip in t.get("nas_ips", []):
+            return slug, t["base_url"], t["adapter_secret"]
+
+    if len(tenants) == 1:
+        slug, t = next(iter(tenants.items()))
+        if nas_ip:
+            log(f"NAS IP {nas_ip} not matched; falling back to sole tenant '{slug}'")
+        return slug, t["base_url"], t["adapter_secret"]
+
+    log(f"NAS IP {nas_ip!r} did not match any tenant and multiple tenants are configured")
+    return None, None, None
+
+
+def api_post(base_url: str, tenant_slug: str, adapter_secret: str, path: str, payload: dict):
     body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
-        f"{BASE_URL}/api/t/{TENANT_SLUG}{path}",
+        f"{base_url}/api/t/{tenant_slug}{path}",
         data=body,
         method="POST",
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "x-radius-adapter-secret": ADAPTER_SECRET,
+            "x-radius-adapter-secret": adapter_secret,
         },
     )
     try:
@@ -410,15 +549,21 @@ def map_accounting_event(raw: str) -> str:
 
 
 def handle_auth(argv):
+    # argv: auth <username> <password> <nas_ip>
     if len(argv) < 4:
         emit_reply("Reply-Message", "Missing username or password", is_string=True)
         return 1
+
+    nas_ip = argv[4] if len(argv) > 4 else ""
+    slug, base_url, adapter_secret = resolve_tenant(nas_ip)
+    if not slug:
+        emit_reply("Reply-Message", "No tenant configured for this NAS", is_string=True)
+        return 1
+
     status, body = api_post(
+        base_url, slug, adapter_secret,
         "/radius/authorize",
-        {
-            "username": argv[2],
-            "password": argv[3],
-        },
+        {"username": argv[2], "password": argv[3]},
     )
     if status != 200 or not isinstance(body, dict):
         log(f"authorize backend failure status={status} body={body}")
@@ -454,8 +599,16 @@ def handle_auth(argv):
 
 
 def handle_accounting(argv):
+    # argv: accounting <event> <session_id> <in_oct> <out_oct> <in_giga> <out_giga>
+    #                  <username> <class> <calling_station> <called_station> <nas_ip>
     if len(argv) < 13:
         log("accounting called without expected arguments")
+        return 0
+
+    nas_ip_address = argv[12]
+    slug, base_url, adapter_secret = resolve_tenant(nas_ip_address)
+    if not slug:
+        log(f"no tenant found for NAS IP {nas_ip_address!r}; dropping accounting packet")
         return 0
 
     payload = {
@@ -474,7 +627,6 @@ def handle_accounting(argv):
     plan_ends_at = parse_iso8601(class_fields.get("planEndsAt", ""))
     calling_station_id = argv[10]
     called_station_id = argv[11]
-    nas_ip_address = argv[12]
 
     if acct_input is not None:
         payload["acctInputOctets"] = acct_input
@@ -502,7 +654,7 @@ def handle_accounting(argv):
     if plan_ends_at and datetime.datetime.now(datetime.timezone.utc) >= plan_ends_at:
         should_disconnect = True
 
-    status, body = api_post("/radius/accounting", payload)
+    status, body = api_post(base_url, slug, adapter_secret, "/radius/accounting", payload)
     if not (200 <= status < 300):
         log(f"accounting backend status={status} body={body}")
         return 0
@@ -536,13 +688,14 @@ EOF
 }
 
 write_mod_files() {
+  # NAS-IP-Address is now passed to auth so the adapter can resolve the tenant.
   cat > "$FR_MODS_AVAILABLE/payspot_auth" <<'EOF'
 exec payspot_auth {
     wait = yes
     input_pairs = request
     output_pairs = reply
     shell_escape = yes
-    program = "/usr/local/bin/payspot-radius-adapter auth \"%{User-Name}\" \"%{User-Password}\""
+    program = "/usr/local/bin/payspot-radius-adapter auth \"%{User-Name}\" \"%{User-Password}\" \"%{NAS-IP-Address}\""
 }
 EOF
 
@@ -627,23 +780,21 @@ path.write_text(text)
 PY
 }
 
-set_managed_clients_block() {
-  local shared_secret="$1"
-  local ip_list="$2"
-  local prefix="$3"
-  python3 - "$FR_CLIENTS" "$shared_secret" "$ip_list" "$prefix" <<'PY'
+# Rebuild the entire PAYSPOT MANAGED CLIENTS block from tenants.json.
+# Each tenant gets its own labelled sub-block with its own radius_secret.
+sync_clients_from_config() {
+  tenants_file_exists || return
+  python3 - "$FR_CLIENTS" "$PAYSPOT_TENANTS_FILE" <<'PY'
 from pathlib import Path
-import re
-import sys
+import json, re, sys
 
-path = Path(sys.argv[1])
-shared_secret = sys.argv[2]
-ip_list = [part.strip() for part in sys.argv[3].split(",") if part.strip()]
-prefix = sys.argv[4]
-if not ip_list:
-    raise SystemExit("At least one RADIUS client IP is required.")
+clients_path  = Path(sys.argv[1])
+tenants_path  = Path(sys.argv[2])
+text          = clients_path.read_text()
+config        = json.loads(tenants_path.read_text())
+tenants       = config.get("tenants", {})
 
-text = path.read_text()
+# Remove legacy placeholder
 text = re.sub(
     r'\nclient omada-controller \{\n\tipaddr = 0\.0\.0\.0/0\n\tsecret = ChangeMe-Strong-Secret-123!\n\tshortname = omada-temp\n\}\n?',
     '\n',
@@ -652,20 +803,27 @@ text = re.sub(
 )
 
 begin = '# BEGIN PAYSPOT MANAGED CLIENTS'
-end = '# END PAYSPOT MANAGED CLIENTS'
+end   = '# END PAYSPOT MANAGED CLIENTS'
 block_lines = [begin]
-for idx, ip in enumerate(ip_list, start=1):
-    block_lines.extend(
-        [
-            f'client {prefix}-{idx} {{',
+
+for slug, t in tenants.items():
+    ips    = t.get("nas_ips", [])
+    secret = t.get("radius_secret", "")
+    prefix = t.get("client_prefix", "omada")
+    if not ips:
+        continue
+    block_lines.append(f'# tenant: {slug}')
+    for idx, ip in enumerate(ips, start=1):
+        block_lines.extend([
+            f'client {prefix}-{slug}-{idx} {{',
             f'  ipaddr = {ip}',
-            f'  secret = {shared_secret}',
-            f'  shortname = {prefix}{idx}',
+            f'  secret = {secret}',
+            f'  shortname = {prefix}{slug}{idx}',
             '  nastype = other',
             '}',
             '',
-        ]
-    )
+        ])
+
 block_lines.append(end)
 block = '\n'.join(block_lines).rstrip() + '\n'
 
@@ -680,9 +838,13 @@ else:
         text += '\n'
     text += '\n' + block
 
-path.write_text(text)
+clients_path.write_text(text)
 PY
 }
+
+# ---------------------------------------------------------------------------
+# Modes
+# ---------------------------------------------------------------------------
 
 configure_mode() {
   ensure_root
@@ -691,58 +853,154 @@ configure_mode() {
   require_freeradius_files
 
   bold "PaySpot FreeRADIUS Setup"
-  local base_url tenant_slug adapter_secret client_ips client_prefix shared_secret restart_service
+
+  local base_url tenant_slug adapter_secret client_ips client_prefix radius_secret
+
   base_url="$(prompt_default "PaySpot base URL" "https://payspot.abdxl.cloud")"
-  tenant_slug="$(prompt_default "Tenant slug" "walstreet")"
+  tenant_slug="$(prompt_required "Tenant slug")"
   adapter_secret="$(prompt_required "PaySpot tenant adapter secret (from PaySpot tenant settings)")"
-  client_ips="$(prompt_required "RADIUS client IPs (comma-separated Omada controller/AP IPs)")"
+  client_ips="$(prompt_required "RADIUS client IPs for this tenant (comma-separated AP/controller IPs)")"
   client_prefix="$(prompt_default "Client shortname prefix" "omada")"
-  shared_secret="$(prompt_optional "RADIUS shared secret (leave blank to auto-generate)")"
-  if [ -z "$shared_secret" ]; then
-    shared_secret="$(generate_secret)"
+  radius_secret="$(prompt_optional "RADIUS shared secret (leave blank to auto-generate)")"
+  if [ -z "$radius_secret" ]; then
+    radius_secret="$(generate_secret)"
   fi
 
   backup_file "$FR_DEFAULT_SITE"
   backup_file "$FR_CLIENTS"
   backup_file "$FR_AUTHORIZE_FILE"
 
-  render_adapter_script "$base_url" "$tenant_slug" "$adapter_secret" > "$FR_ADAPTER_BIN"
+  upsert_tenant "$tenant_slug" "$base_url" "$adapter_secret" "$radius_secret" "$client_prefix" "$client_ips"
+  render_adapter_script "$PAYSPOT_TENANTS_FILE" > "$FR_ADAPTER_BIN"
   chmod 750 "$FR_ADAPTER_BIN"
   write_mod_files
   patch_default_site
   patch_authorize_file
-  set_managed_clients_block "$shared_secret" "$client_ips" "$client_prefix"
+  sync_clients_from_config
 
   if ! freeradius -CX >/dev/null 2>&1; then
     fail "FreeRADIUS config test failed. Backups are in $BACKUP_DIR"
   fi
 
-  restart_service="n"
   if prompt_yes_no "Restart FreeRADIUS now" "y"; then
     systemctl restart freeradius
-    restart_service="y"
   fi
 
   printf '\n'
   bold "Setup Complete"
-  printf 'Generated/active RADIUS shared secret: %s\n' "$shared_secret"
-  printf 'Update the same shared secret in Omada for this RADIUS profile:\n'
-  printf '  Authentication secret\n'
-  printf '  Accounting secret\n'
-  printf 'The client entries were written to %s\n' "$FR_CLIENTS"
-  printf 'The PaySpot adapter was written to %s\n' "$FR_ADAPTER_BIN"
-  printf 'Backups were saved in %s\n' "$BACKUP_DIR"
-  if [ "$restart_service" = "y" ]; then
-    printf 'FreeRADIUS was restarted successfully.\n'
-  else
-    printf 'Restart FreeRADIUS after reviewing the changes.\n'
-  fi
+  printf 'Tenant "%s" configured.\n' "$tenant_slug"
+  printf 'RADIUS shared secret for Omada profile: %s\n' "$radius_secret"
+  printf 'Tenants config: %s\n' "$PAYSPOT_TENANTS_FILE"
+  printf 'Adapter: %s\n' "$FR_ADAPTER_BIN"
+  printf 'Backups: %s\n' "$BACKUP_DIR"
+  printf '\nTo add another tenant later: %s add-tenant\n' "$0"
+}
+
+add_tenant_mode() {
+  ensure_root
+  need_cmd python3
+  need_cmd freeradius
+  require_freeradius_files
+
+  [ -x "$FR_ADAPTER_BIN" ] || fail "PaySpot adapter not found at $FR_ADAPTER_BIN. Run 'configure' first."
+  tenants_file_exists || fail "Tenants config not found at $PAYSPOT_TENANTS_FILE. Run 'configure' first."
+
+  bold "PaySpot — Add Tenant"
+  printf 'Existing tenants:\n'
+  list_tenants_json
+
+  local base_url tenant_slug adapter_secret client_ips client_prefix radius_secret
   printf '\n'
-  printf 'Omada checklist:\n'
-  printf '  1. Point the auth server to this host on UDP 1812.\n'
-  printf '  2. Point the accounting server to this host on UDP 1813.\n'
-  printf '  3. Use the shared secret shown above for both auth and accounting.\n'
-  printf '  4. Keep the external portal URL pointed at your PaySpot tenant page.\n'
+  base_url="$(prompt_default "PaySpot base URL" "https://payspot.abdxl.cloud")"
+  tenant_slug="$(prompt_required "New tenant slug")"
+
+  if tenant_exists "$tenant_slug"; then
+    warn "Tenant '$tenant_slug' already exists — its settings will be updated."
+  fi
+
+  adapter_secret="$(prompt_required "PaySpot tenant adapter secret")"
+  client_ips="$(prompt_required "RADIUS client IPs for this tenant (comma-separated)")"
+  client_prefix="$(prompt_default "Client shortname prefix" "omada")"
+  radius_secret="$(prompt_optional "RADIUS shared secret (leave blank to auto-generate)")"
+  if [ -z "$radius_secret" ]; then
+    radius_secret="$(generate_secret)"
+  fi
+
+  backup_file "$FR_CLIENTS"
+
+  upsert_tenant "$tenant_slug" "$base_url" "$adapter_secret" "$radius_secret" "$client_prefix" "$client_ips"
+  # Rewrite the adapter so it picks up the latest tenants.json path (no-op if path unchanged).
+  render_adapter_script "$PAYSPOT_TENANTS_FILE" > "$FR_ADAPTER_BIN"
+  chmod 750 "$FR_ADAPTER_BIN"
+  sync_clients_from_config
+
+  if ! freeradius -CX >/dev/null 2>&1; then
+    fail "FreeRADIUS config test failed. Backups are in $BACKUP_DIR"
+  fi
+
+  if prompt_yes_no "Restart FreeRADIUS now" "y"; then
+    systemctl restart freeradius
+  fi
+
+  printf '\n'
+  bold "Tenant Added"
+  printf 'Tenant "%s" is now active.\n' "$tenant_slug"
+  printf 'RADIUS shared secret for Omada profile: %s\n' "$radius_secret"
+  printf '\nAll configured tenants:\n'
+  list_tenants_json
+}
+
+remove_tenant_mode() {
+  ensure_root
+  need_cmd python3
+  need_cmd freeradius
+  require_freeradius_files
+
+  tenants_file_exists || fail "Tenants config not found at $PAYSPOT_TENANTS_FILE."
+
+  bold "PaySpot — Remove Tenant"
+  printf 'Existing tenants:\n'
+  list_tenants_json
+  printf '\n'
+
+  local tenant_slug
+  tenant_slug="$(prompt_required "Tenant slug to remove")"
+  tenant_exists "$tenant_slug" || fail "Tenant '$tenant_slug' not found."
+
+  if ! prompt_yes_no "Remove tenant '$tenant_slug' and its AP client entries" "n"; then
+    printf 'Aborted.\n'
+    return
+  fi
+
+  backup_file "$FR_CLIENTS"
+
+  remove_tenant "$tenant_slug"
+  render_adapter_script "$PAYSPOT_TENANTS_FILE" > "$FR_ADAPTER_BIN"
+  chmod 750 "$FR_ADAPTER_BIN"
+  sync_clients_from_config
+
+  if ! freeradius -CX >/dev/null 2>&1; then
+    fail "FreeRADIUS config test failed. Backups are in $BACKUP_DIR"
+  fi
+
+  if prompt_yes_no "Restart FreeRADIUS now" "y"; then
+    systemctl restart freeradius
+  fi
+
+  printf '\n'
+  bold "Tenant Removed"
+  printf 'Remaining tenants:\n'
+  list_tenants_json
+}
+
+list_tenants_mode() {
+  need_cmd python3
+  bold "PaySpot — Configured Tenants"
+  if ! tenants_file_exists; then
+    printf 'No tenants config found at %s.\n' "$PAYSPOT_TENANTS_FILE"
+    return
+  fi
+  list_tenants_json
 }
 
 upgrade_mode() {
@@ -752,20 +1010,7 @@ upgrade_mode() {
   require_freeradius_files
 
   bold "PaySpot FreeRADIUS In-Place Upgrade"
-
-  local detected_base_url detected_tenant_slug detected_adapter_secret
-  detected_base_url="$(read_adapter_value "BASE_URL")"
-  detected_tenant_slug="$(read_adapter_value "TENANT_SLUG")"
-  detected_adapter_secret="$(read_adapter_value "ADAPTER_SECRET")"
-
-  local base_url tenant_slug adapter_secret
-  base_url="$(prompt_default "PaySpot base URL" "${detected_base_url:-https://payspot.abdxl.cloud}")"
-  tenant_slug="$(prompt_default "Tenant slug" "${detected_tenant_slug:-walstreet}")"
-  if [ -n "$detected_adapter_secret" ]; then
-    adapter_secret="$(prompt_default "PaySpot tenant adapter secret" "$detected_adapter_secret")"
-  else
-    adapter_secret="$(prompt_required "PaySpot tenant adapter secret (from PaySpot tenant settings)")"
-  fi
+  tenants_file_exists || fail "Tenants config not found at $PAYSPOT_TENANTS_FILE. Run 'configure' first."
 
   if [ -f "$FR_ADAPTER_BIN" ]; then
     backup_file "$FR_ADAPTER_BIN"
@@ -773,7 +1018,7 @@ upgrade_mode() {
   backup_file "$FR_DEFAULT_SITE"
   backup_file "$FR_AUTHORIZE_FILE"
 
-  render_adapter_script "$base_url" "$tenant_slug" "$adapter_secret" > "$FR_ADAPTER_BIN"
+  render_adapter_script "$PAYSPOT_TENANTS_FILE" > "$FR_ADAPTER_BIN"
   chmod 750 "$FR_ADAPTER_BIN"
   write_mod_files
   patch_default_site
@@ -789,10 +1034,9 @@ upgrade_mode() {
 
   printf '\n'
   bold "Upgrade Complete"
-  printf 'Adapter updated in place at %s\n' "$FR_ADAPTER_BIN"
-  printf 'No RADIUS shared secret was changed.\n'
-  printf 'Backups were saved in %s\n' "$BACKUP_DIR"
-  printf 'If Omada user limits or usage were drifting, this update ensures the adapter forwards gigaword counters and the current PaySpot hooks.\n'
+  printf 'Adapter updated at %s\n' "$FR_ADAPTER_BIN"
+  printf 'Tenant config unchanged at %s\n' "$PAYSPOT_TENANTS_FILE"
+  printf 'Backups: %s\n' "$BACKUP_DIR"
 }
 
 check_file_contains() {
@@ -812,12 +1056,30 @@ check_mode() {
   require_freeradius_files
 
   bold "PaySpot FreeRADIUS Check"
-  [ -x "$FR_ADAPTER_BIN" ] && printf '[ok] Adapter script exists: %s\n' "$FR_ADAPTER_BIN" || printf '[fail] Adapter script missing: %s\n' "$FR_ADAPTER_BIN"
-  [ -f "$FR_MODS_AVAILABLE/payspot_auth" ] && printf '[ok] payspot_auth module exists\n' || printf '[fail] payspot_auth module missing\n'
-  [ -f "$FR_MODS_AVAILABLE/payspot_accounting" ] && printf '[ok] payspot_accounting module exists\n' || printf '[fail] payspot_accounting module missing\n'
+
+  [ -x "$FR_ADAPTER_BIN" ] \
+    && printf '[ok] Adapter script exists: %s\n' "$FR_ADAPTER_BIN" \
+    || printf '[fail] Adapter script missing: %s\n' "$FR_ADAPTER_BIN"
+
+  if tenants_file_exists; then
+    printf '[ok] Tenants config exists: %s\n' "$PAYSPOT_TENANTS_FILE"
+    printf 'Configured tenants:\n'
+    list_tenants_json
+  else
+    printf '[fail] Tenants config missing: %s\n' "$PAYSPOT_TENANTS_FILE"
+  fi
+
+  [ -f "$FR_MODS_AVAILABLE/payspot_auth" ] \
+    && printf '[ok] payspot_auth module exists\n' \
+    || printf '[fail] payspot_auth module missing\n'
+  [ -f "$FR_MODS_AVAILABLE/payspot_accounting" ] \
+    && printf '[ok] payspot_accounting module exists\n' \
+    || printf '[fail] payspot_accounting module missing\n'
+
   check_file_contains "default site assigns Auth-Type payspot_portal" "Auth-Type := payspot_portal" "$FR_DEFAULT_SITE"
   check_file_contains "default site contains payspot_auth auth block" "Auth-Type payspot_portal" "$FR_DEFAULT_SITE"
   check_file_contains "default site contains payspot_accounting" "payspot_accounting" "$FR_DEFAULT_SITE"
+  check_file_contains "auth module passes NAS-IP-Address" "NAS-IP-Address" "$FR_MODS_AVAILABLE/payspot_auth"
 
   if grep -q "0.0.0.0/0" "$FR_CLIENTS"; then
     printf '[fail] Insecure wildcard RADIUS client still present\n'
@@ -867,27 +1129,40 @@ check_mode() {
   printf '[note] first accounting packets also rely on the NAS echoing the Class attribute returned in Access-Accept\n'
 }
 
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
 main() {
   local mode="${1:-}"
   if [ -z "$mode" ]; then
     printf 'Choose mode:\n'
-    printf '  1. Configure a fresh or existing FreeRADIUS host for PaySpot\n'
-    printf '  2. Check an existing FreeRADIUS host for PaySpot compatibility\n'
-    printf '  3. Patch an existing PaySpot FreeRADIUS adapter in place\n'
-    read -r -p 'Enter 1, 2, or 3: ' mode
+    printf '  1. configure      — Set up FreeRADIUS with the first PaySpot tenant\n'
+    printf '  2. add-tenant     — Add a new tenant (and its APs) to an existing setup\n'
+    printf '  3. remove-tenant  — Remove a tenant from an existing setup\n'
+    printf '  4. list-tenants   — Show all configured tenants\n'
+    printf '  5. check          — Validate current FreeRADIUS + PaySpot configuration\n'
+    printf '  6. upgrade        — Patch the adapter script in place (keep tenant config)\n'
+    read -r -p 'Enter 1-6: ' mode
     case "$mode" in
       1) mode="configure" ;;
-      2) mode="check" ;;
-      3) mode="upgrade" ;;
+      2) mode="add-tenant" ;;
+      3) mode="remove-tenant" ;;
+      4) mode="list-tenants" ;;
+      5) mode="check" ;;
+      6) mode="upgrade" ;;
       *) fail "Invalid selection." ;;
     esac
   fi
 
   case "$mode" in
-    configure) configure_mode ;;
-    check) check_mode ;;
-    upgrade) upgrade_mode ;;
-    *) fail "Usage: $0 [configure|check|upgrade]" ;;
+    configure)     configure_mode ;;
+    add-tenant)    add_tenant_mode ;;
+    remove-tenant) remove_tenant_mode ;;
+    list-tenants)  list_tenants_mode ;;
+    check)         check_mode ;;
+    upgrade)       upgrade_mode ;;
+    *) fail "Usage: $0 [configure|add-tenant|remove-tenant|list-tenants|check|upgrade]" ;;
   esac
 }
 
