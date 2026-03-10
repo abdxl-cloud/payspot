@@ -39,10 +39,26 @@ export async function POST(request: Request, { params }: Props) {
 
   const { target, targetPort, username, password, ...contextFields } = parsed.data;
 
-  // Strip any protocol prefix — always use HTTP to avoid cert errors with private LAN IPs
-  const host = target.replace(/^https?:\/\//i, "").trim();
-  const port = targetPort?.trim();
-  const controllerUrl = `http://${host}${port ? `:${port}` : ""}/portal/radius/browserauth`;
+  const normalizedTarget = target.trim();
+  const hasProtocol = /^https?:\/\//i.test(normalizedTarget);
+  let extracted: URL | null = null;
+  if (hasProtocol) {
+    try {
+      extracted = new URL(normalizedTarget);
+    } catch {
+      extracted = null;
+    }
+  }
+
+  const host = (extracted?.hostname ?? normalizedTarget.replace(/^https?:\/\//i, "").replace(/\/+$/, "")).trim();
+  const explicitPort = targetPort?.trim();
+  const port = explicitPort || extracted?.port || "";
+
+  // Common controller TLS ports should default to HTTPS when protocol is omitted.
+  const tlsPorts = new Set(["443", "8043", "8843"]);
+  const inferredProtocol = extracted?.protocol || (port && tlsPorts.has(port) ? "https:" : "http:");
+
+  const controllerUrl = `${inferredProtocol}//${host}${port ? `:${port}` : ""}/portal/radius/browserauth`;
 
   // Build the form fields the Omada controller expects.
   // The POST must come from the client's browser (not our server) so that:
