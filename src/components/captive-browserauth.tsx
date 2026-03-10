@@ -87,13 +87,33 @@ async function performBrowserAuth(params: {
     }),
   });
 
-  const data = await response.json() as { redirectUrl?: string; error?: string };
+  const data = await response.json() as {
+    controllerUrl?: string;
+    formFields?: Record<string, string>;
+    error?: string;
+  };
 
-  if (!response.ok || !data.redirectUrl) {
+  if (!response.ok || !data.controllerUrl || !data.formFields) {
     throw new Error(data.error ?? "Authentication failed");
   }
 
-  window.location.href = data.redirectUrl;
+  // Submit a form directly from the browser to the Omada controller.
+  // The controller is on the client's local network and may not be reachable from
+  // our cloud server, so the POST must originate from the client's browser.
+  // A form navigation from an HTTPS page to an HTTP LAN address is permitted
+  // by browsers (it is a top-level navigation, not a subresource fetch).
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = data.controllerUrl;
+  for (const [key, value] of Object.entries(data.formFields)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = value;
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  form.submit();
 }
 
 export function CaptiveBrowserAuth({

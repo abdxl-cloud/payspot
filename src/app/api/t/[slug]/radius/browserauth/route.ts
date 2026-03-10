@@ -44,39 +44,28 @@ export async function POST(request: Request, { params }: Props) {
   const port = targetPort?.trim();
   const controllerUrl = `http://${host}${port ? `:${port}` : ""}/portal/radius/browserauth`;
 
-  const formData = new URLSearchParams();
-  formData.set("authType", "2");
-  formData.set("username", username);
-  formData.set("password", password);
-  if (contextFields.clientMac) formData.set("clientMac", contextFields.clientMac);
+  // Build the form fields the Omada controller expects.
+  // The POST must come from the client's browser (not our server) so that:
+  //   1. The Omada controller can match the request to the client's Wi-Fi session by MAC/IP.
+  //   2. The controller is typically on the client's local network and is not reachable
+  //      from this cloud server.
+  // We return the URL + fields to the client and let it submit the form directly.
+  const formFields: Record<string, string> = {
+    authType: "2",
+    username,
+    password,
+  };
+  if (contextFields.clientMac) formFields.clientMac = contextFields.clientMac;
   if (contextFields.clientIp) {
-    formData.set("clientIp", contextFields.clientIp);
-    formData.set("clientIP", contextFields.clientIp);
+    formFields.clientIp = contextFields.clientIp;
+    formFields.clientIP = contextFields.clientIp;
   }
-  if (contextFields.apMac) formData.set("apMac", contextFields.apMac);
-  if (contextFields.gatewayMac) formData.set("gatewayMac", contextFields.gatewayMac);
-  if (contextFields.ssidName) formData.set("ssidName", contextFields.ssidName);
-  if (contextFields.radioId) formData.set("radioId", contextFields.radioId);
-  if (contextFields.vid) formData.set("vid", contextFields.vid);
-  if (contextFields.originUrl) formData.set("originUrl", contextFields.originUrl);
+  if (contextFields.apMac) formFields.apMac = contextFields.apMac;
+  if (contextFields.gatewayMac) formFields.gatewayMac = contextFields.gatewayMac;
+  if (contextFields.ssidName) formFields.ssidName = contextFields.ssidName;
+  if (contextFields.radioId) formFields.radioId = contextFields.radioId;
+  if (contextFields.vid) formFields.vid = contextFields.vid;
+  if (contextFields.originUrl) formFields.originUrl = contextFields.originUrl;
 
-  let response: Response;
-  try {
-    response = await fetch(controllerUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formData.toString(),
-      redirect: "manual",
-    });
-  } catch (err) {
-    console.error("[radius/browserauth] Failed to reach controller:", err);
-    return Response.json({ error: "Could not reach controller" }, { status: 502 });
-  }
-
-  const redirectUrl = response.headers.get("location");
-  if (!redirectUrl) {
-    return Response.json({ error: "No redirect from controller" }, { status: 502 });
-  }
-
-  return Response.json({ redirectUrl });
+  return Response.json({ controllerUrl, formFields });
 }
