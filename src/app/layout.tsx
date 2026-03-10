@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { Exo_2, Manrope } from "next/font/google";
 import "./globals.css";
 
@@ -29,18 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${bodyFont.variable} ${headingFont.variable} antialiased`}>
-        {children}
-        <Script id="sw-register" strategy="afterInteractive">
-          {`
-            if ("serviceWorker" in navigator) {
-              window.addEventListener("load", function () {
-                navigator.serviceWorker.register("/sw.js").catch(function () {});
-              });
-            }
-          `}
-        </Script>
-      </body>
+      <body className={`${bodyFont.variable} ${headingFont.variable} antialiased`}>{children}</body>
     </html>
   );
 }
