@@ -94,13 +94,13 @@ export async function POST(request: Request, { params }: Props) {
     const existing = await db
       .prepare(
         `
-        SELECT subscriber_id, entitlement_id
+        SELECT subscriber_id, entitlement_id, status, stopped_at
         FROM radius_accounting_sessions
         WHERE tenant_id = ? AND session_id = ?
       `,
       )
       .get(tenant.id, parsed.data.sessionId) as
-      | { subscriber_id: string; entitlement_id: string }
+      | { subscriber_id: string; entitlement_id: string; status: string; stopped_at: string | null }
       | undefined;
     subscriberId = subscriberId ?? existing?.subscriber_id;
     entitlementId = entitlementId ?? existing?.entitlement_id;
