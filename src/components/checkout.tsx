@@ -403,7 +403,15 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
     !allSoldOut &&
     !hasTrackedActivePlan &&
     isPurchaseFlow &&
+    !isAccountAccessMode &&
     purchaseStage === "payment";
+
+  function selectPlan(pkg: Package) {
+    setSelected(pkg);
+    setPaymentReference(null);
+    setAuthorizationUrl(null);
+    setCopyMessage(null);
+  }
 
   function redirectToPaystack(url: string, newTab = false) {
     if (newTab) {
@@ -456,6 +464,10 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       return;
     }
     setError(null);
+    if (isAccountAccessMode) {
+      void initiatePayment();
+      return;
+    }
     setPurchaseStage("payment");
   }
 
@@ -520,8 +532,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
     }
   }
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
+  async function initiatePayment() {
     if (!selected || selected.availableCount <= 0) return;
 
     setError(null);
@@ -573,6 +584,11 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       setError(message);
       setLoading(false);
     }
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    await initiatePayment();
   }
 
   async function handleResume(event: React.FormEvent) {
@@ -974,13 +990,13 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                   aria-disabled={isSoldOut}
                   aria-pressed={isSelected}
                   onClick={() => {
-                    if (!isSoldOut) setSelected(pkg);
+                    if (!isSoldOut) selectPlan(pkg);
                   }}
                   onKeyDown={(event) => {
                     if (isSoldOut) return;
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      setSelected(pkg);
+                      selectPlan(pkg);
                     }
                   }}
                   className={[
@@ -1080,7 +1096,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
               </p>
               <p className="mt-1 text-xs text-slate-500">
                 {isAccountAccessMode
-                  ? "After you confirm a plan, you will move to payment details."
+                  ? "After selecting a plan, continue directly to secure checkout."
                   : "Continue when you are ready to enter your phone number and start payment."}
               </p>
             </div>
@@ -1099,14 +1115,68 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                 disabled={
                   !selected ||
                   selected.availableCount <= 0 ||
-                  (isAccountAccessMode && !hasAuthenticatedSubscriber)
+                  (isAccountAccessMode && (!hasAuthenticatedSubscriber || loading))
                 }
                 onClick={continueToPaymentStep}
               >
-                {selected ? `Pay NGN ${selected.priceNgn.toLocaleString()}` : "Select a plan"}
+                {loading && isAccountAccessMode
+                  ? "Preparing payment..."
+                  : selected
+                    ? `Pay NGN ${selected.priceNgn.toLocaleString()}`
+                    : "Select a plan"}
               </Button>
             </div>
           </div>
+
+          {isAccountAccessMode && paymentReference ? (
+            <Alert className="border-emerald-200 bg-emerald-50/90">
+              <AlertTitle>Reference saved: {paymentReference}</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>Keep this reference. You can resume payment with it if interrupted.</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyReference(paymentReference)}
+                  >
+                    Copy reference
+                  </Button>
+                  {authorizationUrl ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => redirectToPaystack(authorizationUrl)}
+                    >
+                      Continue to Paystack
+                    </Button>
+                  ) : null}
+                  {authorizationUrl ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => redirectToPaystack(authorizationUrl, true)}
+                    >
+                      Open in browser
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="text-xs text-slate-600">
+                  Continue to Paystack when you are ready.
+                </p>
+                {copyMessage ? <p className="text-xs text-slate-600">{copyMessage}</p> : null}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {isAccountAccessMode ? (
+            <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <Lock className="size-4 text-slate-500" />
+              <MessageSquareText className="size-4 text-slate-500" />
+              Paystack-secured checkout with instant account plan activation.
+            </div>
+          ) : null}
         </CardContent>
       </Card>
       ) : null}
