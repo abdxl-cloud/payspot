@@ -359,12 +359,13 @@ def load_tenants():
         return {}
 
 
-def resolve_tenant(nas_ip: str):
-    """Return (slug, base_url, adapter_secret) for the given NAS IP.
+def resolve_tenant(nas_ip: str, packet_src_ip: str = ""):
+    """Return (slug, base_url, adapter_secret) for the given NAS/controller IP.
 
     Lookup order:
       1. Exact NAS IP match across all tenants.
-      2. If only one tenant is configured, use it as a fallback.
+      2. Exact packet source IP match across all tenants (controller egress IP).
+      3. If only one tenant is configured, use it as a fallback.
     """
     tenants = load_tenants()
     if not tenants:
@@ -374,14 +375,23 @@ def resolve_tenant(nas_ip: str):
     for slug, t in tenants.items():
         if nas_ip and nas_ip in t.get("nas_ips", []):
             return slug, t["base_url"], t["adapter_secret"]
+    for slug, t in tenants.items():
+        if packet_src_ip and packet_src_ip in t.get("nas_ips", []):
+            return slug, t["base_url"], t["adapter_secret"]
 
     if len(tenants) == 1:
         slug, t = next(iter(tenants.items()))
-        if nas_ip:
-            log(f"NAS IP {nas_ip} not matched; falling back to sole tenant '{slug}'")
+        if nas_ip or packet_src_ip:
+            log(
+                f"NAS/controller IPs ({nas_ip or '-'}, {packet_src_ip or '-'}) "
+                f"not matched; falling back to sole tenant '{slug}'"
+            )
         return slug, t["base_url"], t["adapter_secret"]
 
-    log(f"NAS IP {nas_ip!r} did not match any tenant and multiple tenants are configured")
+    log(
+        f"NAS/controller IPs ({nas_ip!r}, {packet_src_ip!r}) did not match any tenant "
+        "and multiple tenants are configured"
+    )
     return None, None, None
 
 
@@ -500,18 +510,31 @@ def find_radius_secret(nas_ip: str):
     return None
 
 
-def send_disconnect(*, nas_ip: str, session_id: str, username: str, calling_station_id: str):
-    if not nas_ip or not session_id:
+def send_disconnect(
+    *,
+    target_ip: str,
+    session_id: str,
+    username: str,
+    calling_station_id: str,
+    nas_ip_address: str = "",
+):
+    if not target_ip or not session_id:
         return
 
-    secret = find_radius_secret(nas_ip)
+    secret = find_radius_secret(target_ip)
+    if not secret and nas_ip_address and nas_ip_address != target_ip:
+        secret = find_radius_secret(nas_ip_address)
     if not secret:
-        log(f"disconnect skipped: no shared secret found for {nas_ip}")
+        log(
+            "disconnect skipped: no shared secret found "
+            f"for target={target_ip} nas={nas_ip_address or '-'}"
+        )
         return
 
+    nas_attr_ip = nas_ip_address or target_ip
     attrs = [
         f'Acct-Session-Id = "{radius_escape(session_id)}"',
-        f"NAS-IP-Address = {nas_ip}",
+        f"NAS-IP-Address = {nas_attr_ip}",
         f"Event-Timestamp = {int(time.time())}",
     ]
     if username:
@@ -530,7 +553,7 @@ def send_disconnect(*, nas_ip: str, session_id: str, username: str, calling_stat
                 "-r",
                 "1",
                 "-x",
-                f"{nas_ip}:{DISCONNECT_PORT}",
+                f"{target_ip}:{DISCONNECT_PORT}",
                 "disconnect",
                 secret,
             ],
@@ -549,7 +572,10 @@ def send_disconnect(*, nas_ip: str, session_id: str, username: str, calling_stat
         log(f"disconnect rejected for session={session_id}: {details}")
         return
 
-    log(f"disconnect request sent for session={session_id} to {nas_ip}")
+    log(
+        f"disconnect request sent for session={session_id} "
+        f"to target={target_ip} nas={nas_attr_ip}"
+    )
 
 
 def map_accounting_event(raw: str) -> str:
@@ -622,15 +648,19 @@ def handle_auth(argv):
 
 def handle_accounting(argv):
     # argv: accounting <event> <session_id> <in_oct> <out_oct> <in_giga> <out_giga>
-    #                  <username> <class> <calling_station> <called_station> <nas_ip>
+    #                  <username> <class> <calling_station> <called_station> <nas_ip> <packet_src_ip>
     if len(argv) < 13:
         log("accounting called without expected arguments")
         return 0
 
     nas_ip_address = argv[12]
-    slug, base_url, adapter_secret = resolve_tenant(nas_ip_address)
+    packet_src_ip = argv[13] if len(argv) > 13 else ""
+    slug, base_url, adapter_secret = resolve_tenant(nas_ip_address, packet_src_ip)
     if not slug:
-        log(f"no tenant found for NAS IP {nas_ip_address!r}; dropping accounting packet")
+        log(
+            f"no tenant found for NAS/controller IPs "
+            f"{nas_ip_address!r}/{packet_src_ip!r}; dropping accounting packet"
+        )
         return 0
 
     payload = {
@@ -700,11 +730,13 @@ def handle_accounting(argv):
             log(f"backend requested disconnect reason={backend_reason} session={payload['sessionId']}")
 
     if should_disconnect and payload["event"] not in {"stop", "accounting-on", "accounting-off"}:
+        disconnect_target = packet_src_ip or nas_ip_address
         send_disconnect(
-            nas_ip=nas_ip_address,
+            target_ip=disconnect_target,
             session_id=payload["sessionId"],
             username=username,
             calling_station_id=calling_station_id,
+            nas_ip_address=nas_ip_address,
         )
     return 0
 
@@ -746,7 +778,7 @@ exec payspot_accounting {
     input_pairs = request
     output_pairs = reply
     shell_escape = yes
-    program = "/usr/local/bin/payspot-radius-adapter accounting \"%{Acct-Status-Type}\" \"%{Acct-Session-Id}\" \"%{Acct-Input-Octets}\" \"%{Acct-Output-Octets}\" \"%{Acct-Input-Gigawords}\" \"%{Acct-Output-Gigawords}\" \"%{User-Name}\" \"%{Class}\" \"%{Calling-Station-Id}\" \"%{Called-Station-Id}\" \"%{NAS-IP-Address}\""
+    program = "/usr/local/bin/payspot-radius-adapter accounting \"%{Acct-Status-Type}\" \"%{Acct-Session-Id}\" \"%{Acct-Input-Octets}\" \"%{Acct-Output-Octets}\" \"%{Acct-Input-Gigawords}\" \"%{Acct-Output-Gigawords}\" \"%{User-Name}\" \"%{Class}\" \"%{Calling-Station-Id}\" \"%{Called-Station-Id}\" \"%{NAS-IP-Address}\" \"%{%{Packet-Src-IP-Address}:-%{Packet-Src-IPv6-Address}}\""
 }
 EOF
 
