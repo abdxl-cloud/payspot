@@ -12,6 +12,7 @@ type Props = {
 const schema = z.object({
   username: z.string().min(3),
   password: z.string().min(1),
+  callingStationId: z.string().optional(),
 });
 
 function getAdapterSecret(request: Request) {
@@ -44,6 +45,7 @@ export async function POST(request: Request, { params }: Props) {
     tenantId: tenant.id,
     username: parsed.data.username,
     password: parsed.data.password,
+    callingStationId: parsed.data.callingStationId,
   });
 
   if (auth.status !== "ok") {

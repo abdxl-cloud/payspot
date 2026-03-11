@@ -69,6 +69,49 @@ type SubscriberOverview = {
   }>;
 };
 
+type StoredSubscriberSession = {
+  token: string;
+  email?: string;
+  savedAt: number;
+};
+
+const SUBSCRIBER_SESSION_KEY_PREFIX = "payspot:subscriber-session:";
+
+function getSubscriberSessionKey(tenantSlug: string) {
+  return `${SUBSCRIBER_SESSION_KEY_PREFIX}${tenantSlug}`;
+}
+
+function readStoredSubscriberSession(tenantSlug: string): StoredSubscriberSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(getSubscriberSessionKey(tenantSlug));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredSubscriberSession;
+    if (!parsed || typeof parsed.token !== "string" || !parsed.token) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function persistSubscriberSession(tenantSlug: string, payload: StoredSubscriberSession) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(getSubscriberSessionKey(tenantSlug), JSON.stringify(payload));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function clearStoredSubscriberSession(tenantSlug: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(getSubscriberSessionKey(tenantSlug));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 async function fetchSubscriberOverview(params: {
   tenantSlug: string;
   token: string;
@@ -79,7 +122,11 @@ async function fetchSubscriberOverview(params: {
   });
   const meData = await readJsonResponse<SubscriberOverview & { error?: string }>(meResponse);
   if (!meResponse.ok || !meData) {
-    throw new Error(meData?.error || "Unable to load subscriber profile.");
+    const error = new Error(meData?.error || "Unable to load subscriber profile.") as Error & {
+      status?: number;
+    };
+    error.status = meResponse.status;
+    throw error;
   }
   return meData;
 }
@@ -406,6 +453,17 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
     !isAccountAccessMode &&
     purchaseStage === "payment";
 
+  useEffect(() => {
+    if (!isAccountAccessMode) return;
+    const storedSession = readStoredSubscriberSession(tenantSlug);
+    if (!storedSession) return;
+    setSubscriberToken(storedSession.token);
+    if (storedSession.email) {
+      setSubscriberEmail((current) => current || storedSession.email || "");
+      setResumeLookup((current) => current || storedSession.email || "");
+    }
+  }, [isAccountAccessMode, tenantSlug]);
+
   function selectPlan(pkg: Package) {
     setSelected(pkg);
     setPaymentReference(null);
@@ -500,6 +558,11 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
         throw new Error(data?.error || "Authentication failed.");
       }
       setSubscriberToken(data.token);
+      persistSubscriberSession(tenantSlug, {
+        token: data.token,
+        email: normalizedEmail,
+        savedAt: Date.now(),
+      });
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(
           `payspot:captive-auth:${tenantSlug}`,
@@ -653,11 +716,23 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
             setPhone((current) => current || next.subscriber.phone || "");
           }
         }
-      } catch {
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        if (status === 401) {
+          clearStoredSubscriberSession(tenantSlug);
+          if (!cancelled) {
+            setSubscriberToken(null);
+            setSubscriberOverview(null);
+            setSubscriberAuthMessage(null);
+            setSubscriberAuthError("Session expired. Please sign in again.");
+          }
+          return;
+        }
         // Keep the last known usage panel visible if refresh fails.
       }
     };
 
+    void refreshOverview();
     const intervalId = window.setInterval(refreshOverview, 45_000);
 
     return () => {

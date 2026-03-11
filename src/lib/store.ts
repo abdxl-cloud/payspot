@@ -274,6 +274,21 @@ function parseIsoTime(value: string | null) {
   return new Date(value).getTime();
 }
 
+function normalizeStationId(value?: string | null) {
+  return (value ?? "").trim().toUpperCase();
+}
+
+function getRadiusActiveStaleMinutes() {
+  const parsed = Number.parseInt(process.env.RADIUS_ACTIVE_STALE_MINUTES ?? "20", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return 20;
+  return parsed;
+}
+
+function getRadiusActiveCutoffIso() {
+  const minutes = getRadiusActiveStaleMinutes();
+  return new Date(Date.now() - minutes * 60 * 1000).toISOString();
+}
+
 export async function getUserByUsername(username: string) {
   const db = getDb();
   return await db
@@ -693,19 +708,26 @@ async function getRadiusUsageForEntitlement(params: {
   entitlementId: string;
 }) {
   const db = getDb();
+  const cutoffIso = getRadiusActiveCutoffIso();
   const row = await db
     .prepare(
       `
       SELECT
         COALESCE(SUM(input_octets + output_octets), 0) as used_bytes,
-        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_sessions
+        COUNT(
+          DISTINCT CASE
+            WHEN status = 'active' AND last_update_at >= ?
+              THEN COALESCE(NULLIF(calling_station_id, ''), session_id)
+            ELSE NULL
+          END
+        ) as active_sessions
       FROM radius_accounting_sessions
       WHERE tenant_id = ?
         AND subscriber_id = ?
         AND entitlement_id = ?
     `,
     )
-    .get(params.tenantId, params.subscriberId, params.entitlementId) as
+    .get(cutoffIso, params.tenantId, params.subscriberId, params.entitlementId) as
     | {
         used_bytes: number;
         active_sessions: number;
@@ -829,6 +851,7 @@ export async function getRadiusUsageForEntitlements(params: {
   }
 
   const db = getDb();
+  const cutoffIso = getRadiusActiveCutoffIso();
   const placeholders = params.entitlementIds.map(() => "?").join(", ");
   const rows = await db
     .prepare(
@@ -836,7 +859,13 @@ export async function getRadiusUsageForEntitlements(params: {
       SELECT
         entitlement_id,
         COALESCE(SUM(input_octets + output_octets), 0) as used_bytes,
-        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_sessions
+        COUNT(
+          DISTINCT CASE
+            WHEN status = 'active' AND last_update_at >= ?
+              THEN COALESCE(NULLIF(calling_station_id, ''), session_id)
+            ELSE NULL
+          END
+        ) as active_sessions
       FROM radius_accounting_sessions
       WHERE tenant_id = ?
         AND subscriber_id = ?
@@ -844,7 +873,7 @@ export async function getRadiusUsageForEntitlements(params: {
       GROUP BY entitlement_id
     `,
     )
-    .all(params.tenantId, params.subscriberId, ...params.entitlementIds) as Array<{
+    .all(cutoffIso, params.tenantId, params.subscriberId, ...params.entitlementIds) as Array<{
     entitlement_id: string;
     used_bytes: number;
     active_sessions: number;
@@ -880,6 +909,7 @@ export async function authorizeSubscriberRadiusAccess(params: {
   tenantId: string;
   username: string;
   password: string;
+  callingStationId?: string | null;
 }) {
   const subscriber = await authenticatePortalSubscriber({
     tenantId: params.tenantId,
@@ -899,15 +929,23 @@ export async function authorizeSubscriberRadiusAccess(params: {
 
   const db = getDb();
   const entitlement = accessState.entitlement;
+  const callingStationId = normalizeStationId(params.callingStationId);
+  const cutoffIso = getRadiusActiveCutoffIso();
   const activeSessionCountRow = await db
     .prepare(
       `
-      SELECT COUNT(1) as count
+      SELECT COUNT(DISTINCT COALESCE(NULLIF(calling_station_id, ''), session_id)) as count
       FROM radius_accounting_sessions
-      WHERE tenant_id = ? AND subscriber_id = ? AND status = 'active'
+      WHERE tenant_id = ?
+        AND subscriber_id = ?
+        AND status = 'active'
+        AND last_update_at >= ?
+        AND (? = '' OR UPPER(COALESCE(calling_station_id, '')) != ?)
     `,
     )
-    .get(params.tenantId, subscriber.id) as { count: number } | undefined;
+    .get(params.tenantId, subscriber.id, cutoffIso, callingStationId, callingStationId) as
+    | { count: number }
+    | undefined;
   const activeSessionCount = Number(activeSessionCountRow?.count ?? 0);
   const maxDevices = entitlement.max_devices;
   if (
@@ -941,7 +979,32 @@ export async function recordRadiusAccountingEvent(params: {
 }) {
   const db = getDb();
   const now = nowIso();
+  const normalizedCallingStationId = normalizeStationId(params.callingStationId);
   const run = db.transaction(async () => {
+    if (normalizedCallingStationId && (params.event === "start" || params.event === "interim")) {
+      // Same device should map to one active session; close stale active sessions for this station.
+      await db.prepare(
+        `
+        UPDATE radius_accounting_sessions
+        SET status = 'stopped',
+            stopped_at = ?,
+            last_update_at = ?
+        WHERE tenant_id = ?
+          AND subscriber_id = ?
+          AND status = 'active'
+          AND UPPER(COALESCE(calling_station_id, '')) = ?
+          AND session_id != ?
+      `,
+      ).run(
+        now,
+        now,
+        params.tenantId,
+        params.subscriberId,
+        normalizedCallingStationId,
+        params.sessionId,
+      );
+    }
+
     const existing = await db
       .prepare(
         `
@@ -976,7 +1039,7 @@ export async function recordRadiusAccountingEvent(params: {
         params.subscriberId,
         params.entitlementId,
         params.sessionId,
-        params.callingStationId ?? null,
+        normalizedCallingStationId || null,
         params.calledStationId ?? null,
         params.nasIpAddress ?? null,
         initialStatus,

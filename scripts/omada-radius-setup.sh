@@ -567,21 +567,25 @@ def map_accounting_event(raw: str) -> str:
 
 
 def handle_auth(argv):
-    # argv: auth <username> <password> <nas_ip>
+    # argv: auth <username> <password> <nas_ip> <calling_station_id>
     if len(argv) < 4:
         emit_reply("Reply-Message", "Missing username or password", is_string=True)
         return 1
 
     nas_ip = argv[4] if len(argv) > 4 else ""
+    calling_station_id = argv[5] if len(argv) > 5 else ""
     slug, base_url, adapter_secret = resolve_tenant(nas_ip)
     if not slug:
         emit_reply("Reply-Message", "No tenant configured for this NAS", is_string=True)
         return 1
 
+    payload = {"username": argv[2], "password": argv[3]}
+    if calling_station_id:
+        payload["callingStationId"] = calling_station_id
     status, body = api_post(
         base_url, slug, adapter_secret,
         "/radius/authorize",
-        {"username": argv[2], "password": argv[3]},
+        payload,
     )
     if status != 200 or not isinstance(body, dict):
         log(f"authorize backend failure status={status} body={body}")
@@ -714,14 +718,15 @@ EOF
 }
 
 write_mod_files() {
-  # NAS-IP-Address is now passed to auth so the adapter can resolve the tenant.
+  # NAS-IP-Address + Calling-Station-Id are passed to auth so the adapter can
+  # resolve tenant and apply per-device max-device checks before accounting.
   cat > "$FR_MODS_AVAILABLE/payspot_auth" <<'EOF'
 exec payspot_auth {
     wait = yes
     input_pairs = request
     output_pairs = reply
     shell_escape = yes
-    program = "/usr/local/bin/payspot-radius-adapter auth \"%{User-Name}\" \"%{User-Password}\" \"%{NAS-IP-Address}\""
+    program = "/usr/local/bin/payspot-radius-adapter auth \"%{User-Name}\" \"%{User-Password}\" \"%{NAS-IP-Address}\" \"%{Calling-Station-Id}\""
 }
 EOF
 

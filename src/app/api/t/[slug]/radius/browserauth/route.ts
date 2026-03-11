@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getTenantBySlug } from "@/lib/store";
+import { authorizeSubscriberRadiusAccess, getTenantBySlug } from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -39,6 +39,29 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const { target, targetPort, scheme, username, password, ...contextFields } = parsed.data;
+  const preAuth = await authorizeSubscriberRadiusAccess({
+    tenantId: tenant.id,
+    username,
+    password,
+    callingStationId: contextFields.clientMac,
+  });
+  if (preAuth.status !== "ok") {
+    const reasonMessages: Record<string, string> = {
+      invalid_credentials: "Invalid email or password.",
+      no_active_plan: "No active plan found for this account.",
+      plan_expired: "Your plan has expired.",
+      data_limit_reached: "Your data limit has been reached.",
+      session_limit_reached:
+        "Maximum devices reached for this plan. Disconnect another device and try again.",
+    };
+    return Response.json(
+      {
+        error: reasonMessages[preAuth.status] ?? preAuth.status,
+        reasonCode: preAuth.status,
+      },
+      { status: 409 },
+    );
+  }
 
   const normalizedTarget = target.trim();
   let extracted: URL | null = null;

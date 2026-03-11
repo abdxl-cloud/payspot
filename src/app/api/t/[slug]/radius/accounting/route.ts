@@ -114,7 +114,9 @@ export async function POST(request: Request, { params }: Props) {
           `
           SELECT subscriber_id, entitlement_id
           FROM radius_accounting_sessions
-          WHERE tenant_id = ? AND calling_station_id = ?
+          WHERE tenant_id = ?
+            AND UPPER(COALESCE(calling_station_id, '')) = UPPER(?)
+            AND status = 'active'
           ORDER BY last_update_at DESC
           LIMIT 1
         `,
