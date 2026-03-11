@@ -977,6 +977,57 @@ add_tenant_mode() {
   list_tenants_json
 }
 
+update_tenant_mode() {
+  ensure_root
+  need_cmd python3
+  need_cmd freeradius
+  require_freeradius_files
+
+  [ -x "$FR_ADAPTER_BIN" ] || fail "PaySpot adapter not found at $FR_ADAPTER_BIN. Run 'configure' first."
+  tenants_file_exists || fail "Tenants config not found at $PAYSPOT_TENANTS_FILE. Run 'configure' first."
+
+  bold "PaySpot - Update Tenant"
+  printf 'Existing tenants:\n'
+  list_tenants_json
+
+  local base_url tenant_slug adapter_secret client_ips client_prefix radius_secret
+  printf '\n'
+  base_url="$(prompt_default "PaySpot base URL" "https://payspot.abdxl.cloud")"
+  tenant_slug="$(prompt_required "Tenant slug to update")"
+  tenant_exists "$tenant_slug" || fail "Tenant '$tenant_slug' not found."
+
+  adapter_secret="$(prompt_required "PaySpot tenant adapter secret")"
+  client_ips="$(prompt_required "RADIUS client IPs for this tenant (comma-separated)")"
+  client_prefix="$(prompt_default "Client shortname prefix" "omada")"
+  radius_secret="$(prompt_optional "RADIUS shared secret (leave blank to keep current)")"
+  if [ -z "$radius_secret" ]; then
+    radius_secret="$(get_tenant_field "$tenant_slug" "radius_secret")"
+    [ -n "$radius_secret" ] || fail "Existing radius_secret is missing for tenant '$tenant_slug'. Enter a new one."
+  fi
+
+  backup_file "$FR_CLIENTS"
+
+  upsert_tenant "$tenant_slug" "$base_url" "$adapter_secret" "$radius_secret" "$client_prefix" "$client_ips"
+  render_adapter_script "$PAYSPOT_TENANTS_FILE" > "$FR_ADAPTER_BIN"
+  chmod 750 "$FR_ADAPTER_BIN"
+  sync_clients_from_config
+
+  if ! freeradius -CX >/dev/null 2>&1; then
+    fail "FreeRADIUS config test failed. Backups are in $BACKUP_DIR"
+  fi
+
+  if prompt_yes_no "Restart FreeRADIUS now" "y"; then
+    systemctl restart freeradius
+  fi
+
+  printf '\n'
+  bold "Tenant Updated"
+  printf 'Tenant "%s" settings were updated.\n' "$tenant_slug"
+  printf 'RADIUS shared secret for Omada profile: %s\n' "$radius_secret"
+  printf '\nAll configured tenants:\n'
+  list_tenants_json
+}
+
 remove_tenant_mode() {
   ensure_root
   need_cmd python3
@@ -1202,20 +1253,22 @@ main() {
   local mode="${1:-}"
   if [ -z "$mode" ]; then
     printf 'Choose mode:\n'
-    printf '  1. configure      — Set up FreeRADIUS with the first PaySpot tenant\n'
-    printf '  2. add-tenant     — Add a new tenant (and its APs) to an existing setup\n'
-    printf '  3. remove-tenant  — Remove a tenant from an existing setup\n'
-    printf '  4. list-tenants   — Show all configured tenants\n'
-    printf '  5. check          — Validate current FreeRADIUS + PaySpot configuration\n'
-    printf '  6. upgrade        — Patch the adapter script in place (keep tenant config)\n'
-    read -r -p 'Enter 1-6: ' mode
+    printf '  1. configure      - Set up FreeRADIUS with the first PaySpot tenant\n'
+    printf '  2. add-tenant     - Add a new tenant (and its APs) to an existing setup\n'
+    printf '  3. update-tenant  - Update an existing tenant (IPs/secrets/base URL)\n'
+    printf '  4. remove-tenant  - Remove a tenant from an existing setup\n'
+    printf '  5. list-tenants   - Show all configured tenants\n'
+    printf '  6. check          - Validate current FreeRADIUS + PaySpot configuration\n'
+    printf '  7. upgrade        - Patch the adapter script in place (keep tenant config)\n'
+    read -r -p 'Enter 1-7: ' mode
     case "$mode" in
       1) mode="configure" ;;
       2) mode="add-tenant" ;;
-      3) mode="remove-tenant" ;;
-      4) mode="list-tenants" ;;
-      5) mode="check" ;;
-      6) mode="upgrade" ;;
+      3) mode="update-tenant" ;;
+      4) mode="remove-tenant" ;;
+      5) mode="list-tenants" ;;
+      6) mode="check" ;;
+      7) mode="upgrade" ;;
       *) fail "Invalid selection." ;;
     esac
   fi
@@ -1223,11 +1276,12 @@ main() {
   case "$mode" in
     configure)     configure_mode ;;
     add-tenant)    add_tenant_mode ;;
+    update-tenant) update_tenant_mode ;;
     remove-tenant) remove_tenant_mode ;;
     list-tenants)  list_tenants_mode ;;
     check)         check_mode ;;
     upgrade)       upgrade_mode ;;
-    *) fail "Usage: $0 [configure|add-tenant|remove-tenant|list-tenants|check|upgrade]" ;;
+    *) fail "Usage: $0 [configure|add-tenant|update-tenant|remove-tenant|list-tenants|check|upgrade]" ;;
   esac
 }
 
