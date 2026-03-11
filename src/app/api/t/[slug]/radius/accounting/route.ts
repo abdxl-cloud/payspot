@@ -53,6 +53,12 @@ function combineOctets(lowWord?: number, highWord?: number) {
   return high * 4_294_967_296 + low;
 }
 
+function getRadiusActiveCutoffIso() {
+  const parsed = Number.parseInt(process.env.RADIUS_ACTIVE_STALE_MINUTES ?? "20", 10);
+  const minutes = Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
+  return new Date(Date.now() - minutes * 60 * 1000).toISOString();
+}
+
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
   const tenant = await getTenantBySlug(slug);
@@ -173,16 +179,51 @@ export async function POST(request: Request, { params }: Props) {
     subscriberId,
   });
 
-  const shouldDisconnect =
+  let shouldDisconnect = false;
+  let disconnectReason: string | null = null;
+
+  if (
     normalizedEvent !== "stop" &&
     access.state === "ended" &&
     (access.reason === "data_limit_reached" ||
       access.reason === "plan_expired" ||
-      access.reason === "no_active_plan");
+      access.reason === "no_active_plan")
+  ) {
+    shouldDisconnect = true;
+    disconnectReason = access.reason;
+  }
+
+  if (!shouldDisconnect && normalizedEvent !== "stop" && access.entitlement?.max_devices) {
+    const maxDevices = access.entitlement.max_devices;
+    if (Number.isFinite(maxDevices) && maxDevices > 0) {
+      const db = getDb();
+      const cutoffIso = getRadiusActiveCutoffIso();
+      const activeSessionCountRow = await db
+        .prepare(
+          `
+          SELECT COUNT(DISTINCT COALESCE(NULLIF(calling_station_id, ''), session_id)) as count
+          FROM radius_accounting_sessions
+          WHERE tenant_id = ?
+            AND subscriber_id = ?
+            AND entitlement_id = ?
+            AND status = 'active'
+            AND last_update_at >= ?
+        `,
+        )
+        .get(tenant.id, subscriberId, access.entitlement.id, cutoffIso) as
+        | { count: number }
+        | undefined;
+      const activeSessionCount = Number(activeSessionCountRow?.count ?? 0);
+      if (activeSessionCount > maxDevices) {
+        shouldDisconnect = true;
+        disconnectReason = "session_limit_reached";
+      }
+    }
+  }
 
   return Response.json({
     ok: true,
     disconnect: shouldDisconnect,
-    reason: shouldDisconnect ? access.reason : null,
+    reason: shouldDisconnect ? disconnectReason : null,
   });
 }
