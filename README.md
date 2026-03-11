@@ -87,6 +87,7 @@ RADIUS adapter endpoints (tenant-scoped):
 - `POST /api/t/<slug>/radius/accounting`
 
 Each endpoint requires `x-radius-adapter-secret` that you set in architecture config for `external_radius_portal`.
+Optional fallback (when CoA is unavailable): set `RADIUS_REAUTH_INTERVAL_SECONDS` so Access-Accept includes a bounded `Session-Timeout` and clients are periodically reauthorized against current entitlement state.
 
 Subscriber monitoring:
 - `GET /api/t/<slug>/admin/subscribers`

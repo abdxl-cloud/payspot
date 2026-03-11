@@ -9,6 +9,14 @@ type Props = {
   params: Promise<{ slug: string }>;
 };
 
+function getRadiusReauthIntervalSeconds() {
+  const raw = process.env.RADIUS_REAUTH_INTERVAL_SECONDS?.trim();
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
 const schema = z.object({
   username: z.string().min(3),
   password: z.string().min(1),
@@ -76,12 +84,24 @@ export async function POST(request: Request, { params }: Props) {
     });
   }
 
+  const reauthIntervalSeconds = getRadiusReauthIntervalSeconds();
+  let sessionTimeout: number | undefined;
+  if (hasTimeLimit) {
+    sessionTimeout = Math.max(1, timeoutSeconds as number);
+  }
+  if (reauthIntervalSeconds) {
+    sessionTimeout =
+      sessionTimeout === undefined
+        ? reauthIntervalSeconds
+        : Math.min(sessionTimeout, reauthIntervalSeconds);
+  }
+
   return Response.json({
     accept: true,
     subscriberId: auth.subscriber.id,
     entitlementId: auth.entitlement.id,
     reply: {
-      sessionTimeout: hasTimeLimit ? Math.max(1, timeoutSeconds as number) : undefined,
+      sessionTimeout,
       maxDevices: auth.entitlement.max_devices,
       bandwidthProfile: auth.entitlement.bandwidth_profile,
       dataLimitMb: auth.entitlement.data_limit_mb,
