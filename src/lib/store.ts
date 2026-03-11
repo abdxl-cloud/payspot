@@ -692,7 +692,7 @@ export async function listActiveEntitlementsForSubscriber(params: {
         AND e.status = 'active'
         AND e.starts_at <= ?
         AND (e.ends_at IS NULL OR e.ends_at > ?)
-      ORDER BY COALESCE(e.ends_at, '9999-12-31T23:59:59.999Z') DESC
+      ORDER BY e.starts_at DESC, e.created_at DESC
     `,
     )
     .all(params.tenantId, params.subscriberId, nowIso(), nowIso()) as Array<
@@ -749,21 +749,21 @@ export async function getSubscriberAccessState(params: {
 }): Promise<SubscriberAccessState> {
   const db = getDb();
   const now = nowIso();
-  const currentOrLatestStartedEntitlement = await db
+  const startedActiveEntitlements = await db
     .prepare(
       `
       SELECT *
       FROM subscriber_entitlements
       WHERE tenant_id = ?
         AND subscriber_id = ?
+        AND status = 'active'
         AND starts_at <= ?
-      ORDER BY COALESCE(ends_at, '9999-12-31T23:59:59.999Z') DESC
-      LIMIT 1
+      ORDER BY starts_at DESC, created_at DESC
     `,
     )
-    .get(params.tenantId, params.subscriberId, now) as SubscriberEntitlementRow | undefined;
+    .all(params.tenantId, params.subscriberId, now) as SubscriberEntitlementRow[];
 
-  if (!currentOrLatestStartedEntitlement) {
+  if (startedActiveEntitlements.length === 0) {
     const latestEntitlement = await db
       .prepare(
         `
@@ -800,47 +800,65 @@ export async function getSubscriberAccessState(params: {
     };
   }
 
-  const latestEntitlement = currentOrLatestStartedEntitlement;
-  const usage = await getRadiusUsageForEntitlement({
-    tenantId: params.tenantId,
-    subscriberId: params.subscriberId,
-    entitlementId: latestEntitlement.id,
-  });
-
-  const startsAtMs = parseIsoTime(latestEntitlement.starts_at);
-  const endsAtMs = parseIsoTime(latestEntitlement.ends_at);
   const nowMs = Date.now();
-  const hasTimeLimit = !!latestEntitlement.ends_at;
-  const isWithinWindow = startsAtMs <= nowMs && (!hasTimeLimit || endsAtMs > nowMs);
-  const allowedBytes =
-    latestEntitlement.data_limit_mb && latestEntitlement.data_limit_mb > 0
-      ? latestEntitlement.data_limit_mb * 1024 * 1024
-      : null;
-  const dataLimitReached = allowedBytes !== null && usage.usedBytes >= allowedBytes;
+  let fallback:
+    | {
+        reason: SubscriberAccessEndReason;
+        entitlement: SubscriberEntitlementRow;
+        usage: SubscriberAccessUsage;
+      }
+    | null = null;
 
-  if (isWithinWindow && latestEntitlement.status === "active" && !dataLimitReached) {
-    return {
-      state: "active",
-      reason: null,
-      entitlement: latestEntitlement,
-      usage,
-    };
+  for (const entitlement of startedActiveEntitlements) {
+    const usage = await getRadiusUsageForEntitlement({
+      tenantId: params.tenantId,
+      subscriberId: params.subscriberId,
+      entitlementId: entitlement.id,
+    });
+
+    const startsAtMs = parseIsoTime(entitlement.starts_at);
+    const endsAtMs = parseIsoTime(entitlement.ends_at);
+    const hasTimeLimit = !!entitlement.ends_at;
+    const isWithinWindow = startsAtMs <= nowMs && (!hasTimeLimit || endsAtMs > nowMs);
+    const allowedBytes =
+      entitlement.data_limit_mb && entitlement.data_limit_mb > 0
+        ? entitlement.data_limit_mb * 1024 * 1024
+        : null;
+    const dataLimitReached = allowedBytes !== null && usage.usedBytes >= allowedBytes;
+
+    if (isWithinWindow && !dataLimitReached) {
+      return {
+        state: "active",
+        reason: null,
+        entitlement,
+        usage,
+      };
+    }
+
+    const reason: SubscriberAccessEndReason = isWithinWindow && dataLimitReached
+      ? "data_limit_reached"
+      : hasTimeLimit
+        ? "plan_expired"
+        : "no_active_plan";
+    if (!fallback) {
+      fallback = { reason, entitlement, usage };
+    }
   }
 
-  if (isWithinWindow && dataLimitReached) {
+  if (fallback) {
     return {
       state: "ended",
-      reason: "data_limit_reached",
-      entitlement: latestEntitlement,
-      usage,
+      reason: fallback.reason,
+      entitlement: fallback.entitlement,
+      usage: fallback.usage,
     };
   }
 
   return {
     state: "ended",
-    reason: hasTimeLimit ? "plan_expired" : "no_active_plan",
-    entitlement: latestEntitlement,
-    usage,
+    reason: "no_active_plan",
+    entitlement: null,
+    usage: null,
   };
 }
 
