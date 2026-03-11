@@ -7,6 +7,7 @@ import {
   getAvailableCount,
   getPackageByCode,
   getPortalSubscriberSession,
+  previewEntitlementWindow,
   getTenantBySlug,
   markTransactionFailed,
   requireTenantPaystackSecretKey,
@@ -119,6 +120,22 @@ export async function POST(request: Request, { params }: Props) {
   const pkg = await getPackageByCode(tenant.id, packageCode);
   if (!pkg) {
     return Response.json({ error: "Package not found" }, { status: 404 });
+  }
+  if (accountAccessMode && subscriberId) {
+    const preview = await previewEntitlementWindow({
+      tenantId: tenant.id,
+      subscriberId,
+      packageId: pkg.id,
+    });
+    if (!preview.ok && preview.reason === "plan_window_unusable") {
+      return Response.json(
+        {
+          error:
+            "This plan cannot be activated within its configured usage window. Please choose another plan or contact support.",
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const available = await getAvailableCount(tenant.id, pkg.id);

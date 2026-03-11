@@ -115,6 +115,8 @@ export async function POST(request: Request, { params }: Props) {
         "Payment succeeded but no voucher was available. Please contact support.",
       access_activation_failed:
         "Payment succeeded but access activation failed. Please contact support.",
+      plan_window_unusable:
+        "Payment succeeded, but this plan's usage window is not valid right now. Please contact support.",
     };
 
     const message =

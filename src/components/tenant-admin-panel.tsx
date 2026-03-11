@@ -51,6 +51,8 @@ type PlanRow = {
   maxDevices: number | null;
   bandwidthProfile: string | null;
   dataLimitMb: number | null;
+  availableFrom: string | null;
+  availableTo: string | null;
   active: number;
   totalCount: number;
   unusedCount: number;
@@ -202,6 +204,22 @@ function formatDataLimitPreviewMb(mb: number) {
   return `${mb} MB`;
 }
 
+function isoToLocalInput(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function localInputToIso(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
+}
+
 export function TenantAdminPanel({ tenantSlug }: Props) {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -245,6 +263,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [newPlanMaxDevices, setNewPlanMaxDevices] = useState("");
   const [newPlanBandwidthProfile, setNewPlanBandwidthProfile] = useState("");
   const [newPlanDataLimitMb, setNewPlanDataLimitMb] = useState("");
+  const [newPlanAvailableFrom, setNewPlanAvailableFrom] = useState("");
+  const [newPlanAvailableTo, setNewPlanAvailableTo] = useState("");
   const [creatingPlan, setCreatingPlan] = useState(false);
 
   const [planDrafts, setPlanDrafts] = useState<
@@ -256,6 +276,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       maxDevices: string;
       bandwidthProfile: string;
       dataLimitMb: string;
+      availableFrom: string;
+      availableTo: string;
       active: boolean;
     }>
   >({});
@@ -418,6 +440,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       maxDevices: string;
       bandwidthProfile: string;
       dataLimitMb: string;
+      availableFrom: string;
+      availableTo: string;
       active: boolean;
     }> = {};
     for (const plan of plans) {
@@ -429,6 +453,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         maxDevices: plan.maxDevices === null ? "" : String(plan.maxDevices),
         bandwidthProfile: plan.bandwidthProfile ?? "",
         dataLimitMb: plan.dataLimitMb ? String(plan.dataLimitMb) : "",
+        availableFrom: isoToLocalInput(plan.availableFrom),
+        availableTo: isoToLocalInput(plan.availableTo),
         active: plan.active === 1,
       };
     }
@@ -608,6 +634,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       ? Number.parseInt(newPlanMaxDevices, 10)
       : null;
     const dataLimitMb = parseDataLimitToMb(newPlanDataLimitMb);
+    const availableFrom = localInputToIso(newPlanAvailableFrom);
+    const availableTo = localInputToIso(newPlanAvailableTo);
     const normalizedDuration = duration ?? null;
     const normalizedDataLimit = dataLimitMb ?? null;
     const accountAccessMode = architecture?.accessMode === "account_access";
@@ -618,9 +646,15 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       !Number.isFinite(price) ||
       price < 0 ||
       (maxDevices !== null && (!Number.isFinite(maxDevices) || maxDevices < 1)) ||
-      (normalizedDataLimit !== null && (!Number.isFinite(normalizedDataLimit) || normalizedDataLimit < 1))
+      (normalizedDataLimit !== null && (!Number.isFinite(normalizedDataLimit) || normalizedDataLimit < 1)) ||
+      availableFrom === undefined ||
+      availableTo === undefined
     ) {
       setPlansError("Provide valid plan name, duration (e.g. 1h/2d), and price (e.g. 25k).");
+      return;
+    }
+    if (availableFrom && availableTo && new Date(availableFrom).getTime() > new Date(availableTo).getTime()) {
+      setPlansError("Plan available-from must be before available-to.");
       return;
     }
     if (!accountAccessMode && normalizedDuration === null) {
@@ -645,6 +679,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           maxDevices,
           bandwidthProfile: newPlanBandwidthProfile.trim() || undefined,
           dataLimitMb: normalizedDataLimit,
+          availableFrom,
+          availableTo,
         }),
       });
       const data = await readJsonResponse<{ error?: string }>(response);
@@ -656,6 +692,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setNewPlanMaxDevices("");
       setNewPlanBandwidthProfile("");
       setNewPlanDataLimitMb("");
+      setNewPlanAvailableFrom("");
+      setNewPlanAvailableTo("");
       setShowCreatePlanModal(false);
       await Promise.all([loadPlans(), loadStats()]);
     } catch (error) {
@@ -675,6 +713,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       : null;
     const parsedDataLimit = parseDataLimitToMb(draft.dataLimitMb);
     const dataLimitMb = draft.dataLimitMb.trim() ? parsedDataLimit : null;
+    const availableFrom = localInputToIso(draft.availableFrom);
+    const availableTo = localInputToIso(draft.availableTo);
     const normalizedDuration = draft.duration.trim() ? duration ?? null : null;
     const accountAccessMode = architecture?.accessMode === "account_access";
     if (
@@ -685,9 +725,15 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       !Number.isFinite(price) ||
       price < 0 ||
       (maxDevices !== null && (!Number.isFinite(maxDevices) || maxDevices < 1)) ||
-      (dataLimitMb != null && (!Number.isFinite(dataLimitMb) || dataLimitMb < 1))
+      (dataLimitMb != null && (!Number.isFinite(dataLimitMb) || dataLimitMb < 1)) ||
+      availableFrom === undefined ||
+      availableTo === undefined
     ) {
       setPlansError(`Invalid values for ${plan.name}.`);
+      return;
+    }
+    if (availableFrom && availableTo && new Date(availableFrom).getTime() > new Date(availableTo).getTime()) {
+      setPlansError(`Availability window is invalid for ${plan.name}.`);
       return;
     }
     if (!accountAccessMode && normalizedDuration === null) {
@@ -714,6 +760,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           maxDevices,
           bandwidthProfile: draft.bandwidthProfile.trim() || null,
           dataLimitMb,
+          availableFrom,
+          availableTo,
           active: draft.active,
         }),
       });
@@ -1143,6 +1191,30 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                       placeholder="Bandwidth profile"
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="datetime-local"
+                      value={draft.availableFrom}
+                      onChange={(event) =>
+                        setPlanDrafts((prev) => ({
+                          ...prev,
+                          [plan.id]: { ...prev[plan.id], availableFrom: event.target.value },
+                        }))
+                      }
+                      placeholder="Available from"
+                    />
+                    <Input
+                      type="datetime-local"
+                      value={draft.availableTo}
+                      onChange={(event) =>
+                        setPlanDrafts((prev) => ({
+                          ...prev,
+                          [plan.id]: { ...prev[plan.id], availableTo: event.target.value },
+                        }))
+                      }
+                      placeholder="Available to"
+                    />
+                  </div>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                   <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">Unused: {plan.unusedCount}</span>
@@ -1211,7 +1283,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </div>
 
         <div className="mt-3 hidden overflow-x-auto border border-slate-200/85 bg-white xl:block">
-          <table className="w-full min-w-[940px] text-sm">
+          <table className="w-full min-w-[1180px] text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
               <tr>
                 <th className="px-3 py-2">Code</th>
@@ -1221,6 +1293,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 <th className="px-3 py-2">Max devices</th>
                 <th className="px-3 py-2">Bandwidth profile</th>
                 <th className="px-3 py-2">Data MB</th>
+                <th className="px-3 py-2">Available from</th>
+                <th className="px-3 py-2">Available to</th>
                 <th className="px-3 py-2">Unused</th>
                 <th className="px-3 py-2">Assigned</th>
                 <th className="px-3 py-2">Active</th>
@@ -1316,6 +1390,30 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                           }))
                         }
                         placeholder="500MB / 1.5GB / 2TB"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        type="datetime-local"
+                        value={draft.availableFrom}
+                        onChange={(event) =>
+                          setPlanDrafts((prev) => ({
+                            ...prev,
+                            [plan.id]: { ...prev[plan.id], availableFrom: event.target.value },
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        type="datetime-local"
+                        value={draft.availableTo}
+                        onChange={(event) =>
+                          setPlanDrafts((prev) => ({
+                            ...prev,
+                            [plan.id]: { ...prev[plan.id], availableTo: event.target.value },
+                          }))
+                        }
                       />
                     </td>
                     <td className="px-3 py-2">{plan.unusedCount}</td>
@@ -1903,6 +2001,18 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               onChange={(event) => setNewPlanDataLimitMb(event.target.value)}
               placeholder="Data limit (e.g. 500MB, 1.5GB, 2TB)"
             />
+            <Input
+              type="datetime-local"
+              value={newPlanAvailableFrom}
+              onChange={(event) => setNewPlanAvailableFrom(event.target.value)}
+              placeholder="Available from (optional)"
+            />
+            <Input
+              type="datetime-local"
+              value={newPlanAvailableTo}
+              onChange={(event) => setNewPlanAvailableTo(event.target.value)}
+              placeholder="Available to (optional)"
+            />
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
               {newPlanDuration.trim() ? (
                 Number.isFinite(parsedNewPlanDuration ?? Number.NaN)
@@ -1923,6 +2033,10 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   ? `Data: ${formatDataLimitPreviewMb(parsedNewPlanDataLimit!)}`
                   : "Data: invalid format"
               ) : "Data: optional (leave blank for unlimited data)"}
+              {" | "}
+              {newPlanAvailableFrom.trim() || newPlanAvailableTo.trim()
+                ? "Availability window set"
+                : "Availability: always on"}
             </div>
             <div className="flex justify-end">
               <Button type="submit" disabled={creatingPlan}>{creatingPlan ? "Creating..." : "Add plan"}</Button>

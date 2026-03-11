@@ -45,12 +45,22 @@ export async function handleSuccessfulPayment(params: {
       return { status: "access_activated" as const };
     }
 
+    const activationFailureStatus =
+      activation.status === "plan_window_unusable"
+        ? "plan_window_unusable"
+        : "access_activation_failed";
+
     await markTransactionFailed({
       tenantId: params.tenantId,
       reference: params.reference,
-      status: "access_activation_failed",
+      status: activationFailureStatus,
     });
-    return { status: "access_failed" as const };
+    return {
+      status:
+        activation.status === "plan_window_unusable"
+          ? ("access_failed_plan_window" as const)
+          : ("access_failed" as const),
+    };
   }
 
   const result = await transactionAssignVoucher({

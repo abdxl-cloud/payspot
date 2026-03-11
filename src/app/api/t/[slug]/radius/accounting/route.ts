@@ -117,11 +117,17 @@ export async function POST(request: Request, { params }: Props) {
           WHERE tenant_id = ?
             AND UPPER(COALESCE(calling_station_id, '')) = UPPER(?)
             AND status = 'active'
+            AND (? = '' OR COALESCE(nas_ip_address, '') = ?)
           ORDER BY last_update_at DESC
           LIMIT 1
         `,
         )
-        .get(tenant.id, parsed.data.callingStationId) as
+        .get(
+          tenant.id,
+          parsed.data.callingStationId,
+          parsed.data.nasIpAddress ?? "",
+          parsed.data.nasIpAddress ?? "",
+        ) as
         | { subscriber_id: string; entitlement_id: string }
         | undefined;
       subscriberId = subscriberId ?? byStation?.subscriber_id;

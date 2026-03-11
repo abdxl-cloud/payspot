@@ -176,6 +176,8 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
       voucher_unavailable: "Payment succeeded but no voucher was available. Contact support.",
       access_activation_failed:
         "Payment succeeded but account access could not be activated. Contact support.",
+      plan_window_unusable:
+        "Payment succeeded, but this plan's usage window is not valid right now. Contact support.",
     };
 
     const message =

@@ -7,6 +7,17 @@ type Props = {
   params: Promise<{ slug: string }>;
 };
 
+function parseOptionalIsoInstant(value: unknown) {
+  if (value === undefined) return { provided: false as const, value: undefined };
+  if (value === null) return { provided: true as const, value: null };
+  if (typeof value !== "string") return { provided: true as const, invalid: true as const };
+  const trimmed = value.trim();
+  if (!trimmed) return { provided: true as const, value: null };
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return { provided: true as const, invalid: true as const };
+  return { provided: true as const, value: parsed.toISOString() };
+}
+
 function normalizePlanCodeCandidate(value: string) {
   return value
     .trim()
@@ -55,6 +66,8 @@ export async function GET(request: Request, { params }: Props) {
         p.max_devices as "maxDevices",
         p.bandwidth_profile as "bandwidthProfile",
         p.data_limit_mb as "dataLimitMb",
+        p.available_from as "availableFrom",
+        p.available_to as "availableTo",
         p.active,
         p.description,
         p.created_at as "createdAt",
@@ -92,6 +105,8 @@ export async function POST(request: Request, { params }: Props) {
     maxDevices?: number | null;
     bandwidthProfile?: string | null;
     dataLimitMb?: number | null;
+    availableFrom?: string | null;
+    availableTo?: string | null;
     active?: boolean;
     description?: string;
   };
@@ -108,6 +123,8 @@ export async function POST(request: Request, { params }: Props) {
         : null;
   const bandwidthProfile = body.bandwidthProfile?.trim() || null;
   const dataLimitMb = body.dataLimitMb ?? null;
+  const availableFrom = parseOptionalIsoInstant(body.availableFrom);
+  const availableTo = parseOptionalIsoInstant(body.availableTo);
   const description = body.description?.trim() || null;
 
   if (!name || name.length < 2) {
@@ -124,6 +141,19 @@ export async function POST(request: Request, { params }: Props) {
   }
   if (dataLimitMb !== null && (!Number.isFinite(dataLimitMb) || dataLimitMb <= 0)) {
     return Response.json({ error: "Invalid dataLimitMb" }, { status: 400 });
+  }
+  if (availableFrom.invalid) {
+    return Response.json({ error: "Invalid availableFrom" }, { status: 400 });
+  }
+  if (availableTo.invalid) {
+    return Response.json({ error: "Invalid availableTo" }, { status: 400 });
+  }
+  if (
+    availableFrom.value &&
+    availableTo.value &&
+    new Date(availableFrom.value).getTime() > new Date(availableTo.value).getTime()
+  ) {
+    return Response.json({ error: "availableFrom must be before availableTo" }, { status: 400 });
   }
   if (!accountAccessMode && durationMinutes === null) {
     return Response.json(
@@ -158,9 +188,9 @@ export async function POST(request: Request, { params }: Props) {
         `
         INSERT INTO voucher_packages (
           id, tenant_id, code, name, duration_minutes, price_ngn,
-          max_devices, bandwidth_profile, data_limit_mb,
+          max_devices, bandwidth_profile, data_limit_mb, available_from, available_to,
           active, description, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       ).run(
         randomUUID(),
@@ -172,6 +202,8 @@ export async function POST(request: Request, { params }: Props) {
         maxDevices === null ? null : Math.round(maxDevices),
         bandwidthProfile,
         dataLimitMb === null ? null : Math.round(dataLimitMb),
+        availableFrom.value ?? null,
+        availableTo.value ?? null,
         body.active === false ? 0 : 1,
         description,
         now,
@@ -211,6 +243,8 @@ export async function PATCH(request: Request, { params }: Props) {
     maxDevices?: number | null;
     bandwidthProfile?: string | null;
     dataLimitMb?: number | null;
+    availableFrom?: string | null;
+    availableTo?: string | null;
     active?: boolean;
     description?: string;
   };
@@ -220,9 +254,21 @@ export async function PATCH(request: Request, { params }: Props) {
 
   const db = getDb();
   const existing = await db
-    .prepare("SELECT id, duration_minutes, data_limit_mb FROM voucher_packages WHERE tenant_id = ? AND id = ?")
+    .prepare(
+      `
+      SELECT id, duration_minutes, data_limit_mb, available_from, available_to
+      FROM voucher_packages
+      WHERE tenant_id = ? AND id = ?
+    `,
+    )
     .get(tenant.id, planId) as
-    | { id: string; duration_minutes: number | null; data_limit_mb: number | null }
+    | {
+        id: string;
+        duration_minutes: number | null;
+        data_limit_mb: number | null;
+        available_from: string | null;
+        available_to: string | null;
+      }
     | undefined;
   if (!existing) return Response.json({ error: "Plan not found" }, { status: 404 });
 
@@ -280,11 +326,38 @@ export async function PATCH(request: Request, { params }: Props) {
     fields.push("data_limit_mb = ?");
     args.push(body.dataLimitMb === null ? null : Math.round(body.dataLimitMb));
   }
+  const availableFrom = parseOptionalIsoInstant(body.availableFrom);
+  const availableTo = parseOptionalIsoInstant(body.availableTo);
+  if (availableFrom.invalid) {
+    return Response.json({ error: "Invalid availableFrom" }, { status: 400 });
+  }
+  if (availableTo.invalid) {
+    return Response.json({ error: "Invalid availableTo" }, { status: 400 });
+  }
+  if (availableFrom.provided) {
+    fields.push("available_from = ?");
+    args.push(availableFrom.value ?? null);
+  }
+  if (availableTo.provided) {
+    fields.push("available_to = ?");
+    args.push(availableTo.value ?? null);
+  }
 
   const nextDuration =
     body.durationMinutes === undefined ? existing.duration_minutes : body.durationMinutes;
   const nextDataLimit =
     body.dataLimitMb === undefined ? existing.data_limit_mb : body.dataLimitMb;
+  const nextAvailableFrom =
+    availableFrom.provided ? (availableFrom.value ?? null) : existing.available_from;
+  const nextAvailableTo =
+    availableTo.provided ? (availableTo.value ?? null) : existing.available_to;
+  if (
+    nextAvailableFrom &&
+    nextAvailableTo &&
+    new Date(nextAvailableFrom).getTime() > new Date(nextAvailableTo).getTime()
+  ) {
+    return Response.json({ error: "availableFrom must be before availableTo" }, { status: 400 });
+  }
   if (!accountAccessMode && nextDuration === null) {
     return Response.json(
       { error: "durationMinutes is required for voucher access plans." },

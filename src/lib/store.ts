@@ -149,6 +149,8 @@ export type PackageRow = {
   max_devices: number | null;
   bandwidth_profile: string | null;
   data_limit_mb: number | null;
+  available_from: string | null;
+  available_to: string | null;
   active: number;
   description: string | null;
 };
@@ -688,11 +690,12 @@ export async function listActiveEntitlementsForSubscriber(params: {
       WHERE e.tenant_id = ?
         AND e.subscriber_id = ?
         AND e.status = 'active'
+        AND e.starts_at <= ?
         AND (e.ends_at IS NULL OR e.ends_at > ?)
       ORDER BY COALESCE(e.ends_at, '9999-12-31T23:59:59.999Z') DESC
     `,
     )
-    .all(params.tenantId, params.subscriberId, nowIso()) as Array<
+    .all(params.tenantId, params.subscriberId, nowIso(), nowIso()) as Array<
     SubscriberEntitlementRow & {
       package_code: string;
       package_name: string;
@@ -1059,7 +1062,12 @@ export async function recordRadiusAccountingEvent(params: {
     await db.prepare(
       `
       UPDATE radius_accounting_sessions
-      SET input_octets = ?,
+      SET subscriber_id = ?,
+          entitlement_id = ?,
+          calling_station_id = COALESCE(?, calling_station_id),
+          called_station_id = COALESCE(?, called_station_id),
+          nas_ip_address = COALESCE(?, nas_ip_address),
+          input_octets = ?,
           output_octets = ?,
           status = ?,
           last_update_at = ?,
@@ -1067,6 +1075,11 @@ export async function recordRadiusAccountingEvent(params: {
       WHERE id = ?
     `,
     ).run(
+      params.subscriberId,
+      params.entitlementId,
+      normalizedCallingStationId || null,
+      params.calledStationId ?? null,
+      params.nasIpAddress ?? null,
       Math.max(0, Math.floor(params.inputOctets ?? existing.input_octets ?? 0)),
       Math.max(0, Math.floor(params.outputOctets ?? existing.output_octets ?? 0)),
       newStatus,
@@ -1800,7 +1813,8 @@ export async function getPackagesWithAvailability(tenantId: string) {
           AND v.status = 'UNUSED'
       ) as available_count
       FROM voucher_packages p
-      WHERE p.tenant_id = ? AND p.active = 1
+      WHERE p.tenant_id = ?
+        AND p.active = 1
       ORDER BY COALESCE(p.duration_minutes, 2147483647) ASC
     `,
     )
@@ -1812,7 +1826,13 @@ export async function getPackageByCode(tenantId: string, code: string) {
   const db = getDb();
   return await db
     .prepare(
-      "SELECT * FROM voucher_packages WHERE tenant_id = ? AND code = ? AND active = 1",
+      `
+      SELECT *
+      FROM voucher_packages
+      WHERE tenant_id = ?
+        AND code = ?
+        AND active = 1
+    `,
     )
     .get(tenantId, code) as PackageRow | undefined;
 }
@@ -2098,10 +2118,26 @@ export async function activateSubscriberAccessForTransaction(params: {
     const baseStart = active && active.ends_at && parseIsoTime(active.ends_at) > now.getTime()
       ? new Date(active.ends_at)
       : now;
+    const packageWindowStartMs = parseIsoTime(pkg.available_from);
+    const packageWindowEndMs = parseIsoTime(pkg.available_to);
+    const effectiveStartMs = Number.isFinite(packageWindowStartMs)
+      ? Math.max(baseStart.getTime(), packageWindowStartMs)
+      : baseStart.getTime();
+    const effectiveStart = new Date(effectiveStartMs);
     const hasDuration = !!pkg.duration_minutes && pkg.duration_minutes > 0;
-    const endsAt = hasDuration
-      ? new Date(baseStart.getTime() + (pkg.duration_minutes as number) * 60 * 1000).toISOString()
+    let effectiveEndMs: number | null = hasDuration
+      ? effectiveStartMs + (pkg.duration_minutes as number) * 60 * 1000
       : null;
+    if (Number.isFinite(packageWindowEndMs)) {
+      effectiveEndMs =
+        effectiveEndMs === null
+          ? packageWindowEndMs
+          : Math.min(effectiveEndMs, packageWindowEndMs);
+    }
+    if (effectiveEndMs !== null && effectiveEndMs <= effectiveStartMs) {
+      return { status: "plan_window_unusable" as const };
+    }
+    const endsAt = effectiveEndMs === null ? null : new Date(effectiveEndMs).toISOString();
     const nowValue = now.toISOString();
 
     await db.prepare(
@@ -2117,7 +2153,7 @@ export async function activateSubscriberAccessForTransaction(params: {
       transaction.subscriber_id,
       transaction.package_id,
       transaction.reference,
-      baseStart.toISOString(),
+      effectiveStart.toISOString(),
       endsAt,
       pkg.max_devices && pkg.max_devices > 0 ? pkg.max_devices : null,
       pkg.bandwidth_profile ?? null,
@@ -2144,6 +2180,63 @@ export async function activateSubscriberAccessForTransaction(params: {
   });
 
   return run();
+}
+
+export async function previewEntitlementWindow(params: {
+  tenantId: string;
+  subscriberId: string;
+  packageId: string;
+}) {
+  const db = getDb();
+  const pkg = await getPackageById(params.tenantId, params.packageId);
+  if (!pkg) {
+    return { ok: false as const, reason: "missing_package" as const };
+  }
+
+  const active = await db
+    .prepare(
+      `
+      SELECT *
+      FROM subscriber_entitlements
+      WHERE tenant_id = ?
+        AND subscriber_id = ?
+        AND status = 'active'
+      ORDER BY ends_at DESC
+      LIMIT 1
+    `,
+    )
+    .get(params.tenantId, params.subscriberId) as SubscriberEntitlementRow | undefined;
+
+  const now = new Date();
+  const baseStart = active && active.ends_at && parseIsoTime(active.ends_at) > now.getTime()
+    ? new Date(active.ends_at)
+    : now;
+
+  const packageWindowStartMs = parseIsoTime(pkg.available_from);
+  const packageWindowEndMs = parseIsoTime(pkg.available_to);
+  const effectiveStartMs = Number.isFinite(packageWindowStartMs)
+    ? Math.max(baseStart.getTime(), packageWindowStartMs)
+    : baseStart.getTime();
+  const hasDuration = !!pkg.duration_minutes && pkg.duration_minutes > 0;
+  let effectiveEndMs: number | null = hasDuration
+    ? effectiveStartMs + (pkg.duration_minutes as number) * 60 * 1000
+    : null;
+  if (Number.isFinite(packageWindowEndMs)) {
+    effectiveEndMs =
+      effectiveEndMs === null
+        ? packageWindowEndMs
+        : Math.min(effectiveEndMs, packageWindowEndMs);
+  }
+
+  if (effectiveEndMs !== null && effectiveEndMs <= effectiveStartMs) {
+    return { ok: false as const, reason: "plan_window_unusable" as const };
+  }
+
+  return {
+    ok: true as const,
+    startsAt: new Date(effectiveStartMs).toISOString(),
+    endsAt: effectiveEndMs === null ? null : new Date(effectiveEndMs).toISOString(),
+  };
 }
 
 export async function assignVoucher(params: {

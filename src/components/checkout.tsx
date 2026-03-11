@@ -76,9 +76,14 @@ type StoredSubscriberSession = {
 };
 
 const SUBSCRIBER_SESSION_KEY_PREFIX = "payspot:subscriber-session:";
+const CAPTIVE_AUTH_KEY_PREFIX = "payspot:captive-auth:";
 
 function getSubscriberSessionKey(tenantSlug: string) {
   return `${SUBSCRIBER_SESSION_KEY_PREFIX}${tenantSlug}`;
+}
+
+function getCaptiveAuthKey(tenantSlug: string) {
+  return `${CAPTIVE_AUTH_KEY_PREFIX}${tenantSlug}`;
 }
 
 function readStoredSubscriberSession(tenantSlug: string): StoredSubscriberSession | null {
@@ -107,6 +112,15 @@ function clearStoredSubscriberSession(tenantSlug: string) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(getSubscriberSessionKey(tenantSlug));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function clearStoredCaptiveAuth(tenantSlug: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(getCaptiveAuthKey(tenantSlug));
   } catch {
     // Ignore storage failures.
   }
@@ -643,7 +657,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       });
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(
-          `payspot:captive-auth:${tenantSlug}`,
+          getCaptiveAuthKey(tenantSlug),
           JSON.stringify({
             username: normalizedEmail,
             password: subscriberPassword,
@@ -666,6 +680,9 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
             ? "Account created. You can now purchase a plan."
             : "Signed in. You can now purchase a plan.",
       );
+      if (meData.entitlements.length > 0) {
+        setSubscriberPassword("");
+      }
     } catch (error) {
       setSubscriberAuthError(error instanceof Error ? error.message : "Authentication failed.");
     } finally {
@@ -772,6 +789,17 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
     }
   }
 
+  function forgetThisDevice() {
+    clearStoredSubscriberSession(tenantSlug);
+    clearStoredCaptiveAuth(tenantSlug);
+    setSubscriberToken(null);
+    setSubscriberOverview(null);
+    setSubscriberPassword("");
+    setSubscriberAuthError(null);
+    setSubscriberAuthMessage("This device was forgotten. Sign in again to continue.");
+    setPurchaseStage("auth");
+  }
+
   useEffect(() => {
     if (!isAccountAccessMode || !subscriberToken) {
       return;
@@ -798,6 +826,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
         const status = (error as { status?: number }).status;
         if (status === 401) {
           clearStoredSubscriberSession(tenantSlug);
+          clearStoredCaptiveAuth(tenantSlug);
           if (!cancelled) {
             setSubscriberToken(null);
             setSubscriberOverview(null);
@@ -904,6 +933,17 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
             <p className="text-xs text-slate-500">
               Usage refreshes automatically every 45 seconds while this page stays open.
             </p>
+
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={forgetThisDevice}
+              >
+                Forget this device
+              </Button>
+            </div>
 
             <CaptiveBrowserAuth
               tenantSlug={tenantSlug}

@@ -200,6 +200,8 @@ async function initSchema() {
       max_devices INTEGER,
       bandwidth_profile TEXT,
       data_limit_mb INTEGER,
+      available_from TEXT,
+      available_to TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       description TEXT,
       created_at TEXT NOT NULL,
@@ -351,6 +353,10 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS bandwidth_profile TEXT;
     ALTER TABLE voucher_packages
       ADD COLUMN IF NOT EXISTS data_limit_mb INTEGER;
+    ALTER TABLE voucher_packages
+      ADD COLUMN IF NOT EXISTS available_from TEXT;
+    ALTER TABLE voucher_packages
+      ADD COLUMN IF NOT EXISTS available_to TEXT;
     ALTER TABLE transactions
       ADD COLUMN IF NOT EXISTS subscriber_id TEXT;
     ALTER TABLE transactions
