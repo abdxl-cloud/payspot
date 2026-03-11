@@ -144,9 +144,9 @@ export type PackageRow = {
   tenant_id: string;
   code: string;
   name: string;
-  duration_minutes: number;
+  duration_minutes: number | null;
   price_ngn: number;
-  max_devices: number;
+  max_devices: number | null;
   bandwidth_profile: string | null;
   data_limit_mb: number | null;
   active: number;
@@ -200,8 +200,8 @@ export type SubscriberEntitlementRow = {
   transaction_reference: string;
   status: string;
   starts_at: string;
-  ends_at: string;
-  max_devices: number;
+  ends_at: string | null;
+  max_devices: number | null;
   bandwidth_profile: string | null;
   data_limit_mb: number | null;
   created_at: string;
@@ -269,7 +269,8 @@ function normalizePhoneForLookup(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
-function parseIsoTime(value: string) {
+function parseIsoTime(value: string | null) {
+  if (!value) return Number.NaN;
   return new Date(value).getTime();
 }
 
@@ -672,15 +673,15 @@ export async function listActiveEntitlementsForSubscriber(params: {
       WHERE e.tenant_id = ?
         AND e.subscriber_id = ?
         AND e.status = 'active'
-        AND e.ends_at > ?
-      ORDER BY e.ends_at DESC
+        AND (e.ends_at IS NULL OR e.ends_at > ?)
+      ORDER BY COALESCE(e.ends_at, '9999-12-31T23:59:59.999Z') DESC
     `,
     )
     .all(params.tenantId, params.subscriberId, nowIso()) as Array<
     SubscriberEntitlementRow & {
       package_code: string;
       package_name: string;
-      package_duration_minutes: number;
+      package_duration_minutes: number | null;
       package_price_ngn: number;
     }
   >;
@@ -731,7 +732,7 @@ export async function getSubscriberAccessState(params: {
       WHERE tenant_id = ?
         AND subscriber_id = ?
         AND starts_at <= ?
-      ORDER BY ends_at DESC
+      ORDER BY COALESCE(ends_at, '9999-12-31T23:59:59.999Z') DESC
       LIMIT 1
     `,
     )
@@ -745,7 +746,7 @@ export async function getSubscriberAccessState(params: {
         FROM subscriber_entitlements
         WHERE tenant_id = ?
           AND subscriber_id = ?
-        ORDER BY ends_at DESC
+        ORDER BY COALESCE(ends_at, '9999-12-31T23:59:59.999Z') DESC
         LIMIT 1
       `,
       )
@@ -784,7 +785,8 @@ export async function getSubscriberAccessState(params: {
   const startsAtMs = parseIsoTime(latestEntitlement.starts_at);
   const endsAtMs = parseIsoTime(latestEntitlement.ends_at);
   const nowMs = Date.now();
-  const isWithinWindow = startsAtMs <= nowMs && endsAtMs > nowMs;
+  const hasTimeLimit = !!latestEntitlement.ends_at;
+  const isWithinWindow = startsAtMs <= nowMs && (!hasTimeLimit || endsAtMs > nowMs);
   const allowedBytes =
     latestEntitlement.data_limit_mb && latestEntitlement.data_limit_mb > 0
       ? latestEntitlement.data_limit_mb * 1024 * 1024
@@ -811,7 +813,7 @@ export async function getSubscriberAccessState(params: {
 
   return {
     state: "ended",
-    reason: "plan_expired",
+    reason: hasTimeLimit ? "plan_expired" : "no_active_plan",
     entitlement: latestEntitlement,
     usage,
   };
@@ -907,8 +909,13 @@ export async function authorizeSubscriberRadiusAccess(params: {
     )
     .get(params.tenantId, subscriber.id) as { count: number } | undefined;
   const activeSessionCount = Number(activeSessionCountRow?.count ?? 0);
-
-  if (activeSessionCount >= Math.max(1, entitlement.max_devices)) {
+  const maxDevices = entitlement.max_devices;
+  if (
+    maxDevices !== null &&
+    Number.isFinite(maxDevices) &&
+    maxDevices > 0 &&
+    activeSessionCount >= maxDevices
+  ) {
     return { status: "session_limit_reached" as const };
   }
 
@@ -1731,7 +1738,7 @@ export async function getPackagesWithAvailability(tenantId: string) {
       ) as available_count
       FROM voucher_packages p
       WHERE p.tenant_id = ? AND p.active = 1
-      ORDER BY p.duration_minutes ASC
+      ORDER BY COALESCE(p.duration_minutes, 2147483647) ASC
     `,
     )
     .all(tenantId);
@@ -1762,7 +1769,7 @@ export async function getTenantPackages(tenantId: string) {
       SELECT *
       FROM voucher_packages
       WHERE tenant_id = ?
-      ORDER BY duration_minutes ASC
+      ORDER BY COALESCE(duration_minutes, 2147483647) ASC
     `,
     )
     .all(tenantId);
@@ -2025,10 +2032,13 @@ export async function activateSubscriberAccessForTransaction(params: {
       .get(params.tenantId, transaction.subscriber_id) as SubscriberEntitlementRow | undefined;
 
     const now = new Date();
-    const baseStart = active && parseIsoTime(active.ends_at) > now.getTime()
+    const baseStart = active && active.ends_at && parseIsoTime(active.ends_at) > now.getTime()
       ? new Date(active.ends_at)
       : now;
-    const endsAt = new Date(baseStart.getTime() + pkg.duration_minutes * 60 * 1000);
+    const hasDuration = !!pkg.duration_minutes && pkg.duration_minutes > 0;
+    const endsAt = hasDuration
+      ? new Date(baseStart.getTime() + (pkg.duration_minutes as number) * 60 * 1000).toISOString()
+      : null;
     const nowValue = now.toISOString();
 
     await db.prepare(
@@ -2045,8 +2055,8 @@ export async function activateSubscriberAccessForTransaction(params: {
       transaction.package_id,
       transaction.reference,
       baseStart.toISOString(),
-      endsAt.toISOString(),
-      Math.max(1, pkg.max_devices ?? 1),
+      endsAt,
+      pkg.max_devices && pkg.max_devices > 0 ? pkg.max_devices : null,
       pkg.bandwidth_profile ?? null,
       pkg.data_limit_mb ?? null,
       nowValue,
@@ -2162,7 +2172,7 @@ export async function transactionAssignVoucher(params: {
         const pkg = await getPackageById(params.tenantId, params.packageId);
         const config = await resolveTenantOmadaOpenApiConfig(params.tenantId);
 
-        if (pkg && config) {
+        if (pkg && config && pkg.duration_minutes && pkg.duration_minutes > 0) {
           try {
             const provisioned = await provisionOmadaVouchers({
               config,
@@ -2233,7 +2243,7 @@ export async function getStats(tenantId: string) {
   const db = getDb();
   const packages = await db
     .prepare(
-      "SELECT * FROM voucher_packages WHERE tenant_id = ? ORDER BY duration_minutes ASC",
+      "SELECT * FROM voucher_packages WHERE tenant_id = ? ORDER BY COALESCE(duration_minutes, 2147483647) ASC",
     )
     .all(tenantId) as PackageRow[];
 
@@ -2354,7 +2364,7 @@ export async function getTenantSubscriberOverview(tenantId: string) {
         ON e.subscriber_id = s.id
        AND e.tenant_id = s.tenant_id
        AND e.status = 'active'
-       AND e.ends_at > ?
+       AND (e.ends_at IS NULL OR e.ends_at > ?)
       LEFT JOIN voucher_packages p ON p.id = e.package_id
       WHERE s.tenant_id = ?
       ORDER BY s.created_at DESC
@@ -2391,7 +2401,7 @@ export async function getTenantSubscriberOverview(tenantId: string) {
           status: row.entitlement_status ?? "active",
           startsAt: row.starts_at,
           endsAt: row.ends_at,
-          maxDevices: row.max_devices ?? 1,
+          maxDevices: row.max_devices,
           bandwidthProfile: row.bandwidth_profile,
           dataLimitMb: row.data_limit_mb,
           planName: row.plan_name,

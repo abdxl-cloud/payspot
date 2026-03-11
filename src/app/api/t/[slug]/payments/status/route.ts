@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
-import { getTenantBySlug, getTransactionByReferencePhone } from "@/lib/store";
+import {
+  getTenantBySlug,
+  getTransactionByReferenceEmail,
+  getTransactionByReferencePhone,
+} from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -8,7 +12,8 @@ type Props = {
 
 const schema = z.object({
   reference: z.string().min(6),
-  phone: z.string().min(7),
+  phone: z.string().min(7).optional(),
+  email: z.string().email().optional(),
 });
 
 export async function POST(request: Request, { params }: Props) {
@@ -30,8 +35,18 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const { reference, phone } = parsed.data;
-  const transaction = await getTransactionByReferencePhone(tenant.id, reference, phone);
+  const { reference, phone, email } = parsed.data;
+  const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
+  if (accountAccessMode && !email) {
+    return Response.json({ error: "Email is required" }, { status: 400 });
+  }
+  if (!accountAccessMode && !phone) {
+    return Response.json({ error: "Phone is required" }, { status: 400 });
+  }
+
+  const transaction = accountAccessMode
+    ? await getTransactionByReferenceEmail(tenant.id, reference, email!)
+    : await getTransactionByReferencePhone(tenant.id, reference, phone!);
 
   if (!transaction) {
     return Response.json({ error: "Transaction not found" }, { status: 404 });

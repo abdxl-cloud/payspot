@@ -25,9 +25,9 @@ import { readJsonResponse } from "@/lib/http";
 type Package = {
   code: string;
   name: string;
-  durationMinutes: number;
+  durationMinutes: number | null;
   priceNgn: number;
-  maxDevices: number;
+  maxDevices: number | null;
   bandwidthProfile?: string | null;
   dataLimitMb?: number | null;
   description?: string | null;
@@ -52,8 +52,8 @@ type SubscriberOverview = {
     id: string;
     status: string;
     startsAt: string;
-    endsAt: string;
-    maxDevices: number;
+    endsAt: string | null;
+    maxDevices: number | null;
     bandwidthProfile?: string | null;
     dataLimitMb?: number | null;
     usage: {
@@ -63,7 +63,7 @@ type SubscriberOverview = {
     package: {
       code: string;
       name: string;
-      durationMinutes: number;
+      durationMinutes: number | null;
       priceNgn: number;
     };
   }>;
@@ -84,7 +84,14 @@ async function fetchSubscriberOverview(params: {
   return meData;
 }
 
-function formatDuration(minutes: number) {
+function isValidEmailAddress(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function formatDuration(minutes: number | null | undefined) {
+  if (!minutes || minutes <= 0) {
+    return "Unlimited time";
+  }
   if (minutes % (60 * 24 * 7) === 0) {
     const w = minutes / (60 * 24 * 7);
     return `${w} week${w === 1 ? "" : "s"}`;
@@ -113,6 +120,16 @@ function formatPriceCompact(value: number) {
   return value.toLocaleString();
 }
 
+function formatDataLimitMb(value: number) {
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1).replace(/\.0$/, "")} TB`;
+  }
+  if (value >= 1024) {
+    return `${(value / 1024).toFixed(1).replace(/\.0$/, "")} GB`;
+  }
+  return `${value} MB`;
+}
+
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-NG", {
     dateStyle: "medium",
@@ -124,7 +141,8 @@ function formatDataMbFromBytes(bytes: number) {
   return Math.max(0, bytes / (1024 * 1024));
 }
 
-function formatRemainingTime(endAt: string) {
+function formatRemainingTime(endAt: string | null | undefined) {
+  if (!endAt) return "Unlimited";
   const remainingMs = new Date(endAt).getTime() - Date.now();
   if (remainingMs <= 0) return "Expired";
 
@@ -210,7 +228,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
 
   const [resumeReference, setResumeReference] = useState("");
-  const [resumePhone, setResumePhone] = useState("");
+  const [resumeLookup, setResumeLookup] = useState("");
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeMessage, setResumeMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -239,11 +257,35 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
     const query = planQuery.trim().toLowerCase();
     if (!query) return packages;
     return packages.filter((pkg) => {
-      return (
-        pkg.name.toLowerCase().includes(query) ||
-        pkg.code.toLowerCase().includes(query) ||
-        formatDuration(pkg.durationMinutes).toLowerCase().includes(query)
-      );
+      const durationMinutes = pkg.durationMinutes ?? 0;
+      const durationHours = durationMinutes / 60;
+      const durationDays = durationMinutes / (24 * 60);
+      const durationWeeks = durationMinutes / (7 * 24 * 60);
+      const dataTokens = pkg.dataLimitMb
+        ? [
+            `${pkg.dataLimitMb}mb`,
+            `${(pkg.dataLimitMb / 1024).toFixed(2)}gb`,
+            `${(pkg.dataLimitMb / (1024 * 1024)).toFixed(3)}tb`,
+            formatDataLimitMb(pkg.dataLimitMb).toLowerCase(),
+          ]
+        : [];
+      const searchable = [
+        pkg.name,
+        pkg.code,
+        pkg.description ?? "",
+        formatDuration(pkg.durationMinutes),
+        `${durationMinutes}m`,
+        `${durationHours.toFixed(2)}h`,
+        `${durationDays.toFixed(2)}d`,
+        `${durationWeeks.toFixed(2)}w`,
+        `ngn ${pkg.priceNgn}`,
+        `₦${pkg.priceNgn}`,
+        formatPriceCompact(pkg.priceNgn),
+        `${pkg.maxDevices ?? "unlimited"} device`,
+        `${pkg.maxDevices ?? "unlimited"} devices`,
+        ...dataTokens,
+      ].join(" ").toLowerCase();
+      return searchable.includes(query);
     });
   }, [packages, planQuery]);
 
@@ -251,16 +293,18 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const displayedPackages = hasHiddenPlans
     ? filteredPackages.slice(0, visiblePlanCount)
     : filteredPackages;
+  const collapsePlansAfterSelection = isAccountAccessMode && !!selected;
+  const visiblePlans = collapsePlansAfterSelection && selected ? [selected] : displayedPackages;
 
   useEffect(() => {
     const firstAvailable = packages.find((pkg) => pkg.availableCount > 0) ?? null;
     setSelected((prev) => {
       if (!firstAvailable) return null;
-      if (!prev) return firstAvailable;
+      if (!prev) return isAccountAccessMode ? null : firstAvailable;
       if (prev.availableCount <= 0) return firstAvailable;
       return prev;
     });
-  }, [packages]);
+  }, [packages, isAccountAccessMode]);
 
   useEffect(() => {
     if (!selected) return;
@@ -305,7 +349,9 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const bestValueCode = useMemo(() => {
     const available = packages.filter((pkg) => pkg.availableCount > 0);
     if (available.length === 0) return null;
-    const sorted = [...available].sort((a, b) => b.durationMinutes - a.durationMinutes);
+    const sorted = [...available].sort(
+      (a, b) => (b.durationMinutes ?? 0) - (a.durationMinutes ?? 0),
+    );
     return sorted[0]?.code ?? null;
   }, [packages]);
 
@@ -329,11 +375,14 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
 
   const canSubmit = useMemo(() => {
     if (isAccountAccessMode && !subscriberToken) return false;
-    return !!selected && selected.availableCount > 0 && phone.length > 6 && !loading;
+    return !!selected &&
+      selected.availableCount > 0 &&
+      (isAccountAccessMode || phone.trim().length > 6) &&
+      !loading;
   }, [selected, phone, loading, isAccountAccessMode, subscriberToken]);
 
   const canSubmitSubscriberAuth =
-    !subscriberAuthLoading && !!subscriberEmail && subscriberPassword.length >= 8;
+    !subscriberAuthLoading && isValidEmailAddress(subscriberEmail) && subscriberPassword.length >= 8;
 
   const activePlanUsedMb = activeEntitlement
     ? formatDataMbFromBytes(activeEntitlement.usage.usedBytes)
@@ -411,6 +460,13 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   }
 
   async function authenticateSubscriber(mode: "login" | "signup") {
+    const normalizedEmail = subscriberEmail.trim().toLowerCase();
+    if (!isValidEmailAddress(normalizedEmail)) {
+      setSubscriberAuthError("Enter a valid email address.");
+      setSubscriberAuthMessage(null);
+      return;
+    }
+
     setSubscriberAuthLoading(true);
     setSubscriberAuthError(null);
     setSubscriberAuthMessage(null);
@@ -420,9 +476,8 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: subscriberEmail.trim(),
+          email: normalizedEmail,
           password: subscriberPassword,
-          phone: phone.trim() || undefined,
         }),
       });
       const data = await readJsonResponse<{
@@ -437,7 +492,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
         window.sessionStorage.setItem(
           `payspot:captive-auth:${tenantSlug}`,
           JSON.stringify({
-            username: subscriberEmail.trim(),
+            username: normalizedEmail,
             password: subscriberPassword,
             savedAt: Date.now(),
           }),
@@ -481,7 +536,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
           ...(subscriberToken ? { Authorization: `Bearer ${subscriberToken}` } : {}),
         },
         body: JSON.stringify({
-          phone,
+          phone: isAccountAccessMode ? undefined : phone.trim(),
           packageCode: selected.code,
           subscriberToken: subscriberToken ?? undefined,
           portalContext,
@@ -507,7 +562,11 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
         }
       }
       setAuthorizationUrl(data.authorizationUrl);
-      setResumePhone(phone.trim());
+      setResumeLookup(
+        isAccountAccessMode
+          ? subscriberOverview?.subscriber.email || subscriberEmail.trim()
+          : phone.trim(),
+      );
       setLoading(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong.";
@@ -526,7 +585,8 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reference: resumeReference.trim(),
-          phone: resumePhone.trim(),
+          phone: isAccountAccessMode ? undefined : resumeLookup.trim(),
+          email: isAccountAccessMode ? resumeLookup.trim() : undefined,
         }),
       });
       const data = await readJsonResponse<{
@@ -616,16 +676,22 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                 <p className="mt-2 text-sm font-semibold text-slate-900">
                   {formatRemainingTime(activeEntitlement.endsAt)}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Ends {formatDateTime(activeEntitlement.endsAt)}
-                </p>
+                {activeEntitlement.endsAt ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Ends {formatDateTime(activeEntitlement.endsAt)}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-slate-500">
+                    No expiry date
+                  </p>
+                )}
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                   Active devices
                 </p>
                 <p className="mt-2 text-sm font-semibold text-slate-900">
-                  {activeEntitlement.usage.activeSessions} / {activeEntitlement.maxDevices}
+                  {activeEntitlement.usage.activeSessions} / {activeEntitlement.maxDevices ?? "Unlimited"}
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
@@ -681,7 +747,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
             <Alert>
               <AlertTitle>No purchase needed right now</AlertTitle>
               <AlertDescription>
-                This account already has an active tracked plan. The purchase flow is hidden until the current entitlement expires.
+                This account already has an active tracked plan. The purchase flow is hidden while this entitlement remains active.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -876,7 +942,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                     setPlanQuery(event.target.value);
                     setVisiblePlanCount(8);
                   }}
-                  placeholder="Search by plan, code, or duration"
+                  placeholder="Search by plan, code, duration, price, or data"
                   className="h-10 pl-9"
                   aria-label="Search plans"
                 />
@@ -888,14 +954,14 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
           <div
             className={[
               "grid gap-3",
-              displayedPackages.length <= 1
+              visiblePlans.length <= 1
                 ? "grid-cols-1"
-                : displayedPackages.length === 2
+                : visiblePlans.length === 2
                   ? "sm:grid-cols-2"
                   : "sm:grid-cols-2 xl:grid-cols-3",
             ].join(" ")}
           >
-            {displayedPackages.map((pkg) => {
+            {visiblePlans.map((pkg) => {
               const isSoldOut = pkg.availableCount <= 0;
               const isSelected = selected?.code === pkg.code;
               const isBestValue = bestValueCode === pkg.code && !isSoldOut;
@@ -921,7 +987,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                     "gap-0 border-slate-200/90 bg-white py-0 transition",
                     !isSoldOut ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-md" : "cursor-not-allowed opacity-60",
                     isSelected ? "ring-2 ring-sky-300" : "",
-                    displayedPackages.length === 1 ? "mx-auto w-full max-w-xl" : "",
+                    visiblePlans.length === 1 ? "mx-auto w-full max-w-xl" : "",
                   ].join(" ")}
                 >
                   <CardContent className="p-4 sm:p-5">
@@ -984,7 +1050,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
             </Alert>
           ) : null}
 
-          {hasHiddenPlans ? (
+          {hasHiddenPlans && !collapsePlansAfterSelection ? (
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Button
                 type="button"
@@ -999,7 +1065,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
             </div>
           ) : null}
 
-          {isLongPlanList && filteredPackages.length > 8 && !hasHiddenPlans ? (
+          {isLongPlanList && filteredPackages.length > 8 && !hasHiddenPlans && !collapsePlansAfterSelection ? (
             <div className="flex justify-center">
               <Button type="button" variant="ghost" size="sm" onClick={() => setVisiblePlanCount(8)}>
                 Collapse list
@@ -1018,17 +1084,28 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                   : "Continue when you are ready to enter your phone number and start payment."}
               </p>
             </div>
-            <Button
-              type="button"
-              disabled={
-                !selected ||
-                selected.availableCount <= 0 ||
-                (isAccountAccessMode && !hasAuthenticatedSubscriber)
-              }
-              onClick={continueToPaymentStep}
-            >
-              Continue
-            </Button>
+            <div className="flex items-center gap-2">
+              {collapsePlansAfterSelection ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSelected(null)}
+                >
+                  Change plan
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                disabled={
+                  !selected ||
+                  selected.availableCount <= 0 ||
+                  (isAccountAccessMode && !hasAuthenticatedSubscriber)
+                }
+                onClick={continueToPaymentStep}
+              >
+                {selected ? `Pay NGN ${selected.priceNgn.toLocaleString()}` : "Select a plan"}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1040,7 +1117,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
             <p className="section-kicker">Customer details</p>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
-                {isAccountAccessMode ? "3. Confirm phone and pay" : "2. Enter phone number"}
+                {isAccountAccessMode ? "3. Confirm account and pay" : "2. Enter phone number"}
               </CardTitle>
               <div className="flex flex-wrap items-center gap-2">
                 {selected ? (
@@ -1070,21 +1147,33 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                 </Alert>
               ) : null}
 
-              <div className="grid gap-2">
-                <Label htmlFor="phone">Phone number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  className="h-11"
-                  placeholder="08012345678"
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Nigeria format (e.g. 080...). Used for payment checks and support follow-up.
-                </p>
-              </div>
+              {isAccountAccessMode ? (
+                <div className="grid gap-2">
+                  <Label>Account email</Label>
+                  <p className="h-11 rounded-md border border-input bg-muted/30 px-3 py-2 text-sm text-slate-700">
+                    {subscriberOverview?.subscriber.email || subscriberEmail.trim()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Your signed-in email is used for this plan purchase.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <Label htmlFor="phone">Phone number</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    className="h-11"
+                    placeholder="08012345678"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Nigeria format (e.g. 080...). Used for payment checks and support follow-up.
+                  </p>
+                </div>
+              )}
 
               <Button type="submit" disabled={!canSubmit} className="h-11 lg:mb-[22px]">
                 {loading
@@ -1195,14 +1284,16 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="resume-phone">Phone used</Label>
+                <Label htmlFor="resume-lookup">
+                  {isAccountAccessMode ? "Account email used" : "Phone used"}
+                </Label>
                 <Input
-                  id="resume-phone"
-                  type="tel"
+                  id="resume-lookup"
+                  type={isAccountAccessMode ? "email" : "tel"}
                   className="h-11"
-                  placeholder="08012345678"
-                  value={resumePhone}
-                  onChange={(event) => setResumePhone(event.target.value)}
+                  placeholder={isAccountAccessMode ? "name@example.com" : "08012345678"}
+                  value={resumeLookup}
+                  onChange={(event) => setResumeLookup(event.target.value)}
                   required
                 />
               </div>

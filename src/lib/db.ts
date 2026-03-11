@@ -195,9 +195,9 @@ async function initSchema() {
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
       code TEXT NOT NULL,
       name TEXT NOT NULL,
-      duration_minutes INTEGER NOT NULL,
+      duration_minutes INTEGER,
       price_ngn INTEGER NOT NULL,
-      max_devices INTEGER NOT NULL DEFAULT 1,
+      max_devices INTEGER,
       bandwidth_profile TEXT,
       data_limit_mb INTEGER,
       active INTEGER NOT NULL DEFAULT 1,
@@ -270,8 +270,8 @@ async function initSchema() {
       transaction_reference TEXT NOT NULL UNIQUE,
       status TEXT NOT NULL DEFAULT 'active',
       starts_at TEXT NOT NULL,
-      ends_at TEXT NOT NULL,
-      max_devices INTEGER NOT NULL DEFAULT 1,
+      ends_at TEXT,
+      max_devices INTEGER,
       bandwidth_profile TEXT,
       data_limit_mb INTEGER,
       created_at TEXT NOT NULL,
@@ -355,6 +355,14 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS subscriber_id TEXT;
     ALTER TABLE transactions
       ADD COLUMN IF NOT EXISTS delivery_mode TEXT NOT NULL DEFAULT 'voucher';
+    ALTER TABLE voucher_packages
+      ALTER COLUMN duration_minutes DROP NOT NULL;
+    ALTER TABLE voucher_packages
+      ALTER COLUMN max_devices DROP NOT NULL;
+    ALTER TABLE subscriber_entitlements
+      ALTER COLUMN ends_at DROP NOT NULL;
+    ALTER TABLE subscriber_entitlements
+      ALTER COLUMN max_devices DROP NOT NULL;
   `);
 }
 

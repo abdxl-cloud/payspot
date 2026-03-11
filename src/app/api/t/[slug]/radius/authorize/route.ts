@@ -47,18 +47,30 @@ export async function POST(request: Request, { params }: Props) {
   });
 
   if (auth.status !== "ok") {
+    const reasonMessages: Record<string, string> = {
+      invalid_credentials: "Invalid email or password.",
+      no_active_plan: "No active plan found for this account.",
+      plan_expired: "Your plan has expired.",
+      data_limit_reached: "Your data limit has been reached.",
+      session_limit_reached:
+        "Maximum devices reached for this plan. Disconnect another device and try again.",
+    };
     return Response.json({
       accept: false,
-      reason: auth.status,
+      reason: reasonMessages[auth.status] ?? auth.status,
+      reasonCode: auth.status,
     });
   }
 
-  const endsAtMs = new Date(auth.entitlement.ends_at).getTime();
-  const timeoutSeconds = Math.floor((endsAtMs - Date.now()) / 1000);
-  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+  const hasTimeLimit = !!auth.entitlement.ends_at;
+  const timeoutSeconds = hasTimeLimit
+    ? Math.floor((new Date(auth.entitlement.ends_at as string).getTime() - Date.now()) / 1000)
+    : null;
+  if (hasTimeLimit && (!Number.isFinite(timeoutSeconds) || (timeoutSeconds as number) <= 0)) {
     return Response.json({
       accept: false,
-      reason: "plan_expired",
+      reason: "Your plan has expired.",
+      reasonCode: "plan_expired",
     });
   }
 
@@ -67,11 +79,11 @@ export async function POST(request: Request, { params }: Props) {
     subscriberId: auth.subscriber.id,
     entitlementId: auth.entitlement.id,
     reply: {
-      sessionTimeout: Math.max(1, timeoutSeconds),
+      sessionTimeout: hasTimeLimit ? Math.max(1, timeoutSeconds as number) : undefined,
       maxDevices: auth.entitlement.max_devices,
       bandwidthProfile: auth.entitlement.bandwidth_profile,
       dataLimitMb: auth.entitlement.data_limit_mb,
-      planEndsAt: auth.entitlement.ends_at,
+      planEndsAt: auth.entitlement.ends_at ?? undefined,
     },
   });
 }

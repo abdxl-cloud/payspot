@@ -46,9 +46,9 @@ type PlanRow = {
   id: string;
   code: string;
   name: string;
-  durationMinutes: number;
+  durationMinutes: number | null;
   priceNgn: number;
-  maxDevices: number;
+  maxDevices: number | null;
   bandwidthProfile: string | null;
   dataLimitMb: number | null;
   active: number;
@@ -100,7 +100,7 @@ type SubscriberOverviewRow = {
     status: string;
     startsAt: string | null;
     endsAt: string | null;
-    maxDevices: number;
+    maxDevices: number | null;
     bandwidthProfile: string | null;
     dataLimitMb: number | null;
     planName: string | null;
@@ -128,6 +128,78 @@ function dt(value: string | null) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
   return parsed.toLocaleString();
+}
+
+function parseDurationToMinutes(input: string): number | undefined {
+  const raw = input.trim().toLowerCase();
+  if (!raw) return undefined;
+
+  const matched = raw.match(/^([0-9]+(?:\.[0-9]+)?)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)?$/i);
+  if (!matched) return Number.NaN;
+
+  const value = Number.parseFloat(matched[1]);
+  if (!Number.isFinite(value) || value <= 0) return Number.NaN;
+
+  const unit = (matched[2] || "m").toLowerCase();
+  const factor =
+    unit === "w" || unit === "week" || unit === "weeks"
+      ? 7 * 24 * 60
+      : unit === "d" || unit === "day" || unit === "days"
+        ? 24 * 60
+        : unit === "h" || unit === "hr" || unit === "hrs" || unit === "hour" || unit === "hours"
+          ? 60
+          : 1;
+  return Math.round(value * factor);
+}
+
+function parsePriceToNgn(input: string): number | undefined {
+  const raw = input.trim().toLowerCase();
+  if (!raw) return undefined;
+
+  const cleaned = raw.replace(/[\s,₦]/g, "").replace(/^ngn/, "");
+  const matched = cleaned.match(/^([0-9]+(?:\.[0-9]+)?)(k|m|b)?$/i);
+  if (!matched) return Number.NaN;
+
+  const value = Number.parseFloat(matched[1]);
+  if (!Number.isFinite(value) || value < 0) return Number.NaN;
+
+  const suffix = (matched[2] || "").toLowerCase();
+  const factor = suffix === "b" ? 1_000_000_000 : suffix === "m" ? 1_000_000 : suffix === "k" ? 1_000 : 1;
+  return Math.round(value * factor);
+}
+
+function parseDataLimitToMb(input: string): number | undefined {
+  const raw = input.trim().toLowerCase();
+  if (!raw) return undefined;
+
+  const matched = raw.match(/^([0-9]+(?:\.[0-9]+)?)\s*(mb|m|gb|g|tb|t)?$/i);
+  if (!matched) return Number.NaN;
+
+  const value = Number.parseFloat(matched[1]);
+  if (!Number.isFinite(value) || value <= 0) return Number.NaN;
+
+  const unit = (matched[2] || "mb").toLowerCase();
+  const factor =
+    unit === "tb" || unit === "t"
+      ? 1024 * 1024
+      : unit === "gb" || unit === "g"
+        ? 1024
+        : 1;
+
+  return Math.round(value * factor);
+}
+
+function formatDurationPreview(minutes: number) {
+  if (minutes % (7 * 24 * 60) === 0) return `${minutes / (7 * 24 * 60)} week(s)`;
+  if (minutes % (24 * 60) === 0) return `${minutes / (24 * 60)} day(s)`;
+  if (minutes % 60 === 0) return `${minutes / 60} hour(s)`;
+  return `${minutes} minute(s)`;
+}
+
+function formatDataLimitPreviewMb(mb: number) {
+  if (mb >= 1024 * 1024) return `${(mb / (1024 * 1024)).toFixed(2).replace(/\.00$/, "")} TB`;
+  if (mb >= 1024) return `${(mb / 1024).toFixed(2).replace(/\.00$/, "")} GB`;
+  return `${mb} MB`;
 }
 
 export function TenantAdminPanel({ tenantSlug }: Props) {
@@ -167,7 +239,6 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [voucherTotalPages, setVoucherTotalPages] = useState(1);
   const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
 
-  const [newPlanCode, setNewPlanCode] = useState("");
   const [newPlanName, setNewPlanName] = useState("");
   const [newPlanDuration, setNewPlanDuration] = useState("");
   const [newPlanPrice, setNewPlanPrice] = useState("");
@@ -213,6 +284,18 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [subscribers, setSubscribers] = useState<SubscriberOverviewRow[]>([]);
   const [subscribersLoading, setSubscribersLoading] = useState(false);
   const [subscribersError, setSubscribersError] = useState<string | null>(null);
+  const parsedNewPlanDuration = useMemo(
+    () => parseDurationToMinutes(newPlanDuration),
+    [newPlanDuration],
+  );
+  const parsedNewPlanPrice = useMemo(
+    () => parsePriceToNgn(newPlanPrice),
+    [newPlanPrice],
+  );
+  const parsedNewPlanDataLimit = useMemo(
+    () => parseDataLimitToMb(newPlanDataLimitMb),
+    [newPlanDataLimitMb],
+  );
 
   const loadStats = useCallback(async () => {
     setStatsError(null);
@@ -341,9 +424,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       drafts[plan.id] = {
         name: plan.name,
         code: plan.code,
-        duration: String(plan.durationMinutes),
+        duration: plan.durationMinutes === null ? "" : String(plan.durationMinutes),
         price: String(plan.priceNgn),
-        maxDevices: String(plan.maxDevices ?? 1),
+        maxDevices: plan.maxDevices === null ? "" : String(plan.maxDevices),
         bandwidthProfile: plan.bandwidthProfile ?? "",
         dataLimitMb: plan.dataLimitMb ? String(plan.dataLimitMb) : "",
         active: plan.active === 1,
@@ -519,25 +602,33 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
   async function createPlan(event: React.FormEvent) {
     event.preventDefault();
-    const duration = Number.parseInt(newPlanDuration, 10);
-    const price = Number.parseFloat(newPlanPrice);
+    const duration = parseDurationToMinutes(newPlanDuration);
+    const price = parsePriceToNgn(newPlanPrice);
     const maxDevices = newPlanMaxDevices.trim()
       ? Number.parseInt(newPlanMaxDevices, 10)
-      : undefined;
-    const dataLimitMb = newPlanDataLimitMb.trim()
-      ? Number.parseInt(newPlanDataLimitMb, 10)
-      : undefined;
+      : null;
+    const dataLimitMb = parseDataLimitToMb(newPlanDataLimitMb);
+    const normalizedDuration = duration ?? null;
+    const normalizedDataLimit = dataLimitMb ?? null;
+    const accountAccessMode = architecture?.accessMode === "account_access";
     if (
-      !newPlanCode.trim() ||
       !newPlanName.trim() ||
-      !Number.isFinite(duration) ||
-      duration <= 0 ||
+      (normalizedDuration !== null && (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0)) ||
+      price === undefined ||
       !Number.isFinite(price) ||
       price < 0 ||
-      (maxDevices !== undefined && (!Number.isFinite(maxDevices) || maxDevices < 1)) ||
-      (dataLimitMb !== undefined && (!Number.isFinite(dataLimitMb) || dataLimitMb < 1))
+      (maxDevices !== null && (!Number.isFinite(maxDevices) || maxDevices < 1)) ||
+      (normalizedDataLimit !== null && (!Number.isFinite(normalizedDataLimit) || normalizedDataLimit < 1))
     ) {
-      setPlansError("Provide valid plan code, name, duration, and price.");
+      setPlansError("Provide valid plan name, duration (e.g. 1h/2d), and price (e.g. 25k).");
+      return;
+    }
+    if (!accountAccessMode && normalizedDuration === null) {
+      setPlansError("Duration is required for voucher access plans.");
+      return;
+    }
+    if (normalizedDuration === null && normalizedDataLimit === null) {
+      setPlansError("Set at least one limit: duration or data.");
       return;
     }
     setCreatingPlan(true);
@@ -548,19 +639,17 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          code: newPlanCode.trim(),
           name: newPlanName.trim(),
-          durationMinutes: duration,
-          priceNgn: Math.round(price),
+          durationMinutes: normalizedDuration,
+          priceNgn: price,
           maxDevices,
           bandwidthProfile: newPlanBandwidthProfile.trim() || undefined,
-          dataLimitMb,
+          dataLimitMb: normalizedDataLimit,
         }),
       });
       const data = await readJsonResponse<{ error?: string }>(response);
       if (!response.ok) throw new Error(data?.error || "Unable to create plan.");
       setPlanNotice("Plan created.");
-      setNewPlanCode("");
       setNewPlanName("");
       setNewPlanDuration("");
       setNewPlanPrice("");
@@ -579,25 +668,34 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   async function savePlan(plan: PlanRow) {
     const draft = planDrafts[plan.id];
     if (!draft) return;
-    const duration = Number.parseInt(draft.duration, 10);
-    const price = Number.parseFloat(draft.price);
+    const duration = parseDurationToMinutes(draft.duration);
+    const price = parsePriceToNgn(draft.price);
     const maxDevices = draft.maxDevices.trim()
       ? Number.parseInt(draft.maxDevices, 10)
-      : undefined;
-    const dataLimitMb = draft.dataLimitMb.trim()
-      ? Number.parseInt(draft.dataLimitMb, 10)
       : null;
+    const parsedDataLimit = parseDataLimitToMb(draft.dataLimitMb);
+    const dataLimitMb = draft.dataLimitMb.trim() ? parsedDataLimit : null;
+    const normalizedDuration = draft.duration.trim() ? duration ?? null : null;
+    const accountAccessMode = architecture?.accessMode === "account_access";
     if (
       !draft.name.trim() ||
       !draft.code.trim() ||
-      !Number.isFinite(duration) ||
-      duration <= 0 ||
+      (normalizedDuration !== null && (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0)) ||
+      price === undefined ||
       !Number.isFinite(price) ||
       price < 0 ||
-      (maxDevices !== undefined && (!Number.isFinite(maxDevices) || maxDevices < 1)) ||
-      (dataLimitMb !== null && (!Number.isFinite(dataLimitMb) || dataLimitMb < 1))
+      (maxDevices !== null && (!Number.isFinite(maxDevices) || maxDevices < 1)) ||
+      (dataLimitMb != null && (!Number.isFinite(dataLimitMb) || dataLimitMb < 1))
     ) {
       setPlansError(`Invalid values for ${plan.name}.`);
+      return;
+    }
+    if (!accountAccessMode && normalizedDuration === null) {
+      setPlansError("Duration is required for voucher access plans.");
+      return;
+    }
+    if (normalizedDuration === null && dataLimitMb === null) {
+      setPlansError("Set at least one limit: duration or data.");
       return;
     }
     setSavingPlanIds((prev) => ({ ...prev, [plan.id]: true }));
@@ -611,8 +709,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           planId: plan.id,
           name: draft.name.trim(),
           code: draft.code.trim(),
-          durationMinutes: duration,
-          priceNgn: Math.round(price),
+          durationMinutes: normalizedDuration,
+          priceNgn: price,
           maxDevices,
           bandwidthProfile: draft.bandwidthProfile.trim() || null,
           dataLimitMb,
@@ -886,7 +984,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   <div className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
                     <span>Plan: {row.entitlement.planName || row.entitlement.planCode || "-"}</span>
                     <span>Ends: {dt(row.entitlement.endsAt)}</span>
-                    <span>Max devices: {row.entitlement.maxDevices}</span>
+                    <span>Max devices: {row.entitlement.maxDevices ?? "Unlimited"}</span>
                     <span>Profile: {row.entitlement.bandwidthProfile || "-"}</span>
                   </div>
                 ) : (
@@ -990,23 +1088,25 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   <div className="grid grid-cols-2 gap-2">
                     <Input
                       value={draft.duration}
-                      inputMode="numeric"
+                      inputMode="text"
                       onChange={(event) =>
                         setPlanDrafts((prev) => ({
                           ...prev,
                           [plan.id]: { ...prev[plan.id], duration: event.target.value },
                         }))
                       }
+                      placeholder="1h / 2d / 1w"
                     />
                     <Input
                       value={draft.price}
-                      inputMode="numeric"
+                      inputMode="text"
                       onChange={(event) =>
                         setPlanDrafts((prev) => ({
                           ...prev,
                           [plan.id]: { ...prev[plan.id], price: event.target.value },
                         }))
                       }
+                      placeholder="25k / NGN 12000"
                     />
                   </div>
                   <div className="grid grid-cols-3 gap-2">
@@ -1019,18 +1119,18 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                           [plan.id]: { ...prev[plan.id], maxDevices: event.target.value },
                         }))
                       }
-                      placeholder="Max devices"
+                      placeholder="Max devices (blank = unlimited)"
                     />
                     <Input
                       value={draft.dataLimitMb}
-                      inputMode="numeric"
+                      inputMode="text"
                       onChange={(event) =>
                         setPlanDrafts((prev) => ({
                           ...prev,
                           [plan.id]: { ...prev[plan.id], dataLimitMb: event.target.value },
                         }))
                       }
-                      placeholder="Data MB"
+                      placeholder="500MB / 1.5GB / 2TB"
                     />
                     <Input
                       value={draft.bandwidthProfile}
@@ -1158,25 +1258,27 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                     <td className="px-3 py-2">
                       <Input
                         value={draft.duration}
-                        inputMode="numeric"
+                        inputMode="text"
                         onChange={(event) =>
                           setPlanDrafts((prev) => ({
                             ...prev,
                             [plan.id]: { ...prev[plan.id], duration: event.target.value },
                           }))
                         }
+                        placeholder="1h / 2d / 1w"
                       />
                     </td>
                     <td className="px-3 py-2">
                       <Input
                         value={draft.price}
-                        inputMode="numeric"
+                        inputMode="text"
                         onChange={(event) =>
                           setPlanDrafts((prev) => ({
                             ...prev,
                             [plan.id]: { ...prev[plan.id], price: event.target.value },
                           }))
                         }
+                        placeholder="25k / NGN 12000"
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -1189,6 +1291,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                             [plan.id]: { ...prev[plan.id], maxDevices: event.target.value },
                           }))
                         }
+                        placeholder="Blank = unlimited"
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -1205,13 +1308,14 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                     <td className="px-3 py-2">
                       <Input
                         value={draft.dataLimitMb}
-                        inputMode="numeric"
+                        inputMode="text"
                         onChange={(event) =>
                           setPlanDrafts((prev) => ({
                             ...prev,
                             [plan.id]: { ...prev[plan.id], dataLimitMb: event.target.value },
                           }))
                         }
+                        placeholder="500MB / 1.5GB / 2TB"
                       />
                     </td>
                     <td className="px-3 py-2">{plan.unusedCount}</td>
@@ -1769,25 +1873,24 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       {showCreatePlanModal ? (
         <ModalShell title="Add plan" onClose={() => setShowCreatePlanModal(false)}>
           <form className="grid gap-2" onSubmit={createPlan}>
-            <Input value={newPlanCode} onChange={(event) => setNewPlanCode(event.target.value)} placeholder="Code" />
             <Input value={newPlanName} onChange={(event) => setNewPlanName(event.target.value)} placeholder="Name" />
             <Input
               value={newPlanDuration}
-              inputMode="numeric"
+              inputMode="text"
               onChange={(event) => setNewPlanDuration(event.target.value)}
-              placeholder="Minutes"
+              placeholder="Duration optional (e.g. 90m, 1h, 2d, 1w)"
             />
             <Input
               value={newPlanPrice}
-              inputMode="numeric"
+              inputMode="text"
               onChange={(event) => setNewPlanPrice(event.target.value)}
-              placeholder="Price (NGN)"
+              placeholder="Price (e.g. 25000, 25k, NGN 25,000)"
             />
             <Input
               value={newPlanMaxDevices}
               inputMode="numeric"
               onChange={(event) => setNewPlanMaxDevices(event.target.value)}
-              placeholder="Max devices (optional)"
+              placeholder="Max devices (optional, blank = unlimited)"
             />
             <Input
               value={newPlanBandwidthProfile}
@@ -1796,10 +1899,31 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             />
             <Input
               value={newPlanDataLimitMb}
-              inputMode="numeric"
+              inputMode="text"
               onChange={(event) => setNewPlanDataLimitMb(event.target.value)}
-              placeholder="Data limit MB (optional)"
+              placeholder="Data limit (e.g. 500MB, 1.5GB, 2TB)"
             />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              {newPlanDuration.trim() ? (
+                Number.isFinite(parsedNewPlanDuration ?? Number.NaN)
+                  ? `Duration: ${formatDurationPreview(parsedNewPlanDuration!)}`
+                  : "Duration: invalid format"
+              ) : architecture?.accessMode === "account_access"
+                ? "Duration: optional (leave blank for unlimited time)"
+                : "Duration: required for voucher plans"}
+              {" | "}
+              {newPlanPrice.trim() ? (
+                Number.isFinite(parsedNewPlanPrice ?? Number.NaN)
+                  ? `Price: NGN ${parsedNewPlanPrice!.toLocaleString()}`
+                  : "Price: invalid format"
+              ) : "Price: enter 25000, 25k, or NGN 25,000"}
+              {" | "}
+              {newPlanDataLimitMb.trim() ? (
+                Number.isFinite(parsedNewPlanDataLimit ?? Number.NaN)
+                  ? `Data: ${formatDataLimitPreviewMb(parsedNewPlanDataLimit!)}`
+                  : "Data: invalid format"
+              ) : "Data: optional (leave blank for unlimited data)"}
+            </div>
             <div className="flex justify-end">
               <Button type="submit" disabled={creatingPlan}>{creatingPlan ? "Creating..." : "Add plan"}</Button>
             </div>

@@ -7,6 +7,24 @@ type Props = {
   params: Promise<{ slug: string }>;
 };
 
+function normalizePlanCodeCandidate(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24);
+}
+
+function buildGeneratedPlanCode(name: string, durationMinutes?: number | null) {
+  const normalizedName = normalizePlanCodeCandidate(name) || "plan";
+  const durationTag = typeof durationMinutes === "number" && Number.isFinite(durationMinutes) && durationMinutes > 0
+    ? `${Math.round(durationMinutes)}m`
+    : "pkg";
+  const base = normalizePlanCodeCandidate(`${normalizedName}-${durationTag}`);
+  return base || "plan";
+}
+
 async function normalizeTenantAccess(request: Request, tenantId: string) {
   const user = await getSessionUserFromRequest(request);
   if (!user) return { ok: false as const, status: 401, error: "Unauthorized" };
@@ -49,7 +67,7 @@ export async function GET(request: Request, { params }: Props) {
         ON v.tenant_id = p.tenant_id AND v.package_id = p.id
       WHERE p.tenant_id = ?
       GROUP BY p.id
-      ORDER BY p.duration_minutes ASC, p.created_at DESC
+      ORDER BY COALESCE(p.duration_minutes, 2147483647) ASC, p.created_at DESC
     `,
     )
     .all(tenant.id);
@@ -64,83 +82,115 @@ export async function POST(request: Request, { params }: Props) {
 
   const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
+  const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
 
   const body = (await request.json()) as {
     code?: string;
     name?: string;
-    durationMinutes?: number;
+    durationMinutes?: number | null;
     priceNgn?: number;
-    maxDevices?: number;
+    maxDevices?: number | null;
     bandwidthProfile?: string | null;
     dataLimitMb?: number | null;
     active?: boolean;
     description?: string;
   };
 
-  const code = body.code?.trim().toLowerCase();
+  const inputCode = body.code?.trim();
   const name = body.name?.trim();
-  const durationMinutes = body.durationMinutes;
+  const durationMinutes = body.durationMinutes ?? null;
   const priceNgn = body.priceNgn;
-  const maxDevices = typeof body.maxDevices === "number" ? body.maxDevices : 1;
+  const maxDevices =
+    body.maxDevices === null
+      ? null
+      : typeof body.maxDevices === "number"
+        ? body.maxDevices
+        : null;
   const bandwidthProfile = body.bandwidthProfile?.trim() || null;
   const dataLimitMb = body.dataLimitMb ?? null;
   const description = body.description?.trim() || null;
 
-  if (!code || code.length < 2) {
-    return Response.json({ error: "Plan code is required" }, { status: 400 });
-  }
   if (!name || name.length < 2) {
     return Response.json({ error: "Plan name is required" }, { status: 400 });
   }
-  if (typeof durationMinutes !== "number" || !Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+  if (durationMinutes !== null && (!Number.isFinite(durationMinutes) || durationMinutes <= 0)) {
     return Response.json({ error: "Invalid durationMinutes" }, { status: 400 });
   }
   if (typeof priceNgn !== "number" || !Number.isFinite(priceNgn) || priceNgn < 0) {
     return Response.json({ error: "Invalid priceNgn" }, { status: 400 });
   }
-  if (
-    typeof maxDevices !== "number" ||
-    !Number.isFinite(maxDevices) ||
-    maxDevices < 1 ||
-    maxDevices > 32
-  ) {
+  if (maxDevices !== null && (!Number.isFinite(maxDevices) || maxDevices < 1 || maxDevices > 32)) {
     return Response.json({ error: "Invalid maxDevices" }, { status: 400 });
   }
   if (dataLimitMb !== null && (!Number.isFinite(dataLimitMb) || dataLimitMb <= 0)) {
     return Response.json({ error: "Invalid dataLimitMb" }, { status: 400 });
   }
+  if (!accountAccessMode && durationMinutes === null) {
+    return Response.json(
+      { error: "durationMinutes is required for voucher access plans." },
+      { status: 400 },
+    );
+  }
+  if (durationMinutes === null && dataLimitMb === null) {
+    return Response.json(
+      { error: "Set at least one limit: durationMinutes or dataLimitMb." },
+      { status: 400 },
+    );
+  }
+  if (inputCode !== undefined && inputCode.length > 0) {
+    const normalizedCode = normalizePlanCodeCandidate(inputCode);
+    if (!normalizedCode || normalizedCode.length < 2) {
+      return Response.json({ error: "Invalid plan code" }, { status: 400 });
+    }
+  }
 
   const db = getDb();
   const now = new Date().toISOString();
-  try {
-    await db.prepare(
-      `
-      INSERT INTO voucher_packages (
-        id, tenant_id, code, name, duration_minutes, price_ngn,
-        max_devices, bandwidth_profile, data_limit_mb,
-        active, description, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    ).run(
-      randomUUID(),
-      tenant.id,
-      code,
-      name,
-      Math.round(durationMinutes),
-      Math.round(priceNgn),
-      Math.round(maxDevices),
-      bandwidthProfile,
-      dataLimitMb === null ? null : Math.round(dataLimitMb),
-      body.active === false ? 0 : 1,
-      description,
-      now,
-      now,
-    );
-  } catch {
-    return Response.json({ error: "Plan code already exists" }, { status: 409 });
+  const baseCode = inputCode
+    ? normalizePlanCodeCandidate(inputCode)
+    : buildGeneratedPlanCode(name, durationMinutes);
+
+  let createdCode: string | null = null;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const candidateCode = attempt === 0 ? baseCode : `${baseCode}-${attempt + 1}`;
+    try {
+      await db.prepare(
+        `
+        INSERT INTO voucher_packages (
+          id, tenant_id, code, name, duration_minutes, price_ngn,
+          max_devices, bandwidth_profile, data_limit_mb,
+          active, description, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      ).run(
+        randomUUID(),
+        tenant.id,
+        candidateCode,
+        name,
+        durationMinutes === null ? null : Math.round(durationMinutes),
+        Math.round(priceNgn),
+        maxDevices === null ? null : Math.round(maxDevices),
+        bandwidthProfile,
+        dataLimitMb === null ? null : Math.round(dataLimitMb),
+        body.active === false ? 0 : 1,
+        description,
+        now,
+        now,
+      );
+      createdCode = candidateCode;
+      break;
+    } catch {
+      if (inputCode) {
+        return Response.json({ error: "Plan code already exists" }, { status: 409 });
+      }
+    }
   }
 
-  return Response.json({ ok: true });
+  if (!createdCode) {
+    return Response.json({ error: "Unable to generate a unique plan code" }, { status: 409 });
+  }
+
+  return Response.json({ ok: true, code: createdCode });
 }
 
 export async function PATCH(request: Request, { params }: Props) {
@@ -150,14 +200,15 @@ export async function PATCH(request: Request, { params }: Props) {
 
   const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
+  const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
 
   const body = (await request.json()) as {
     planId?: string;
     code?: string;
     name?: string;
-    durationMinutes?: number;
+    durationMinutes?: number | null;
     priceNgn?: number;
-    maxDevices?: number;
+    maxDevices?: number | null;
     bandwidthProfile?: string | null;
     dataLimitMb?: number | null;
     active?: boolean;
@@ -169,8 +220,10 @@ export async function PATCH(request: Request, { params }: Props) {
 
   const db = getDb();
   const existing = await db
-    .prepare("SELECT id FROM voucher_packages WHERE tenant_id = ? AND id = ?")
-    .get(tenant.id, planId) as { id: string } | undefined;
+    .prepare("SELECT id, duration_minutes, data_limit_mb FROM voucher_packages WHERE tenant_id = ? AND id = ?")
+    .get(tenant.id, planId) as
+    | { id: string; duration_minutes: number | null; data_limit_mb: number | null }
+    | undefined;
   if (!existing) return Response.json({ error: "Plan not found" }, { status: 404 });
 
   const fields: string[] = [];
@@ -192,12 +245,12 @@ export async function PATCH(request: Request, { params }: Props) {
     fields.push("name = ?");
     args.push(name);
   }
-  if (typeof body.durationMinutes === "number") {
-    if (!Number.isFinite(body.durationMinutes) || body.durationMinutes <= 0) {
+  if (body.durationMinutes !== undefined) {
+    if (body.durationMinutes !== null && (!Number.isFinite(body.durationMinutes) || body.durationMinutes <= 0)) {
       return Response.json({ error: "Invalid durationMinutes" }, { status: 400 });
     }
     fields.push("duration_minutes = ?");
-    args.push(Math.round(body.durationMinutes));
+    args.push(body.durationMinutes === null ? null : Math.round(body.durationMinutes));
   }
   if (typeof body.priceNgn === "number") {
     if (!Number.isFinite(body.priceNgn) || body.priceNgn < 0) {
@@ -206,12 +259,12 @@ export async function PATCH(request: Request, { params }: Props) {
     fields.push("price_ngn = ?");
     args.push(Math.round(body.priceNgn));
   }
-  if (typeof body.maxDevices === "number") {
-    if (!Number.isFinite(body.maxDevices) || body.maxDevices < 1 || body.maxDevices > 32) {
+  if (body.maxDevices !== undefined) {
+    if (body.maxDevices !== null && (!Number.isFinite(body.maxDevices) || body.maxDevices < 1 || body.maxDevices > 32)) {
       return Response.json({ error: "Invalid maxDevices" }, { status: 400 });
     }
     fields.push("max_devices = ?");
-    args.push(Math.round(body.maxDevices));
+    args.push(body.maxDevices === null ? null : Math.round(body.maxDevices));
   }
   if (body.bandwidthProfile !== undefined) {
     if (body.bandwidthProfile !== null && typeof body.bandwidthProfile !== "string") {
@@ -226,6 +279,23 @@ export async function PATCH(request: Request, { params }: Props) {
     }
     fields.push("data_limit_mb = ?");
     args.push(body.dataLimitMb === null ? null : Math.round(body.dataLimitMb));
+  }
+
+  const nextDuration =
+    body.durationMinutes === undefined ? existing.duration_minutes : body.durationMinutes;
+  const nextDataLimit =
+    body.dataLimitMb === undefined ? existing.data_limit_mb : body.dataLimitMb;
+  if (!accountAccessMode && nextDuration === null) {
+    return Response.json(
+      { error: "durationMinutes is required for voucher access plans." },
+      { status: 400 },
+    );
+  }
+  if (nextDuration === null && nextDataLimit === null) {
+    return Response.json(
+      { error: "Set at least one limit: durationMinutes or dataLimitMb." },
+      { status: 400 },
+    );
   }
   if (typeof body.active === "boolean") {
     fields.push("active = ?");
