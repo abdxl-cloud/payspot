@@ -945,7 +945,11 @@ add_tenant_mode() {
     warn "Tenant '$tenant_slug' already exists — its settings will be updated."
   fi
 
-  adapter_secret="$(prompt_required "PaySpot tenant adapter secret")"
+  adapter_secret="$(prompt_optional "PaySpot tenant adapter secret (leave blank to keep current)")"
+  if [ -z "$adapter_secret" ]; then
+    adapter_secret="$(get_tenant_field "$tenant_slug" "adapter_secret")"
+    [ -n "$adapter_secret" ] || fail "Existing adapter_secret is missing for tenant '$tenant_slug'. Enter a new one."
+  fi
   client_ips="$(prompt_required "RADIUS client IPs for this tenant (comma-separated)")"
   client_prefix="$(prompt_default "Client shortname prefix" "omada")"
   radius_secret="$(prompt_optional "RADIUS shared secret (leave blank to auto-generate)")"
