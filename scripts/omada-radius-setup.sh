@@ -521,61 +521,69 @@ def send_disconnect(
     if not target_ip or not session_id:
         return
 
-    secret = find_radius_secret(target_ip)
-    if not secret and nas_ip_address and nas_ip_address != target_ip:
-        secret = find_radius_secret(nas_ip_address)
-    if not secret:
-        log(
-            "disconnect skipped: no shared secret found "
-            f"for target={target_ip} nas={nas_ip_address or '-'}"
+    def _attempt_disconnect(send_to_ip: str, nas_attr_ip: str):
+        secret = find_radius_secret(send_to_ip)
+        if not secret and nas_attr_ip and nas_attr_ip != send_to_ip:
+            secret = find_radius_secret(nas_attr_ip)
+        if not secret:
+            return False, (
+                "disconnect skipped: no shared secret found "
+                f"for target={send_to_ip} nas={nas_attr_ip or '-'}"
+            )
+
+        attrs = [
+            f'Acct-Session-Id = "{radius_escape(session_id)}"',
+            f"NAS-IP-Address = {nas_attr_ip}",
+            f"Event-Timestamp = {int(time.time())}",
+        ]
+        if username:
+            attrs.append(f'User-Name = "{radius_escape(username)}"')
+        if calling_station_id:
+            attrs.append(f'Calling-Station-Id = "{radius_escape(calling_station_id)}"')
+        request_body = "\\n".join(attrs) + "\\n"
+
+        try:
+            completed = subprocess.run(
+                [
+                    "/usr/bin/radclient",
+                    "-t",
+                    "3",
+                    "-r",
+                    "1",
+                    "-x",
+                    f"{send_to_ip}:{DISCONNECT_PORT}",
+                    "disconnect",
+                    secret,
+                ],
+                input=request_body,
+                text=True,
+                capture_output=True,
+                timeout=TIMEOUT,
+                check=False,
+            )
+        except Exception as exc:
+            return False, f"disconnect failed for session={session_id}: {exc}"
+
+        if completed.returncode != 0:
+            details = completed.stderr.strip() or completed.stdout.strip() or "unknown radclient failure"
+            return False, f"disconnect rejected for session={session_id} target={send_to_ip}: {details}"
+
+        return True, (
+            f"disconnect request sent for session={session_id} "
+            f"to target={send_to_ip} nas={nas_attr_ip}"
         )
-        return
 
     nas_attr_ip = nas_ip_address or target_ip
-    attrs = [
-        f'Acct-Session-Id = "{radius_escape(session_id)}"',
-        f"NAS-IP-Address = {nas_attr_ip}",
-        f"Event-Timestamp = {int(time.time())}",
-    ]
-    if username:
-        attrs.append(f'User-Name = "{radius_escape(username)}"')
-    if calling_station_id:
-        attrs.append(f'Calling-Station-Id = "{radius_escape(calling_station_id)}"')
-
-    request_body = "\\n".join(attrs) + "\\n"
-
-    try:
-        completed = subprocess.run(
-            [
-                "/usr/bin/radclient",
-                "-t",
-                "3",
-                "-r",
-                "1",
-                "-x",
-                f"{target_ip}:{DISCONNECT_PORT}",
-                "disconnect",
-                secret,
-            ],
-            input=request_body,
-            text=True,
-            capture_output=True,
-            timeout=TIMEOUT,
-            check=False,
-        )
-    except Exception as exc:
-        log(f"disconnect failed for session={session_id}: {exc}")
+    ok, message = _attempt_disconnect(target_ip, nas_attr_ip)
+    log(message)
+    if ok:
         return
 
-    if completed.returncode != 0:
-        details = completed.stderr.strip() or completed.stdout.strip() or "unknown radclient failure"
-        log(f"disconnect rejected for session={session_id}: {details}")
-        return
-
-    log(
-        f"disconnect request sent for session={session_id} "
-        f"to target={target_ip} nas={nas_attr_ip}"
-    )
+    if nas_ip_address and nas_ip_address != target_ip:
+        ok2, message2 = _attempt_disconnect(nas_ip_address, nas_attr_ip)
+        log(message2)
+        if ok2:
+            return
 
 
 def map_accounting_event(raw: str) -> str:

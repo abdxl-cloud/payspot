@@ -356,7 +356,14 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const portalQuery = createCaptivePortalSearchParams(portalContext).toString();
   const hasAuthenticatedSubscriber = !!subscriberToken;
   const activeEntitlement = subscriberOverview?.entitlements[0] ?? null;
-  const hasTrackedActivePlan = isAccountAccessMode && !!activeEntitlement;
+  const activeEntitlementDataLimitReached = !!(
+    activeEntitlement &&
+    activeEntitlement.dataLimitMb &&
+    activeEntitlement.dataLimitMb > 0 &&
+    activeEntitlement.usage.usedBytes >= activeEntitlement.dataLimitMb * 1024 * 1024
+  );
+  const hasTrackedActivePlan =
+    isAccountAccessMode && !!activeEntitlement && !activeEntitlementDataLimitReached;
   const hasAvailable = packages.some((pkg) => pkg.availableCount > 0);
   const allSoldOut = packages.length > 0 && !hasAvailable;
   const isLongPlanList = packages.length > 12;
