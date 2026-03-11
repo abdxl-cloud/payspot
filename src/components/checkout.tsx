@@ -177,6 +177,53 @@ function formatDataLimitMb(value: number) {
   return `${value} MB`;
 }
 
+function formatPlanDataLabel(dataLimitMb: number | null | undefined) {
+  if (!dataLimitMb || dataLimitMb <= 0) return "Unlimited data";
+  return formatDataLimitMb(dataLimitMb);
+}
+
+function formatDeviceLimit(maxDevices: number | null | undefined) {
+  if (!maxDevices || maxDevices <= 0) return "Unlimited devices";
+  return `${maxDevices} device${maxDevices === 1 ? "" : "s"}`;
+}
+
+function hashText(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function getDefaultPlanDescription(params: {
+  pkg: Package;
+  mode: "voucher_access" | "account_access";
+}) {
+  const timeLabel = formatDuration(params.pkg.durationMinutes).toLowerCase();
+  const dataLabel = formatPlanDataLabel(params.pkg.dataLimitMb).toLowerCase();
+  const deviceLabel = formatDeviceLimit(params.pkg.maxDevices).toLowerCase();
+
+  const voucherTemplates = [
+    `Quick voucher access with ${timeLabel} and ${dataLabel}.`,
+    `Guest Wi-Fi voucher plan: ${dataLabel}, ${timeLabel}.`,
+    `Fast-connect voucher with ${deviceLabel} and ${dataLabel}.`,
+    `Voucher plan tuned for short checkout and instant activation.`,
+    `Simple prepaid voucher access for your Wi-Fi users.`,
+  ];
+
+  const accountTemplates = [
+    `Account-based internet plan with ${timeLabel} and ${dataLabel}.`,
+    `Sign in once and use this plan across ${deviceLabel}.`,
+    `Subscriber plan with tracked usage: ${dataLabel}, ${timeLabel}.`,
+    `Account access package with instant activation after payment.`,
+    `Managed subscriber plan for recurring account-based access.`,
+  ];
+
+  const templates = params.mode === "account_access" ? accountTemplates : voucherTemplates;
+  const seed = `${params.mode}:${params.pkg.code}:${params.pkg.name}:${params.pkg.priceNgn}`;
+  return templates[hashText(seed) % templates.length];
+}
+
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-NG", {
     dateStyle: "medium",
@@ -396,9 +443,40 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const bestValueCode = useMemo(() => {
     const available = packages.filter((pkg) => pkg.availableCount > 0);
     if (available.length === 0) return null;
-    const sorted = [...available].sort(
-      (a, b) => (b.durationMinutes ?? 0) - (a.durationMinutes ?? 0),
+
+    const maxDuration = Math.max(
+      1,
+      ...available.map((pkg) => (pkg.durationMinutes && pkg.durationMinutes > 0 ? pkg.durationMinutes : 0)),
     );
+    const maxData = Math.max(
+      1,
+      ...available.map((pkg) => (pkg.dataLimitMb && pkg.dataLimitMb > 0 ? pkg.dataLimitMb : 0)),
+    );
+    const maxDevices = Math.max(
+      1,
+      ...available.map((pkg) => (pkg.maxDevices && pkg.maxDevices > 0 ? pkg.maxDevices : 0)),
+    );
+
+    const sorted = [...available].sort((a, b) => {
+      const score = (pkg: Package) => {
+        const durationScore = pkg.durationMinutes && pkg.durationMinutes > 0
+          ? pkg.durationMinutes / maxDuration
+          : 1;
+        const dataScore = pkg.dataLimitMb && pkg.dataLimitMb > 0
+          ? pkg.dataLimitMb / maxData
+          : 1;
+        const deviceScore = pkg.maxDevices && pkg.maxDevices > 0
+          ? pkg.maxDevices / maxDevices
+          : 1;
+        const capabilityScore = (durationScore * 0.35) + (dataScore * 0.55) + (deviceScore * 0.1);
+        return capabilityScore / Math.max(1, pkg.priceNgn);
+      };
+
+      const diff = score(b) - score(a);
+      if (Math.abs(diff) > 0.000001) return diff;
+      return a.priceNgn - b.priceNgn;
+    });
+
     return sorted[0]?.code ?? null;
   }, [packages]);
 
@@ -1056,6 +1134,11 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
               const isSoldOut = pkg.availableCount <= 0;
               const isSelected = selected?.code === pkg.code;
               const isBestValue = bestValueCode === pkg.code && !isSoldOut;
+              const description = pkg.description?.trim()
+                || getDefaultPlanDescription({
+                  pkg,
+                  mode: isAccountAccessMode ? "account_access" : "voucher_access",
+                });
 
               return (
                 <Card
@@ -1087,7 +1170,17 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                         <p className="truncate text-sm font-semibold text-slate-900" title={pkg.name}>
                           {pkg.name}
                         </p>
-                        <p className="text-xs text-slate-500">{formatDuration(pkg.durationMinutes)}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-600">
+                            {formatDuration(pkg.durationMinutes)}
+                          </span>
+                          <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-600">
+                            {formatPlanDataLabel(pkg.dataLimitMb)}
+                          </span>
+                          <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-600">
+                            {formatDeviceLimit(pkg.maxDevices)}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         {isBestValue ? (
@@ -1126,7 +1219,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                     </div>
 
                     <p className="mt-3 text-xs leading-relaxed text-slate-600">
-                      {pkg.description || "Instant access voucher for your Wi-Fi network."}
+                      {description}
                     </p>
                   </CardContent>
                 </Card>
