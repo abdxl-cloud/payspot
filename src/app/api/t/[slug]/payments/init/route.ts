@@ -19,7 +19,7 @@ type Props = {
 };
 
 const schema = z.object({
-  phone: z.string().min(7),
+  phone: z.string().min(7).optional(),
   packageCode: z.string().min(1),
   subscriberToken: z.string().min(10).optional(),
   portalContext: z.object({
@@ -38,11 +38,18 @@ const schema = z.object({
     previewSite: z.string().optional(),
   }).optional(),
 });
+const emailSchema = z.string().trim().toLowerCase().email();
 
 function buildCheckoutEmailFromPhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
   const localPart = (digits || `guest${randomUUID().slice(0, 8)}`).slice(0, 40);
   return `${localPart}@guest.payspot.co`;
+}
+
+function resolvePaystackEmail(candidate: string, fallbackPhone: string) {
+  const parsed = emailSchema.safeParse(candidate);
+  if (parsed.success) return parsed.data;
+  return buildCheckoutEmailFromPhone(fallbackPhone);
 }
 
 export async function POST(request: Request, { params }: Props) {
@@ -85,9 +92,14 @@ export async function POST(request: Request, { params }: Props) {
       : null;
   const effectiveSubscriberToken = subscriberToken ?? headerToken ?? undefined;
 
+  const inputPhone = phone?.trim() ?? "";
+  if (!accountAccessMode && inputPhone.length < 7) {
+    return Response.json({ error: "Phone is required" }, { status: 400 });
+  }
+
   let subscriberId: string | null = null;
-  let email = buildCheckoutEmailFromPhone(phone);
-  let normalizedPhone = phone;
+  let email = buildCheckoutEmailFromPhone(inputPhone);
+  let normalizedPhone = inputPhone;
   if (accountAccessMode) {
     if (!effectiveSubscriberToken) {
       return Response.json(
@@ -100,8 +112,8 @@ export async function POST(request: Request, { params }: Props) {
       return Response.json({ error: "Invalid subscriber session" }, { status: 401 });
     }
     subscriberId = session.subscriber_id;
-    email = session.email;
-    normalizedPhone = session.phone || phone;
+    email = resolvePaystackEmail(session.email, session.phone || inputPhone);
+    normalizedPhone = session.phone || session.email;
   }
 
   const pkg = await getPackageByCode(tenant.id, packageCode);

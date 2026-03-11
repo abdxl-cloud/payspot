@@ -25,6 +25,13 @@ function shouldForceHttps() {
 }
 
 export function proxy(request: NextRequest) {
+  // This app does not use React Server Actions for user flows.
+  // Captive portals and stale clients may replay malformed Next-Action requests
+  // after deployments, which otherwise flood logs with "Failed to find Server Action".
+  if (request.headers.has("next-action")) {
+    return new NextResponse(null, { status: 410 });
+  }
+
   if (!shouldForceHttps()) return NextResponse.next();
 
   const { nextUrl } = request;
