@@ -168,5 +168,21 @@ export async function POST(request: Request, { params }: Props) {
     nasIpAddress: parsed.data.nasIpAddress,
   });
 
-  return Response.json({ ok: true });
+  const access = await getSubscriberAccessState({
+    tenantId: tenant.id,
+    subscriberId,
+  });
+
+  const shouldDisconnect =
+    normalizedEvent !== "stop" &&
+    access.state === "ended" &&
+    (access.reason === "data_limit_reached" ||
+      access.reason === "plan_expired" ||
+      access.reason === "no_active_plan");
+
+  return Response.json({
+    ok: true,
+    disconnect: shouldDisconnect,
+    reason: shouldDisconnect ? access.reason : null,
+  });
 }

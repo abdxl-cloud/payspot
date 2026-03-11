@@ -689,6 +689,16 @@ def handle_accounting(argv):
         log(f"accounting backend status={status} body={body}")
         return 0
 
+    backend_disconnect = False
+    backend_reason = ""
+    if isinstance(body, dict):
+        backend_disconnect = bool(body.get("disconnect"))
+        backend_reason = str(body.get("reason") or "")
+    if backend_disconnect:
+        should_disconnect = True
+        if backend_reason:
+            log(f"backend requested disconnect reason={backend_reason} session={payload['sessionId']}")
+
     if should_disconnect and payload["event"] not in {"stop", "accounting-on", "accounting-off"}:
         send_disconnect(
             nas_ip=nas_ip_address,
