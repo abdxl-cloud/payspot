@@ -1239,16 +1239,6 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                         {isBestValue ? (
                           <Badge className="bg-sky-700 text-white">Best Value</Badge>
                         ) : null}
-                        {!isAccountAccessMode && isSoldOut ? (
-                          <Badge variant="outline" className="border-rose-200 bg-rose-50 text-rose-700">
-                            Sold out
-                          </Badge>
-                        ) : null}
-                        {!isAccountAccessMode && !isSoldOut ? (
-                          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                            {pkg.availableCount} left
-                          </Badge>
-                        ) : null}
                       </div>
                     </div>
 
