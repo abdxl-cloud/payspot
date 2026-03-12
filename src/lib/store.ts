@@ -2339,59 +2339,6 @@ export async function transactionAssignVoucher(params: {
 
     const voucher = await assignVoucher(params);
     if (!voucher) {
-      const tenant = await getTenantById(params.tenantId);
-      const voucherSourceMode = normalizeVoucherSourceMode(tenant?.voucher_source_mode ?? null);
-
-      if (tenant && voucherSourceMode === "omada_openapi") {
-        const pkg = await getPackageById(params.tenantId, params.packageId);
-        const config = await resolveTenantOmadaOpenApiConfig(params.tenantId);
-
-        if (pkg && config && pkg.duration_minutes && pkg.duration_minutes > 0) {
-          try {
-            const provisioned = await provisionOmadaVouchers({
-              config,
-              amount: 1,
-              durationMinutes: pkg.duration_minutes,
-              groupName: `PS-OD-${pkg.id.slice(0, 8)}-${Date.now()}`,
-              codeLength: 10,
-            });
-            const code = provisioned.codes[0];
-            if (code) {
-              await db
-                .prepare(
-                  `
-                  INSERT INTO voucher_pool (
-                    id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
-                  ) VALUES (?, ?, ?, ?, 'UNUSED', ?, ?)
-                  ON CONFLICT (tenant_id, voucher_code) DO NOTHING
-                `,
-                )
-                .run(
-                  randomUUID(),
-                  params.tenantId,
-                  code,
-                  pkg.duration_minutes,
-                  pkg.id,
-                  nowIso(),
-                );
-            }
-          } catch (error) {
-            console.error("On-demand Omada voucher provisioning failed", error);
-          }
-        }
-
-        const voucherAfterProvision = await assignVoucher(params);
-        if (voucherAfterProvision) {
-          await completeTransaction({
-            tenantId: params.tenantId,
-            reference: params.reference,
-            voucherCode: voucherAfterProvision.voucherCode,
-            paidAt: voucherAfterProvision.assignedAt,
-          });
-          return { status: "assigned", voucherCode: voucherAfterProvision.voucherCode };
-        }
-      }
-
       await markTransactionFailed({
         tenantId: params.tenantId,
         reference: params.reference,
