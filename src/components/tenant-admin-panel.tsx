@@ -954,7 +954,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   return (
     <>
       <div className="grid gap-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <StatTile label="Revenue" value={money(stats?.transactions.revenueNgn ?? 0)} />
           <StatTile label="Successful payments" value={String(stats?.transactions.success ?? 0)} />
           <StatTile label="Total vouchers" value={String(voucherTotals.total)} />
@@ -963,7 +963,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </div>
 
         {(stats?.voucherPool.length ?? 0) > 0 ? (
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {stats?.voucherPool.slice(0, 6).map((item) => (
               <div key={item.code} className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
                 <p className="font-semibold text-slate-900">{item.name}</p>
@@ -1078,7 +1078,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Alert>
         ) : null}
         {architectureNotice ? (
-          <Alert className="mt-4">
+          <Alert variant="success" className="mt-4">
             <AlertTitle>Architecture updated</AlertTitle>
             <AlertDescription>{architectureNotice}</AlertDescription>
           </Alert>
@@ -1090,7 +1090,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Alert>
         ) : null}
         {omadaTestNotice ? (
-          <Alert className="mt-4">
+          <Alert variant="success" className="mt-4">
             <AlertTitle>Omada test passed</AlertTitle>
             <AlertDescription>{omadaTestNotice}</AlertDescription>
           </Alert>
@@ -1108,7 +1108,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Button>
         </div>
 
-        <div className="mt-3 space-y-3 lg:hidden">
+        <div className="mt-3 space-y-3 xl:hidden">
           {plans.map((plan) => {
             const draft = planDrafts[plan.id];
             if (!draft) return null;
@@ -1282,7 +1282,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           ) : null}
         </div>
 
-        <div className="mt-3 hidden overflow-x-auto border border-slate-200/85 bg-white xl:block">
+        <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200/85 bg-white xl:block">
           <table className="w-full min-w-[1180px] text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
               <tr>
@@ -1491,7 +1491,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Alert>
         ) : null}
         {planNotice ? (
-          <Alert className="mt-4">
+          <Alert variant="success" className="mt-4">
             <AlertTitle>Plan update</AlertTitle>
             <AlertDescription>{planNotice}</AlertDescription>
           </Alert>
@@ -1564,7 +1564,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Button>
         </div>
 
-        <div className="mt-3 space-y-3 lg:hidden">
+        <div className="mt-3 space-y-3 xl:hidden">
           {vouchers.map((row) => (
             <article key={row.id} className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
               <div className="flex items-start justify-between gap-3">
@@ -1603,7 +1603,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           ) : null}
         </div>
 
-        <div className="mt-3 hidden overflow-x-auto border border-slate-200/85 bg-white xl:block">
+        <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200/85 bg-white xl:block">
           <table className="w-full min-w-[1060px] text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
               <tr>
@@ -1696,7 +1696,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Alert>
         ) : null}
         {voucherNotice ? (
-          <Alert className="mt-4">
+          <Alert variant="success" className="mt-4">
             <AlertTitle>Voucher update</AlertTitle>
             <AlertDescription>{voucherNotice}</AlertDescription>
           </Alert>
@@ -1708,7 +1708,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Alert>
         ) : null}
         {importNotice ? (
-          <Alert className="mt-4">
+          <Alert variant="success" className="mt-4">
             <AlertTitle>Import complete</AlertTitle>
             <AlertDescription>{importNotice}</AlertDescription>
           </Alert>

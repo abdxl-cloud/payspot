@@ -164,16 +164,19 @@ function formatDurationLabel(minutes: number) {
 }
 
 function buildPlan(normalized: NormalizedRow): PlanInfo | null {
-  if (!normalized.durationMinutes || !normalized.trafficLimitCode) return null;
+  if (!normalized.durationMinutes) return null;
   const durationCode = formatDurationCode(normalized.durationMinutes);
-  const code = `${normalized.trafficLimitCode}-${durationCode}`;
   const durationLabel = formatDurationLabel(normalized.durationMinutes);
-  const limitLabel = normalized.trafficLimitLabel ?? normalized.trafficLimitCode;
+  const isUnlimited = !normalized.trafficLimitCode;
+  const code = isUnlimited ? `unlimited-${durationCode}` : `${normalized.trafficLimitCode}-${durationCode}`;
+  const limitLabel = isUnlimited ? "Unlimited" : (normalized.trafficLimitLabel ?? normalized.trafficLimitCode!);
   return {
     code,
     name: `${limitLabel} / ${durationLabel}`,
     durationMinutes: normalized.durationMinutes,
-    description: `Data cap ${limitLabel} for ${durationLabel} of access.`,
+    description: isUnlimited
+      ? `Unlimited data for ${durationLabel} of access.`
+      : `Data cap ${limitLabel} for ${durationLabel} of access.`,
     priceNgn: normalized.priceNgn,
   };
 }

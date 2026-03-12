@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Wifi } from "lucide-react";
 
 type Props = {
   breadcrumb: string;
@@ -18,6 +19,7 @@ export function AppTopbar({
     <header className="app-topbar">
       <div className="app-topbar-left">
         <Link href="/" className="app-topbar-brand">
+          <Wifi className="size-4 shrink-0 text-sky-300" />
           PaySpot
         </Link>
         <span className="app-topbar-divider" />

@@ -437,50 +437,50 @@ async function seedInitialData() {
     mustChangePassword: false,
   });
 
-  const seedTenantSlug = "walstreet";
-  const tenantRows = (await queryRows("SELECT id FROM tenants WHERE slug = ?", [
-    seedTenantSlug,
-  ])) as Array<{ id: string }>;
-  let tenantId = tenantRows[0]?.id ?? null;
+  const seedTenants: Array<{
+    slug: string;
+    name: string;
+    email: string;
+    username: string;
+    password: string;
+  }> = [
+    {
+      slug: "wallstreet-mystic",
+      name: "WALLSTREET MYSTIC",
+      email: "wallstreet@example.com",
+      username: "wallstreet",
+      password: "Pathfinder07!",
+    },
+  ];
 
-  if (!tenantId) {
-    tenantId = randomUUID();
-    await runSql(
-      `
-        INSERT INTO tenants (
-          id, slug, name, admin_email, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        tenantId,
-        seedTenantSlug,
-        "WALSTREET",
-        "walstreet@example.com",
-        "pending_setup",
-        now,
-        now,
-      ],
-    );
+  for (const t of seedTenants) {
+    const tenantRows = (await queryRows(
+      "SELECT id FROM tenants WHERE slug = ?",
+      [t.slug],
+    )) as Array<{ id: string }>;
+    let tenantId = tenantRows[0]?.id ?? null;
+
+    if (!tenantId) {
+      tenantId = randomUUID();
+      await runSql(
+        `
+          INSERT INTO tenants (
+            id, slug, name, admin_email, status, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
+        [tenantId, t.slug, t.name, t.email, "pending_setup", now, now],
+      );
+    }
+
+    await ensureUser({
+      email: t.email,
+      username: t.username,
+      role: "tenant",
+      tenantId,
+      password: t.password,
+      mustChangePassword: false,
+    });
   }
-
-  const pkgRows = (await queryRows(
-    "SELECT COUNT(1) as count FROM voucher_packages WHERE tenant_id = ?",
-    [tenantId],
-  )) as Array<{ count: string | number }>;
-
-  const pkgCount = Number(pkgRows[0]?.count ?? 0);
-  if (pkgCount === 0) {
-    // No default plans are seeded. Tenants create plans explicitly from admin.
-  }
-
-  await ensureUser({
-    email: "walstreet@example.com",
-    username: "WALSTREET",
-    role: "tenant",
-    tenantId,
-    password: "Pathfinder07!",
-    mustChangePassword: false,
-  });
 }
 
 async function ensureInitialized() {

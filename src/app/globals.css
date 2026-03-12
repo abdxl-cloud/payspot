@@ -125,12 +125,12 @@
 @keyframes rise-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 10px, 0);
+    transform: translate3d(0, 14px, 0) scale(0.995);
   }
 
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
@@ -144,9 +144,10 @@
     font-family: var(--font-body), "Manrope", ui-sans-serif, system-ui, sans-serif;
     min-height: 100vh;
     background-image:
-      radial-gradient(circle at 6% 0%, rgb(30 64 175 / 0.18), transparent 34%),
-      radial-gradient(circle at 100% 0%, rgb(14 165 233 / 0.14), transparent 40%),
-      linear-gradient(160deg, #f5f8ff 0%, #e9eff8 48%, #edf3fd 100%);
+      radial-gradient(circle at 6% 0%, rgb(30 64 175 / 0.24), transparent 34%),
+      radial-gradient(circle at 100% 0%, rgb(14 165 233 / 0.2), transparent 40%),
+      radial-gradient(circle at 50% 92%, rgb(99 102 241 / 0.07), transparent 42%),
+      linear-gradient(155deg, #eff5ff 0%, #e5ecf8 48%, #ecf2fd 100%);
   }
 
   :focus-visible {
@@ -197,6 +198,7 @@
 
   .surface-card {
     @apply rounded-3xl border border-white/90 bg-white/92 shadow-[var(--shadow-lg)] backdrop-blur-lg;
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgb(255 255 255 / 0.75);
   }
 
   .soft-panel {
@@ -205,11 +207,11 @@
 
   .panel-surface {
     @apply rounded-2xl border border-slate-200/95 bg-white p-4 shadow-[var(--shadow-sm)] sm:p-6;
-    animation: rise-in 280ms ease-out both;
+    animation: rise-in 340ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
   }
 
   .section-kicker {
-    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700;
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-primary;
   }
 
   .section-title {
@@ -225,7 +227,7 @@
   }
 
   .hero-chip {
-    @apply inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-800;
+    @apply inline-flex items-center gap-1.5 rounded-full border border-indigo-200/90 bg-gradient-to-r from-indigo-50 to-sky-50 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-indigo-700 shadow-sm;
   }
 
   .hero-title {
@@ -237,11 +239,11 @@
   }
 
   .hero-metric-grid {
-    @apply grid gap-3 md:grid-cols-3;
+    @apply grid gap-3 sm:grid-cols-2 md:grid-cols-3;
   }
 
   .hero-metric {
-    @apply rounded-2xl border border-slate-200/95 bg-white p-4 shadow-[var(--shadow-sm)];
+    @apply rounded-2xl border border-slate-200/95 bg-white p-4 shadow-[var(--shadow-sm)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)];
   }
 
   .hero-metric strong {
@@ -253,7 +255,11 @@
   }
 
   .dashboard-header {
-    @apply mb-6 rounded-2xl border border-indigo-900/20 bg-gradient-to-br from-slate-950 via-indigo-950 to-sky-900 px-5 py-6 text-white shadow-[var(--shadow-md)] sm:px-7 sm:py-8;
+    @apply mb-6 rounded-2xl border border-indigo-900/25 px-5 py-7 text-white shadow-[var(--shadow-lg)] sm:px-7 sm:py-8;
+    background-image:
+      radial-gradient(ellipse at 12% -15%, rgb(99 102 241 / 0.55) 0%, transparent 52%),
+      radial-gradient(ellipse at 88% 115%, rgb(6 182 212 / 0.3) 0%, transparent 48%),
+      linear-gradient(140deg, oklch(0.16 0.04 258) 0%, oklch(0.14 0.07 268) 52%, oklch(0.17 0.055 228) 100%);
   }
 
   .dashboard-header-top {
@@ -277,11 +283,11 @@
   }
 
   .dashboard-kpi-grid {
-    @apply mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4;
+    @apply mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4;
   }
 
   .dashboard-kpi {
-    @apply rounded-2xl border border-slate-200/95 bg-white px-4 py-3 shadow-[var(--shadow-sm)];
+    @apply rounded-2xl border border-slate-200/95 bg-white px-4 py-3 shadow-[var(--shadow-sm)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)];
   }
 
   .dashboard-kpi-label {
@@ -289,7 +295,7 @@
   }
 
   .dashboard-kpi-value {
-    @apply mt-1 text-2xl font-semibold leading-none text-slate-950;
+    @apply mt-1 font-display text-2xl font-semibold leading-none text-slate-950;
   }
 
   .dashboard-lane {
@@ -305,7 +311,8 @@
   }
 
   .app-topbar {
-    @apply mb-4 grid gap-2 rounded-2xl border border-slate-800/20 bg-slate-950 px-3 py-3 text-white shadow-[var(--shadow-sm)] sm:mb-6 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:px-5;
+    @apply mb-4 grid gap-2 rounded-2xl border border-slate-800/30 px-3 py-3 text-white shadow-[var(--shadow-sm)] sm:mb-6 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:px-5;
+    background-image: linear-gradient(135deg, oklch(0.17 0.04 258) 0%, oklch(0.2 0.05 255) 100%);
   }
 
   .app-topbar-left {
@@ -313,7 +320,7 @@
   }
 
   .app-topbar-brand {
-    @apply font-display text-sm font-semibold uppercase tracking-[0.14em] text-white;
+    @apply inline-flex items-center gap-2 font-display text-sm font-semibold uppercase tracking-[0.14em] text-white;
   }
 
   .app-topbar-divider {
@@ -329,15 +336,16 @@
   }
 
   .app-topbar-pill {
-    @apply rounded-full border border-sky-300/35 bg-sky-500/20 px-2.5 py-1 text-[11px] font-semibold text-sky-100;
+    @apply rounded-full border border-sky-300/40 bg-sky-400/20 px-2.5 py-1 text-[11px] font-semibold text-sky-100 backdrop-blur-sm;
   }
 
   .app-topbar-account {
-    @apply rounded-full border border-white/30 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-100;
+    @apply rounded-full border border-white/25 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-200 backdrop-blur-sm;
   }
 
   .status-card {
     @apply rounded-2xl border border-slate-200/95 bg-white p-6 shadow-[var(--shadow-md)] sm:p-8;
+    background-image: radial-gradient(ellipse at 0% 0%, rgb(79 70 229 / 0.04) 0%, transparent 60%);
   }
 
   .status-title {
@@ -381,7 +389,7 @@
   }
 
   .ops-card {
-    @apply rounded-2xl border border-slate-200/95 bg-white p-4 shadow-[var(--shadow-sm)];
+    @apply rounded-2xl border border-slate-200/95 bg-white p-4 shadow-[var(--shadow-sm)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)];
   }
 
   .ops-card strong {
@@ -393,7 +401,7 @@
   }
 
   .text-gradient {
-    background: linear-gradient(110deg, #0b1220 0%, #1d4ed8 45%, #0891b2 100%);
+    background: linear-gradient(115deg, #1e1b4b 0%, #3b82f6 38%, #06b6d4 70%, #818cf8 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

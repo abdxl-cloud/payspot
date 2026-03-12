@@ -82,7 +82,7 @@ export function ResetPasswordForm({ token }: Props) {
         ) : null}
 
         {success ? (
-          <Alert>
+          <Alert variant="success">
             <AlertTitle>Success</AlertTitle>
             <AlertDescription>{success}</AlertDescription>
           </Alert>

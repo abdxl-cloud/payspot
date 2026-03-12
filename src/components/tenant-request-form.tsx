@@ -58,10 +58,10 @@ export function TenantRequestForm() {
         <CardTitle className="section-title">Request your PaySpot tenant</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="grid gap-2 rounded-xl border border-slate-200/85 bg-slate-50/80 p-3 text-xs text-slate-700">
-          <p className="inline-flex items-center gap-2"><Building2 className="size-3.5" /> Submit business and admin email.</p>
-          <p className="inline-flex items-center gap-2"><Wifi className="size-3.5" /> Configure slug and voucher source after approval.</p>
-          <p className="inline-flex items-center gap-2"><ShieldCheck className="size-3.5" /> Activate payments and start selling vouchers.</p>
+        <div className="grid gap-2.5 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 to-sky-50/50 p-3.5 text-xs text-indigo-900/80">
+          <p className="inline-flex items-center gap-2"><Building2 className="size-3.5 shrink-0 text-indigo-500" /> Submit business and admin email.</p>
+          <p className="inline-flex items-center gap-2"><Wifi className="size-3.5 shrink-0 text-indigo-500" /> Configure slug and voucher source after approval.</p>
+          <p className="inline-flex items-center gap-2"><ShieldCheck className="size-3.5 shrink-0 text-indigo-500" /> Activate payments and start selling vouchers.</p>
         </div>
 
         {error ? (
@@ -72,7 +72,7 @@ export function TenantRequestForm() {
         ) : null}
 
         {success ? (
-          <Alert>
+          <Alert variant="success">
             <AlertTitle>Submitted</AlertTitle>
             <AlertDescription>{success}</AlertDescription>
           </Alert>

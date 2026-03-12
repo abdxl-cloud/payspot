@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { CaptiveBrowserAuth } from "@/components/captive-browserauth";
+import { VoucherDisplay } from "@/components/voucher-display";
 import {
   createCaptivePortalSearchParams,
   getCaptivePortalContextFromSearchParams,
@@ -98,12 +99,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
                 </p>
               </div>
             ) : (
-              <div className="mt-6 rounded-2xl border border-slate-300/90 bg-slate-50/85 px-5 py-7 text-center sm:px-6 sm:py-8">
-                <p className="text-sm text-slate-500">Voucher code</p>
-                <p className="mt-2 break-all text-2xl font-semibold tracking-[0.14em] text-slate-950 sm:text-3xl sm:tracking-[0.2em]">
-                  {updated.voucher_code}
-                </p>
-              </div>
+              <VoucherDisplay code={updated.voucher_code ?? ""} />
             )}
 
             <div className="mt-6 space-y-2 text-sm text-slate-700">

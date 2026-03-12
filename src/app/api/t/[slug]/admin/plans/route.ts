@@ -425,16 +425,6 @@ export async function DELETE(request: Request, { params }: Props) {
     .get(tenant.id, planId) as { id: string } | undefined;
   if (!existing) return Response.json({ error: "Plan not found" }, { status: 404 });
 
-  const linkedTx = await db
-    .prepare("SELECT COUNT(1) as count FROM transactions WHERE tenant_id = ? AND package_id = ?")
-    .get(tenant.id, planId) as { count: number };
-  if ((linkedTx.count ?? 0) > 0) {
-    return Response.json(
-      { error: "Cannot delete plan with transaction history." },
-      { status: 409 },
-    );
-  }
-
   const run = db.transaction(async () => {
     await db.prepare("DELETE FROM voucher_pool WHERE tenant_id = ? AND package_id = ?").run(tenant.id, planId);
     const result = await db

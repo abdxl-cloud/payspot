@@ -873,7 +873,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                   Time remaining
@@ -960,7 +960,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
               autoSubmitWhenReady
             />
 
-            <Alert>
+            <Alert variant="info">
               <AlertTitle>No purchase needed right now</AlertTitle>
               <AlertDescription>
                 This account already has an active tracked plan. The purchase flow is hidden while this entitlement remains active.
@@ -1086,7 +1086,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       ) : null}
 
       {portalContext ? (
-        <Alert>
+        <Alert variant="info">
           <AlertTitle>Captive portal session detected</AlertTitle>
           <AlertDescription>
             Continue with payment here. Your network session details will be preserved so you can
@@ -1174,7 +1174,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                 ? "grid-cols-1"
                 : visiblePlans.length === 2
                   ? "sm:grid-cols-2"
-                  : "sm:grid-cols-2 xl:grid-cols-3",
+                  : "sm:grid-cols-2 lg:grid-cols-3",
             ].join(" ")}
           >
             {visiblePlans.map((pkg) => {
