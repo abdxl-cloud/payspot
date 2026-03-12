@@ -317,7 +317,7 @@
       <div class="buy-section">
         <p class="buy-note">Need a voucher code? Buy one using this link:</p>
         <div class="buy-actions">
-          <a id="payment-link" class="buy-link" href="//payspot.abdxl.cloud/t/wallstreet-mystic">Buy Voucher</a>
+          <a id="payment-link" class="buy-link" href="https://payspot.abdxl.cloud/t/wallstreet-mystic">Buy Voucher</a>
           <button id="copy-link-btn" class="copy-btn" type="button" aria-label="Copy payment link" title="Copy payment link">
             <svg class="copy-icon default-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H10V7h9v14z"/>
@@ -596,6 +596,24 @@
         }, 1200);
       });
     });
+
+    function buildPaymentLink() {
+      var base = "https://payspot.abdxl.cloud/t/wallstreet-mystic";
+      var params = new URLSearchParams();
+      params.set("originUrl", window.location.href);
+      if (state.clientMac) params.set("clientMac", state.clientMac);
+      if (state.apMac) params.set("apMac", state.apMac);
+      if (state.gatewayMac) params.set("gatewayMac", state.gatewayMac);
+      if (state.ssidName) params.set("ssidName", state.ssidName);
+      if (state.radioId !== undefined) params.set("radioId", String(state.radioId));
+      if (state.vid !== undefined) params.set("vid", String(state.vid));
+      return base + "?" + params.toString();
+    }
+
+    var paymentAnchor = document.getElementById("payment-link");
+    if (paymentAnchor) {
+      paymentAnchor.href = buildPaymentLink();
+    }
 
     initPortal();
   </script>

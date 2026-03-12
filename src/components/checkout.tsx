@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   CircleAlert,
@@ -284,7 +284,7 @@ function Stepper({
       ]
     : [
         { id: 1, label: "Select Plan" },
-        { id: 2, label: "Phone Number" },
+        { id: 2, label: "Email Address" },
         { id: 3, label: "Pay Securely" },
       ];
 
@@ -331,6 +331,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const [planQuery, setPlanQuery] = useState("");
   const [visiblePlanCount, setVisiblePlanCount] = useState(8);
   const [phone, setPhone] = useState("");
+  const [voucherEmail, setVoucherEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentReference, setPaymentReference] = useState<string | null>(null);
@@ -352,6 +353,8 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const [subscriberAuthMessage, setSubscriberAuthMessage] = useState<string | null>(null);
   const [subscriberAuthError, setSubscriberAuthError] = useState<string | null>(null);
   const [subscriberAuthLoading, setSubscriberAuthLoading] = useState(false);
+
+  const customerCardRef = useRef<HTMLDivElement>(null);
 
   const isAccountAccessMode = accessMode === "account_access";
   const portalQuery = createCaptivePortalSearchParams(portalContext).toString();
@@ -409,14 +412,14 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const displayedPackages = hasHiddenPlans
     ? filteredPackages.slice(0, visiblePlanCount)
     : filteredPackages;
-  const collapsePlansAfterSelection = isAccountAccessMode && !!selected;
+  const collapsePlansAfterSelection = !!selected;
   const visiblePlans = collapsePlansAfterSelection && selected ? [selected] : displayedPackages;
 
   useEffect(() => {
     const firstAvailable = packages.find((pkg) => pkg.availableCount > 0) ?? null;
     setSelected((prev) => {
       if (!firstAvailable) return null;
-      if (!prev) return isAccountAccessMode ? null : firstAvailable;
+      if (!prev) return null;
       if (prev.availableCount <= 0) return firstAvailable;
       return prev;
     });
@@ -524,9 +527,9 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
     if (isAccountAccessMode && !subscriberToken) return false;
     return !!selected &&
       selected.availableCount > 0 &&
-      (isAccountAccessMode || phone.trim().length > 6) &&
+      (isAccountAccessMode || isValidEmailAddress(voucherEmail)) &&
       !loading;
-  }, [selected, phone, loading, isAccountAccessMode, subscriberToken]);
+  }, [selected, voucherEmail, loading, isAccountAccessMode, subscriberToken]);
 
   const canSubmitSubscriberAuth =
     !subscriberAuthLoading && isValidEmailAddress(subscriberEmail) && subscriberPassword.length >= 8;
@@ -627,6 +630,9 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       return;
     }
     setPurchaseStage("payment");
+    setTimeout(() => {
+      customerCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
   }
 
   async function authenticateSubscriber(mode: "login" | "signup") {
@@ -713,7 +719,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
           ...(subscriberToken ? { Authorization: `Bearer ${subscriberToken}` } : {}),
         },
         body: JSON.stringify({
-          phone: isAccountAccessMode ? undefined : phone.trim(),
+          email: isAccountAccessMode ? undefined : voucherEmail.trim(),
           packageCode: selected.code,
           subscriberToken: subscriberToken ?? undefined,
           portalContext,
@@ -742,7 +748,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       setResumeLookup(
         isAccountAccessMode
           ? subscriberOverview?.subscriber.email || subscriberEmail.trim()
-          : phone.trim(),
+          : voucherEmail.trim(),
       );
       setLoading(false);
     } catch (err) {
@@ -767,8 +773,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reference: resumeReference.trim(),
-          phone: isAccountAccessMode ? undefined : resumeLookup.trim(),
-          email: isAccountAccessMode ? resumeLookup.trim() : undefined,
+          email: resumeLookup.trim(),
         }),
       });
       const data = await readJsonResponse<{
@@ -1398,12 +1403,12 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       ) : null}
 
       {showPaymentStep ? (
-        <Card className="max-w-4xl border-slate-200/80 bg-white/90">
+        <Card ref={customerCardRef} className="max-w-4xl border-slate-200/80 bg-white/90">
           <CardHeader className="space-y-2 pb-2">
             <p className="section-kicker">Customer details</p>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
-                {isAccountAccessMode ? "3. Confirm account and pay" : "2. Enter phone number"}
+                {isAccountAccessMode ? "3. Confirm account and pay" : "2. Enter email address"}
               </CardTitle>
               <div className="flex flex-wrap items-center gap-2">
                 {selected ? (
@@ -1445,18 +1450,18 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                 </div>
               ) : (
                 <div className="grid gap-2">
-                  <Label htmlFor="phone">Phone number</Label>
+                  <Label htmlFor="voucherEmail">Email address</Label>
                   <Input
-                    id="phone"
-                    type="tel"
+                    id="voucherEmail"
+                    type="email"
                     className="h-11"
-                    placeholder="08012345678"
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
+                    placeholder="you@example.com"
+                    value={voucherEmail}
+                    onChange={(event) => setVoucherEmail(event.target.value)}
                     required
                   />
                   <p className="text-xs text-muted-foreground">
-                    Nigeria format (e.g. 080...). Used for payment checks and support follow-up.
+                    Used for payment confirmation and your voucher receipt.
                   </p>
                 </div>
               )}
@@ -1571,13 +1576,13 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="resume-lookup">
-                  {isAccountAccessMode ? "Account email used" : "Phone used"}
+                  {isAccountAccessMode ? "Account email used" : "Email used"}
                 </Label>
                 <Input
                   id="resume-lookup"
-                  type={isAccountAccessMode ? "email" : "tel"}
+                  type="email"
                   className="h-11"
-                  placeholder={isAccountAccessMode ? "name@example.com" : "08012345678"}
+                  placeholder="you@example.com"
                   value={resumeLookup}
                   onChange={(event) => setResumeLookup(event.target.value)}
                   required

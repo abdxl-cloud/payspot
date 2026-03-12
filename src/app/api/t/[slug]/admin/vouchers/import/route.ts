@@ -13,6 +13,7 @@ type PackageLite = { id: string; code: string; duration_minutes: number };
 type NormalizedRow = {
   code: string | null;
   durationMinutes: number | null;
+  dataLimitMb: number | null;
   trafficLimitLabel: string | null;
   trafficLimitCode: string | null;
   usedDataMb: number | null;
@@ -26,6 +27,7 @@ type PlanInfo = {
   code: string;
   name: string;
   durationMinutes: number;
+  dataLimitMb: number | null;
   description: string;
   priceNgn: number | null;
 };
@@ -58,6 +60,7 @@ function normalizeRow(row: Record<string, unknown>): NormalizedRow {
       (entries.csvcode as string | undefined) ||
       null,
     durationMinutes: parseDurationMinutes(durationRaw),
+    dataLimitMb: parseDataLimitMb(trafficLimitRaw),
     trafficLimitLabel: formatLimitLabel(trafficLimitRaw),
     trafficLimitCode: formatLimitCode(trafficLimitRaw),
     usedDataMb: parseDataLimitMb(usedDataRaw),
@@ -174,6 +177,7 @@ function buildPlan(normalized: NormalizedRow): PlanInfo | null {
     code,
     name: `${limitLabel} / ${durationLabel}`,
     durationMinutes: normalized.durationMinutes,
+    dataLimitMb: normalized.dataLimitMb,
     description: isUnlimited
       ? `Unlimited data for ${durationLabel} of access.`
       : `Data cap ${limitLabel} for ${durationLabel} of access.`,
@@ -209,8 +213,8 @@ async function ensurePackage(params: {
   await db.prepare(
     `
     INSERT INTO voucher_packages (
-      id, tenant_id, code, name, duration_minutes, price_ngn, active, description, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, tenant_id, code, name, duration_minutes, data_limit_mb, price_ngn, active, description, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     id,
@@ -218,6 +222,7 @@ async function ensurePackage(params: {
     plan.code,
     plan.name,
     plan.durationMinutes,
+    plan.dataLimitMb ?? null,
     plan.priceNgn ?? 0,
     1,
     plan.description,

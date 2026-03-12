@@ -20,6 +20,7 @@ type Props = {
 };
 
 const schema = z.object({
+  email: z.string().trim().toLowerCase().email().optional(),
   phone: z.string().min(7).optional(),
   packageCode: z.string().min(1),
   subscriberToken: z.string().min(10).optional(),
@@ -83,7 +84,7 @@ export async function POST(request: Request, { params }: Props) {
     );
   }
 
-  const { phone, packageCode, subscriberToken } = parsed.data;
+  const { email: inputEmail, phone, packageCode, subscriberToken } = parsed.data;
   const portalContext = normalizeCaptivePortalContext(parsed.data.portalContext);
   const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
   const bearer = request.headers.get("authorization");
@@ -94,13 +95,13 @@ export async function POST(request: Request, { params }: Props) {
   const effectiveSubscriberToken = subscriberToken ?? headerToken ?? undefined;
 
   const inputPhone = phone?.trim() ?? "";
-  if (!accountAccessMode && inputPhone.length < 7) {
-    return Response.json({ error: "Phone is required" }, { status: 400 });
+  if (!accountAccessMode && !inputEmail && inputPhone.length < 7) {
+    return Response.json({ error: "Email is required" }, { status: 400 });
   }
 
   let subscriberId: string | null = null;
-  let email = buildCheckoutEmailFromPhone(inputPhone);
-  let normalizedPhone = inputPhone;
+  let email = inputEmail || buildCheckoutEmailFromPhone(inputPhone);
+  let normalizedPhone = inputEmail || inputPhone;
   if (accountAccessMode) {
     if (!effectiveSubscriberToken) {
       return Response.json(

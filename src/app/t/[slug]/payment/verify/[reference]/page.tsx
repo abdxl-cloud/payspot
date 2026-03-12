@@ -155,9 +155,22 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
             ) : null}
 
             {!isAccountAccess ? (
-              <p className="mt-6 text-xs text-slate-500">
-                This voucher was also delivered to your phone by SMS.
-              </p>
+              <>
+                <div className="mt-6">
+                  <a
+                    href={portalContext?.originUrl ?? `/t/${tenant.slug}`}
+                    className="inline-flex items-center justify-center rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-800"
+                  >
+                    Go to network sign-in
+                  </a>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Opens the Wi-Fi login page where you can enter your voucher code.
+                  </p>
+                </div>
+                <p className="mt-4 text-xs text-slate-500">
+                  This voucher was also delivered to your phone by SMS.
+                </p>
+              </>
             ) : null}
           </div>
         </div>
