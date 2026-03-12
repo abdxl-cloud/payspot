@@ -426,6 +426,8 @@ export async function DELETE(request: Request, { params }: Props) {
   if (!existing) return Response.json({ error: "Plan not found" }, { status: 404 });
 
   const run = db.transaction(async () => {
+    await db.prepare("DELETE FROM subscriber_entitlements WHERE tenant_id = ? AND package_id = ?").run(tenant.id, planId);
+    await db.prepare("DELETE FROM transactions WHERE tenant_id = ? AND package_id = ?").run(tenant.id, planId);
     await db.prepare("DELETE FROM voucher_pool WHERE tenant_id = ? AND package_id = ?").run(tenant.id, planId);
     const result = await db
       .prepare("DELETE FROM voucher_packages WHERE tenant_id = ? AND id = ?")

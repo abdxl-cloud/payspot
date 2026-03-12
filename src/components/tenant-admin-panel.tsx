@@ -963,15 +963,27 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </div>
 
         {(stats?.voucherPool.length ?? 0) > 0 ? (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {stats?.voucherPool.slice(0, 6).map((item) => (
-              <div key={item.code} className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
-                <p className="font-semibold text-slate-900">{item.name}</p>
-                <p className="mt-1 text-slate-500">{item.unused}/{item.total} unused</p>
-                <div className="mt-2 h-2 rounded-full bg-slate-100">
+              <div key={item.code} className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold leading-tight text-slate-900">{item.name}</p>
+                  <span className={[
+                    "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                    item.percentageRemaining > 30
+                      ? "bg-emerald-100 text-emerald-700"
+                      : item.percentageRemaining > 10
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-rose-100 text-rose-700",
+                  ].join(" ")}>
+                    {item.percentageRemaining.toFixed(0)}%
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">{item.unused}/{item.total} unused</p>
+                <div className="mt-3 h-1.5 rounded-full bg-slate-100">
                   <div
                     className={[
-                      "h-2 rounded-full",
+                      "h-1.5 rounded-full transition-all duration-500",
                       item.percentageRemaining > 30
                         ? "bg-emerald-500"
                         : item.percentageRemaining > 10
@@ -996,7 +1008,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         <section id="ops-subscribers" className="panel-surface">
           <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <h2 className="section-title">Subscriber monitoring</h2>
+              <p className="section-kicker">Live</p>
+              <h2 className="mt-1 section-title">Subscriber monitoring</h2>
               <p className="mt-1 text-sm text-slate-600">
                 Monitor active plans, live sessions, and policy limits for account-based access.
               </p>
@@ -1013,30 +1026,32 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           ) : null}
           <div className="mt-3 space-y-2">
             {subscribers.length === 0 && !subscribersLoading ? (
-              <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-500">
                 No subscribers yet.
               </p>
             ) : null}
             {subscribers.map((row) => (
-              <div key={row.subscriberId} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm">
+              <div key={row.subscriberId} className="rounded-2xl border border-slate-200/85 bg-white px-4 py-3.5 shadow-[var(--shadow-sm)] transition-[box-shadow] duration-200 hover:shadow-[var(--shadow-md)]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold text-slate-900">{row.fullName || row.email}</p>
-                  <Badge className={row.activeSessions > 0 ? "bg-emerald-700 text-white" : "bg-slate-600 text-white"}>
-                    Sessions {row.activeSessions}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{row.fullName || row.email}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {row.email} {row.phone ? `· ${row.phone}` : ""}
+                    </p>
+                  </div>
+                  <Badge className={row.activeSessions > 0 ? "shrink-0 bg-emerald-600 text-white" : "shrink-0 bg-slate-400 text-white"}>
+                    {row.activeSessions} session{row.activeSessions !== 1 ? "s" : ""}
                   </Badge>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  {row.email} {row.phone ? `• ${row.phone}` : ""}
-                </p>
                 {row.entitlement ? (
-                  <div className="mt-2 grid gap-1 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
-                    <span>Plan: {row.entitlement.planName || row.entitlement.planCode || "-"}</span>
-                    <span>Ends: {dt(row.entitlement.endsAt)}</span>
-                    <span>Max devices: {row.entitlement.maxDevices ?? "Unlimited"}</span>
-                    <span>Profile: {row.entitlement.bandwidthProfile || "-"}</span>
+                  <div className="mt-3 grid gap-1.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+                    <span><span className="font-medium text-slate-700">Plan:</span> {row.entitlement.planName || row.entitlement.planCode || "-"}</span>
+                    <span><span className="font-medium text-slate-700">Ends:</span> {dt(row.entitlement.endsAt)}</span>
+                    <span><span className="font-medium text-slate-700">Devices:</span> {row.entitlement.maxDevices ?? "Unlimited"}</span>
+                    <span><span className="font-medium text-slate-700">Profile:</span> {row.entitlement.bandwidthProfile || "-"}</span>
                   </div>
                 ) : (
-                  <p className="mt-2 text-xs text-amber-700">No active entitlement.</p>
+                  <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">No active entitlement.</p>
                 )}
               </div>
             ))}
@@ -1046,7 +1061,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         <section id="ops-architecture" className="panel-surface">
           <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <h2 className="section-title">Architecture settings</h2>
+              <p className="section-kicker">Config</p>
+              <h2 className="mt-1 section-title">Architecture settings</h2>
               <p className="mt-1 text-sm text-slate-600">
                 Keep advanced config out of the main screen. Open the editor only when needed.
               </p>
@@ -1100,7 +1116,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         <section id="ops-plans" className="panel-surface">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
           <div>
-            <h2 className="section-title">Plan management</h2>
+            <p className="section-kicker">Plans</p>
+            <h2 className="mt-1 section-title">Plan management</h2>
             <p className="mt-1 text-sm text-slate-600">Create, update pricing, and toggle availability per plan.</p>
           </div>
           <Button type="button" variant="outline" onClick={() => setShowCreatePlanModal(true)}>
@@ -1501,7 +1518,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         <section id="ops-vouchers" className="panel-surface">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
           <div>
-            <h2 className="section-title">Voucher operations</h2>
+            <p className="section-kicker">Inventory</p>
+            <h2 className="mt-1 section-title">Voucher operations</h2>
             <p className="mt-1 text-sm text-slate-600">
               {hasArchitectureConfigured
                 ? isExternalAccessMode
@@ -2125,44 +2143,40 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </ModalShell>
       ) : null}
 
-      <div className="fixed right-5 top-1/2 z-40 hidden -translate-y-1/2 lg:flex lg:flex-col lg:gap-2">
-        <Button
-          variant="outline"
-          size="icon"
+      <div className="fixed right-4 top-1/2 z-40 hidden -translate-y-1/2 lg:flex lg:flex-col lg:gap-1.5">
+        <button
           type="button"
           onClick={refreshAll}
           disabled={statsLoading || plansLoading || vouchersLoading}
           aria-label="Refresh dashboard data"
-          className="bg-white shadow-[var(--shadow-sm)]"
+          title="Refresh"
+          className="group inline-flex size-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-500 shadow-[var(--shadow-sm)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-white hover:text-indigo-600 hover:shadow-[var(--shadow-md)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw
             className={[
-              "size-4",
-              statsLoading || plansLoading || vouchersLoading ? "animate-spin" : "",
+              "size-3.5 transition-transform",
+              statsLoading || plansLoading || vouchersLoading ? "animate-spin" : "group-hover:rotate-180 duration-500",
             ].join(" ")}
           />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
+        </button>
+        <button
           type="button"
           onClick={jumpToVoucherTools}
           aria-label="Go to voucher tools"
-          className="bg-white shadow-[var(--shadow-sm)]"
+          title="Voucher tools"
+          className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-500 shadow-[var(--shadow-sm)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-white hover:text-indigo-600 hover:shadow-[var(--shadow-md)]"
         >
-          <Plus className="size-4" />
-        </Button>
+          <Plus className="size-3.5" />
+        </button>
       </div>
 
-      <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 lg:hidden">
-        <Button
-          variant="outline"
-          size="icon"
+      <div className="fixed bottom-5 right-4 z-40 flex items-center gap-2 lg:hidden">
+        <button
           type="button"
           onClick={refreshAll}
           disabled={statsLoading || plansLoading || vouchersLoading}
           aria-label="Refresh dashboard data"
-          className="bg-white shadow-[var(--shadow-sm)]"
+          className="inline-flex size-10 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-500 shadow-[var(--shadow-md)] backdrop-blur-sm transition-all hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw
             className={[
@@ -2170,17 +2184,15 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               statsLoading || plansLoading || vouchersLoading ? "animate-spin" : "",
             ].join(" ")}
           />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
+        </button>
+        <button
           type="button"
           onClick={jumpToVoucherTools}
           aria-label="Go to voucher tools"
-          className="bg-white shadow-[var(--shadow-sm)]"
+          className="inline-flex size-10 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-500 shadow-[var(--shadow-md)] backdrop-blur-sm transition-all hover:text-indigo-600"
         >
           <Plus className="size-4" />
-        </Button>
+        </button>
       </div>
     </>
   );
@@ -2188,7 +2200,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200/85 bg-slate-50/80 px-3 py-2.5">
+    <div className="dashboard-kpi">
       <p className="dashboard-kpi-label">{label}</p>
       <p className="dashboard-kpi-value">{value}</p>
     </div>
