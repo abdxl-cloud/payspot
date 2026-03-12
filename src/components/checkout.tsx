@@ -21,6 +21,7 @@ import {
   type CaptivePortalContext,
 } from "@/lib/captive-portal";
 import { readJsonResponse } from "@/lib/http";
+import { VoucherHistory } from "@/components/voucher-history";
 
 type Package = {
   code: string;
@@ -1589,6 +1590,8 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
           </CardContent>
         </Card>
       ) : null}
+
+      <VoucherHistory tenantSlug={tenantSlug} />
 
     </div>
   );

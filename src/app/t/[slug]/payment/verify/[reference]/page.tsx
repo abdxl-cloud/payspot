@@ -99,7 +99,12 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
                 </p>
               </div>
             ) : (
-              <VoucherDisplay code={updated.voucher_code ?? ""} />
+              <VoucherDisplay
+                code={updated.voucher_code ?? ""}
+                tenantSlug={tenant.slug}
+                planName={pkg?.name}
+                reference={reference}
+              />
             )}
 
             <div className="mt-6 space-y-2 text-sm text-slate-700">

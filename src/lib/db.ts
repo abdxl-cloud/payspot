@@ -445,10 +445,17 @@ async function seedInitialData() {
     password: string;
   }> = [
     {
-      slug: "wallstreet-mystic",
-      name: "WALLSTREET MYSTIC",
+      slug: "wallstreet",
+      name: "WALLSTREET",
       email: "wallstreet@example.com",
       username: "wallstreet",
+      password: "Pathfinder07!",
+    },
+    {
+      slug: "wallstreet-mystic",
+      name: "WALLSTREET MYSTIC",
+      email: "wallstreet-mystic@example.com",
+      username: "wallstreet-mystic",
       password: "Pathfinder07!",
     },
   ];

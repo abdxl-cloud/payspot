@@ -1,10 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { saveVoucher } from "@/lib/voucher-storage";
 
-export function VoucherDisplay({ code }: { code: string }) {
+type Props = {
+  code: string;
+  tenantSlug?: string;
+  planName?: string;
+  reference?: string;
+};
+
+export function VoucherDisplay({ code, tenantSlug, planName, reference }: Props) {
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!code || !tenantSlug) return;
+    saveVoucher({ code, planName, reference, tenantSlug, savedAt: Date.now() });
+  }, [code, tenantSlug, planName, reference]);
 
   function handleCopy() {
     navigator.clipboard.writeText(code).then(() => {
