@@ -614,8 +614,8 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   }, []);
 
   function openPaystackPopup(code: string, successUrl: string, fallbackUrl?: string) {
-    if (!window.PaystackPop) {
-      // Script not yet loaded — fall back to hosted page
+    if (!window.PaystackPop || typeof window.PaystackPop.resumeTransaction !== "function") {
+      // Script not loaded or wrong version — fall back to hosted page
       if (fallbackUrl) window.location.assign(fallbackUrl);
       return;
     }
