@@ -606,9 +606,9 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
 
   useEffect(() => {
     if (typeof document === "undefined") return;
-    if (document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]')) return;
+    if (document.querySelector('script[src="https://js.paystack.co/v2/inline.js"]')) return;
     const script = document.createElement("script");
-    script.src = "https://js.paystack.co/v1/inline.js";
+    script.src = "https://js.paystack.co/v2/inline.js";
     script.async = true;
     document.head.appendChild(script);
   }, []);
