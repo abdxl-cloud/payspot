@@ -12,6 +12,7 @@ import {
   transactionAssignVoucher,
 } from "@/lib/store";
 import { sendVoucherSms } from "@/lib/termii";
+import { sendVoucherEmail } from "@/lib/mailer";
 import { verifyTransaction } from "@/lib/paystack";
 
 export async function handleSuccessfulPayment(params: {
@@ -89,6 +90,17 @@ export async function handleSuccessfulPayment(params: {
         });
       } catch (error) {
         console.error("SMS delivery failed", error);
+      }
+
+      try {
+        await sendVoucherEmail({
+          to: transaction.email,
+          voucherCode: result.voucherCode,
+          packageName: pkg.name,
+          reference: transaction.reference,
+        });
+      } catch (error) {
+        console.error("Voucher email delivery failed", error);
       }
     }
   }

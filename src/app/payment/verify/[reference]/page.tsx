@@ -18,7 +18,7 @@ export default async function PaymentVerifyRedirect({ params }: Props) {
           <div className="status-card">
             <h1 className="status-title">Transaction not found</h1>
             <p className="status-copy">
-              We could not locate this payment reference. Contact support if you were charged.
+              We could not locate this payment reference. Contact us at payspot@abdxl.cloud if you were charged.
             </p>
           </div>
         </div>

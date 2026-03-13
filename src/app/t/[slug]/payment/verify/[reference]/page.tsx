@@ -39,7 +39,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
           <div className="status-card">
             <h1 className="status-title">Transaction not found</h1>
             <p className="status-copy">
-              We could not locate this payment reference. Please contact support if you were charged.
+              We could not locate this payment reference. Please contact us at payspot@abdxl.cloud if you were charged.
             </p>
           </div>
         </div>
@@ -181,7 +181,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
   if (updated && updated.payment_status !== "pending" && updated.payment_status !== "processing") {
     const failureMessages: Record<string, string> = {
       paystack_failed:
-        "We could not confirm this payment with Paystack. If you were charged, contact support.",
+        "We could not confirm this payment with Paystack. If you were charged, contact us at payspot@abdxl.cloud.",
       amount_mismatch:
         "We received a payment but the amount did not match the selected package.",
       currency_mismatch:
@@ -196,7 +196,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
 
     const message =
       failureMessages[updated.payment_status] ??
-      "This payment could not be completed. Please contact support.";
+      "This payment could not be completed. Please contact us at payspot@abdxl.cloud.";
 
     return (
       <div className="app-shell">

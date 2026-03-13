@@ -108,16 +108,16 @@ export async function POST(request: Request, { params }: Props) {
 
   if (refreshed.payment_status !== "pending") {
     const failureMessages: Record<string, string> = {
-      paystack_failed: "Payment could not be confirmed. Please contact support.",
+      paystack_failed: "Payment could not be confirmed. Please contact us at payspot@abdxl.cloud.",
       amount_mismatch: "Payment amount did not match the selected package.",
       currency_mismatch: "Payment currency was not supported.",
       init_failed: "Payment could not be initialized. Please try again.",
       voucher_unavailable:
-        "Payment succeeded but no voucher was available. Please contact support.",
+        "Payment succeeded but no voucher was available. Please contact us at payspot@abdxl.cloud.",
       access_activation_failed:
-        "Payment succeeded but access activation failed. Please contact support.",
+        "Payment succeeded but access activation failed. Please contact us at payspot@abdxl.cloud.",
       plan_window_unusable:
-        "Payment succeeded, but this plan's usage window is not valid right now. Please contact support.",
+        "Payment succeeded, but this plan's usage window is not valid right now. Please contact us at payspot@abdxl.cloud.",
     };
 
     const message =

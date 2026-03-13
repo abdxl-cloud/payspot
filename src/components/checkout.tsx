@@ -23,6 +23,21 @@ import {
 import { readJsonResponse } from "@/lib/http";
 import { VoucherHistory } from "@/components/voucher-history";
 
+declare global {
+  interface Window {
+    PaystackPop?: {
+      resumeTransaction(
+        accessCode: string,
+        options?: {
+          onSuccess?: (transaction: { reference: string }) => void;
+          onCancel?: () => void;
+          onError?: (error: unknown) => void;
+        },
+      ): void;
+    };
+  }
+}
+
 type Package = {
   code: string;
   name: string;
@@ -336,6 +351,8 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
   const [error, setError] = useState<string | null>(null);
   const [paymentReference, setPaymentReference] = useState<string | null>(null);
   const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
+  const [accessCode, setAccessCode] = useState<string | null>(null);
+  const [verifyUrl, setVerifyUrl] = useState<string | null>(null);
 
   const [resumeReference, setResumeReference] = useState("");
   const [resumeLookup, setResumeLookup] = useState("");
@@ -571,6 +588,8 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
     setSelected(pkg);
     setPaymentReference(null);
     setAuthorizationUrl(null);
+    setAccessCode(null);
+    setVerifyUrl(null);
     setCopyMessage(null);
   }
 
@@ -583,6 +602,31 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       return;
     }
     window.location.assign(url);
+  }
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]')) return;
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.async = true;
+    document.head.appendChild(script);
+  }, []);
+
+  function openPaystackPopup(code: string, successUrl: string, fallbackUrl?: string) {
+    if (!window.PaystackPop) {
+      // Script not yet loaded — fall back to hosted page
+      if (fallbackUrl) window.location.assign(fallbackUrl);
+      return;
+    }
+    window.PaystackPop.resumeTransaction(code, {
+      onSuccess: () => {
+        window.location.assign(successUrl);
+      },
+      onCancel: () => {
+        setError("Payment was cancelled. Click 'Retry payment' to try again.");
+      },
+    });
   }
 
   async function copyReference(reference: string) {
@@ -728,6 +772,8 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
       const data = await readJsonResponse<{
         error?: string;
         authorizationUrl?: string;
+        accessCode?: string;
+        verifyUrl?: string;
         reference?: string;
       }>(response);
       if (!response.ok) {
@@ -745,12 +791,21 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
         }
       }
       setAuthorizationUrl(data.authorizationUrl);
+      const newAccessCode = data.accessCode ?? null;
+      const newVerifyUrl = data.verifyUrl ?? null;
+      setAccessCode(newAccessCode);
+      setVerifyUrl(newVerifyUrl);
       setResumeLookup(
         isAccountAccessMode
           ? subscriberOverview?.subscriber.email || subscriberEmail.trim()
           : voucherEmail.trim(),
       );
       setLoading(false);
+      if (newAccessCode && newVerifyUrl) {
+        openPaystackPopup(newAccessCode, newVerifyUrl, data.authorizationUrl);
+      } else {
+        window.location.assign(data.authorizationUrl);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong.";
       setError(message);
@@ -1308,7 +1363,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
               <p className="mt-1 text-xs text-slate-500">
                 {isAccountAccessMode
                   ? "After selecting a plan, continue directly to secure checkout."
-                  : "Continue when you are ready to enter your phone number and start payment."}
+                  : "Continue when you are ready to enter your email and start payment."}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1353,29 +1408,22 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                   >
                     Copy reference
                   </Button>
-                  {authorizationUrl ? (
+                  {(accessCode && verifyUrl) || authorizationUrl ? (
                     <Button
                       type="button"
                       size="sm"
-                      onClick={() => redirectToPaystack(authorizationUrl)}
+                      onClick={() => {
+                        if (accessCode && verifyUrl) {
+                          openPaystackPopup(accessCode, verifyUrl, authorizationUrl ?? undefined);
+                        } else if (authorizationUrl) {
+                          window.location.assign(authorizationUrl);
+                        }
+                      }}
                     >
-                      Continue to Paystack
-                    </Button>
-                  ) : null}
-                  {authorizationUrl ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => redirectToPaystack(authorizationUrl, true)}
-                    >
-                      Open in browser
+                      Retry payment
                     </Button>
                   ) : null}
                 </div>
-                <p className="text-xs text-slate-600">
-                  Continue to Paystack when you are ready.
-                </p>
                 {copyMessage ? <p className="text-xs text-slate-600">{copyMessage}</p> : null}
               </AlertDescription>
             </Alert>
@@ -1478,29 +1526,22 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                       >
                         Copy reference
                       </Button>
-                      {authorizationUrl ? (
+                      {(accessCode && verifyUrl) || authorizationUrl ? (
                         <Button
                           type="button"
                           size="sm"
-                          onClick={() => redirectToPaystack(authorizationUrl)}
+                          onClick={() => {
+                            if (accessCode && verifyUrl) {
+                              openPaystackPopup(accessCode, verifyUrl, authorizationUrl ?? undefined);
+                            } else if (authorizationUrl) {
+                              window.location.assign(authorizationUrl);
+                            }
+                          }}
                         >
-                          Continue to Paystack
-                        </Button>
-                      ) : null}
-                      {authorizationUrl ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => redirectToPaystack(authorizationUrl, true)}
-                        >
-                          Open in browser
+                          Retry payment
                         </Button>
                       ) : null}
                     </div>
-                    <p className="text-xs text-slate-600">
-                      Continue to Paystack when you are ready.
-                    </p>
                     {copyMessage ? <p className="text-xs text-slate-600">{copyMessage}</p> : null}
                   </AlertDescription>
                 </Alert>
@@ -1511,7 +1552,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
                 <MessageSquareText className="size-4 text-slate-500" />
                 {isAccountAccessMode
                   ? "Paystack-secured checkout with instant account plan activation."
-                  : "Paystack-secured checkout with instant SMS voucher delivery."}
+                  : "Paystack-secured checkout with instant email voucher delivery."}
               </div>
             </form>
           </CardContent>

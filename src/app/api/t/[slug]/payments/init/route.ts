@@ -194,6 +194,7 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({
       reference,
       authorizationUrl: init.authorization_url,
+      accessCode: init.access_code,
       verifyUrl: callbackUrl,
     });
   } catch (error) {
