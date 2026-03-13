@@ -92,15 +92,17 @@ export async function handleSuccessfulPayment(params: {
         console.error("SMS delivery failed", error);
       }
 
-      try {
-        await sendVoucherEmail({
-          to: transaction.email,
-          voucherCode: result.voucherCode,
-          packageName: pkg.name,
-          reference: transaction.reference,
-        });
-      } catch (error) {
-        console.error("Voucher email delivery failed", error);
+      if (result.voucherCode) {
+        try {
+          await sendVoucherEmail({
+            to: transaction.email,
+            voucherCode: result.voucherCode,
+            packageName: pkg.name,
+            reference: transaction.reference,
+          });
+        } catch (error) {
+          console.error("Voucher email delivery failed", error);
+        }
       }
     }
   }

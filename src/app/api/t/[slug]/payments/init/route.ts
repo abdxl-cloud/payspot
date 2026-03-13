@@ -132,7 +132,7 @@ export async function POST(request: Request, { params }: Props) {
       return Response.json(
         {
           error:
-            "This plan cannot be activated within its configured usage window. Please choose another plan or contact support.",
+            "This plan cannot be activated within its configured usage window. Please choose another plan or contact us at payspot@abdxl.cloud.",
         },
         { status: 409 },
       );

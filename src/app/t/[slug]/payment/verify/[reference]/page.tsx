@@ -187,11 +187,11 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
       currency_mismatch:
         "We received a payment in an unsupported currency.",
       init_failed: "We could not start this payment. Please try again.",
-      voucher_unavailable: "Payment succeeded but no voucher was available. Contact support.",
+      voucher_unavailable: "Payment succeeded but no voucher was available. Contact us at payspot@abdxl.cloud.",
       access_activation_failed:
-        "Payment succeeded but account access could not be activated. Contact support.",
+        "Payment succeeded but account access could not be activated. Contact us at payspot@abdxl.cloud.",
       plan_window_unusable:
-        "Payment succeeded, but this plan's usage window is not valid right now. Contact support.",
+        "Payment succeeded, but this plan's usage window is not valid right now. Contact us at payspot@abdxl.cloud.",
     };
 
     const message =
