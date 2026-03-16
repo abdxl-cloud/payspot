@@ -208,6 +208,119 @@ export async function provisionOmadaVouchers(params: ProvisionParams) {
   throw new Error("Omada voucher codes were not ready in time after group creation");
 }
 
+// --- Voucher status lookup ---
+
+type OmadaVoucherDetailRow = {
+  id?: string | null;
+  code?: string | null;
+  // Omada Open API v1: 0 = UNUSED, 1 = USED, 2 = EXPIRED (inferred from community docs)
+  status?: number | null;
+  usedAt?: number | null;    // epoch ms
+  expireAt?: number | null;  // epoch ms
+  duration?: number | null;  // minutes
+  clientMac?: string | null;
+};
+
+type OmadaVoucherGroupListRow = {
+  id?: string | null;
+};
+
+type OmadaVoucherGroupListResult = {
+  totalRows?: number;
+  data?: OmadaVoucherGroupListRow[];
+};
+
+type OmadaVoucherGroupDetailResult = {
+  totalRows?: number;
+  data?: OmadaVoucherDetailRow[];
+};
+
+export type OmadaVoucherLookupResult =
+  | { found: false; unavailable?: true }
+  | {
+      found: true;
+      status: "UNUSED" | "USED" | "EXPIRED" | "UNKNOWN";
+      usedAt: string | null;
+      expireAt: string | null;
+      durationMinutes: number | null;
+    };
+
+const MAX_LOOKUP_GROUPS = 20;
+
+/**
+ * Searches the most recent voucher groups on the Omada controller for a
+ * specific code and returns its live usage status.
+ *
+ * Works with all Omada controller types (Cloud, OC200, OC300, Software) that
+ * expose the Open API v1 voucher-groups endpoint (requires controller v5.15+
+ * for Software/Hardware controllers; available on all Cloud controller versions).
+ *
+ * Returns { found: false, unavailable: true } when the controller is
+ * unreachable or does not support the endpoint (e.g. Software < v5.15).
+ */
+export async function lookupOmadaVoucherStatus(
+  config: TenantOmadaOpenApiConfig,
+  targetCode: string,
+): Promise<OmadaVoucherLookupResult> {
+  const baseUrl = normalizeBaseUrl(config.apiBaseUrl);
+  let token: string;
+  try {
+    token = await getOmadaAccessToken(config);
+  } catch {
+    return { found: false, unavailable: true };
+  }
+
+  const siteBase = `${baseUrl}/openapi/v1/${encodeURIComponent(config.omadacId)}/sites/${encodeURIComponent(config.siteId)}/hotspot`;
+  const headers = { Accept: "application/json", Authorization: `AccessToken=${token}` };
+
+  let groupsData: OmadaResponse<OmadaVoucherGroupListResult>;
+  try {
+    groupsData = await omadaRequest<OmadaVoucherGroupListResult>(
+      `${siteBase}/voucher-groups?page=1&pageSize=${MAX_LOOKUP_GROUPS}`,
+      { headers },
+    );
+  } catch {
+    return { found: false, unavailable: true };
+  }
+
+  const normalized = targetCode.trim().toUpperCase();
+
+  for (const group of groupsData.result?.data ?? []) {
+    if (!group.id) continue;
+
+    let detail: OmadaResponse<OmadaVoucherGroupDetailResult>;
+    try {
+      detail = await omadaRequest<OmadaVoucherGroupDetailResult>(
+        `${siteBase}/voucher-groups/${encodeURIComponent(group.id)}?page=1&pageSize=100`,
+        { headers },
+      );
+    } catch {
+      continue;
+    }
+
+    const match = (detail.result?.data ?? []).find(
+      (v) => (v.code?.trim().toUpperCase() ?? "") === normalized,
+    );
+
+    if (match) {
+      let status: "UNUSED" | "USED" | "EXPIRED" | "UNKNOWN" = "UNKNOWN";
+      if (match.status === 0) status = "UNUSED";
+      else if (match.status === 1) status = "USED";
+      else if (match.status === 2) status = "EXPIRED";
+
+      return {
+        found: true,
+        status,
+        usedAt: match.usedAt ? new Date(match.usedAt).toISOString() : null,
+        expireAt: match.expireAt ? new Date(match.expireAt).toISOString() : null,
+        durationMinutes: match.duration ?? null,
+      };
+    }
+  }
+
+  return { found: false };
+}
+
 export async function testOmadaOpenApiConnection(config: TenantOmadaOpenApiConfig) {
   const baseUrl = normalizeBaseUrl(config.apiBaseUrl);
   const token = await getOmadaAccessToken(config);

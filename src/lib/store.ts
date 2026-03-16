@@ -2531,3 +2531,56 @@ export async function getTenantSubscriberOverview(tenantId: string) {
       : null,
   }));
 }
+
+export async function getTransactionByVoucherCode(tenantId: string, voucherCode: string) {
+  const db = getDb();
+  return await db
+    .prepare(
+      `SELECT * FROM transactions
+       WHERE tenant_id = ? AND UPPER(voucher_code) = UPPER(?) AND payment_status = 'success'
+       ORDER BY paid_at DESC
+       LIMIT 1`,
+    )
+    .get(tenantId, voucherCode.trim()) as TransactionRow | undefined;
+}
+
+export type VoucherPoolEntryRow = {
+  id: string;
+  tenant_id: string;
+  voucher_code: string;
+  status: string;
+  package_id: string;
+  assigned_to_transaction: string | null;
+  created_at: string;
+  assigned_at: string | null;
+};
+
+export async function getVoucherPoolEntryByCode(tenantId: string, voucherCode: string) {
+  const db = getDb();
+  return await db
+    .prepare(
+      `SELECT * FROM voucher_pool WHERE tenant_id = ? AND UPPER(voucher_code) = UPPER(?) LIMIT 1`,
+    )
+    .get(tenantId, voucherCode.trim()) as VoucherPoolEntryRow | undefined;
+}
+
+export async function resolveTenantOmadaConfigIfPresent(tenantId: string) {
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) return null;
+  if (
+    !tenant.omada_api_base_url ||
+    !tenant.omada_omadac_id ||
+    !tenant.omada_site_id ||
+    !tenant.omada_client_id ||
+    !tenant.omada_client_secret_enc
+  ) {
+    return null;
+  }
+  return {
+    apiBaseUrl: tenant.omada_api_base_url,
+    omadacId: tenant.omada_omadac_id,
+    siteId: tenant.omada_site_id,
+    clientId: tenant.omada_client_id,
+    clientSecret: decryptSecret(tenant.omada_client_secret_enc),
+  } satisfies TenantOmadaOpenApiConfig;
+}
