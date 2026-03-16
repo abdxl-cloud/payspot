@@ -109,6 +109,7 @@ export async function POST(request: Request, { params }: Props) {
   if (refreshed.payment_status !== "pending") {
     const failureMessages: Record<string, string> = {
       paystack_failed: "Payment could not be confirmed. Please contact us at payspot@abdxl.cloud.",
+      paystack_timeout: "Payment was not confirmed within 3 hours and has expired. Please start a new transaction.",
       amount_mismatch: "Payment amount did not match the selected package.",
       currency_mismatch: "Payment currency was not supported.",
       init_failed: "Payment could not be initialized. Please try again.",
