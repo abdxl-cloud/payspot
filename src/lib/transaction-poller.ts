@@ -16,6 +16,24 @@ async function pollOnce() {
   const now = Date.now();
   const windowStart = new Date(now - POLL_WINDOW_MS).toISOString();
 
+  // Reset transactions stuck in "processing" back to "pending".
+  // Processing should only last a few seconds; if it's still there after a full
+  // 60s poll cycle the worker that set it almost certainly crashed mid-flight.
+  const reset = await db
+    .prepare(
+      `
+      UPDATE transactions
+      SET payment_status = 'pending'
+      WHERE payment_status = 'processing'
+        AND created_at > ?
+    `,
+    )
+    .run(windowStart);
+
+  if (reset.changes > 0) {
+    console.log(`[poller] Reset ${reset.changes} stuck processing transaction(s) to pending`);
+  }
+
   // Expire transactions that have been pending for more than 3 hours.
   const expired = await db
     .prepare(
