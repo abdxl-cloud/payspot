@@ -67,21 +67,21 @@ export async function GET(request: Request, { params }: Props) {
       ? "ASSIGNED"
       : null;
 
-  // Best-effort live status from Omada controller (Open API v1)
+  // Live status from Omada controller (Open API v1).
   // Works on all controller types at v5.15+ (Cloud, OC200, OC300, Software).
-  // Falls back gracefully if the controller is unreachable or on an older version.
-  let omadaStatus: {
-    found: boolean;
-    unavailable?: boolean;
-    status?: string;
-    usedAt?: string | null;
-    expireAt?: string | null;
-    durationMinutes?: number | null;
-  } | null = null;
+  // null  = Omada not configured for this tenant (section hidden in UI)
+  // error = Omada is configured but the lookup failed (shown as an error in UI)
+  type OmadaStatusPayload =
+    | null
+    | { error: true; message: string }
+    | { found: false; unavailable?: boolean }
+    | { found: true; status: string; usedAt: string | null; expireAt: string | null; durationMinutes: number | null };
 
-  try {
-    const omadaConfig = await resolveTenantOmadaConfigIfPresent(tenant.id);
-    if (omadaConfig) {
+  let omadaStatus: OmadaStatusPayload = null;
+
+  const omadaConfig = await resolveTenantOmadaConfigIfPresent(tenant.id);
+  if (omadaConfig) {
+    try {
       const result = await lookupOmadaVoucherStatus(omadaConfig, code);
       if (!result.found) {
         omadaStatus = { found: false, unavailable: result.unavailable };
@@ -94,9 +94,11 @@ export async function GET(request: Request, { params }: Props) {
           durationMinutes: result.durationMinutes,
         };
       }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unexpected error during Omada lookup";
+      console.error("[voucher/check] Omada lookup failed", { slug, code, error: message });
+      omadaStatus = { error: true, message };
     }
-  } catch {
-    // Omada lookup is best-effort — never fail the response because of it
   }
 
   return Response.json({

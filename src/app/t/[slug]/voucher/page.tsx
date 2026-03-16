@@ -84,13 +84,16 @@ async function lookupVoucher(tenantId: string, rawCode: string) {
       : null;
 
   let omadaResult: OmadaVoucherLookupResult | null = null;
-  try {
-    const omadaConfig = await resolveTenantOmadaConfigIfPresent(tenantId);
-    if (omadaConfig) {
+  let omadaError: string | null = null;
+
+  const omadaConfig = await resolveTenantOmadaConfigIfPresent(tenantId);
+  if (omadaConfig) {
+    try {
       omadaResult = await lookupOmadaVoucherStatus(omadaConfig, code);
+    } catch (err) {
+      omadaError = err instanceof Error ? err.message : "Unexpected error during Omada lookup";
+      console.error("[voucher] Omada lookup failed", { tenantId, code, error: omadaError });
     }
-  } catch {
-    // best-effort
   }
 
   return {
@@ -100,6 +103,7 @@ async function lookupVoucher(tenantId: string, rawCode: string) {
     estimatedExpiresAt,
     poolStatus,
     omadaResult,
+    omadaError,
   };
 }
 
@@ -214,24 +218,29 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                 </div>
               </div>
 
-              {/* Omada live status */}
-              {result.omadaResult && (
-                <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5">
+              {/* Omada live status — only rendered when Omada is configured */}
+              {(result.omadaResult !== null || result.omadaError !== null) && (
+                <div className={`rounded-2xl border px-5 py-5 ${result.omadaError ? "border-red-200 bg-red-50" : "border-slate-200 bg-white"}`}>
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                     Omada controller — live status
                   </p>
 
-                  {!result.omadaResult.found && result.omadaResult.unavailable ? (
+                  {result.omadaError ? (
+                    <>
+                      <p className="mt-2 text-sm font-semibold text-red-700">Lookup failed</p>
+                      <p className="mt-1 font-mono text-xs text-red-600">{result.omadaError}</p>
+                    </>
+                  ) : result.omadaResult && !result.omadaResult.found && result.omadaResult.unavailable ? (
                     <p className="mt-2 text-sm text-slate-500">
                       The Omada controller could not be reached or does not support live
                       voucher lookup (requires controller v5.15+ or Cloud controller).
                     </p>
-                  ) : !result.omadaResult.found ? (
+                  ) : result.omadaResult && !result.omadaResult.found ? (
                     <p className="mt-2 text-sm text-slate-500">
                       This code was not found in the most recent voucher groups on the
                       controller. It may have been issued in an earlier batch.
                     </p>
-                  ) : (
+                  ) : result.omadaResult && result.omadaResult.found ? (
                     <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                       <div>
                         <p className="font-medium text-slate-500">Controller status</p>
@@ -262,7 +271,7 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                         </div>
                       )}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
