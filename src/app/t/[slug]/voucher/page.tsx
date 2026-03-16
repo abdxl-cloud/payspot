@@ -1,7 +1,11 @@
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { AppTopbar } from "@/components/app-topbar";
+import { OmadaQuickSetup } from "@/components/omada-quick-setup";
+import { SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
 import {
   getPackageById,
+  getSessionUser,
   getTenantBySlug,
   getTransactionByVoucherCode,
   getVoucherPoolEntryByCode,
@@ -113,6 +117,19 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
   const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
 
+  // Check if the logged-in user is the tenant admin so we can show Omada setup
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
+  const sessionUser = sessionToken ? await getSessionUser(sessionToken) : null;
+  const isTenantAdmin =
+    sessionUser !== null &&
+    (sessionUser.role === "admin" ||
+      (sessionUser.role === "tenant" && sessionUser.tenantId === tenant.id));
+  const omadaConfig = isTenantAdmin
+    ? await resolveTenantOmadaConfigIfPresent(tenant.id)
+    : null;
+  const showOmadaSetup = isTenantAdmin && omadaConfig === null;
+
   const rawCode =
     typeof resolvedSearchParams.code === "string" ? resolvedSearchParams.code : "";
 
@@ -134,6 +151,13 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
           <p className="mt-2 status-copy">
             Enter your voucher code to see its current status and usage details.
           </p>
+
+          {/* Omada setup — only visible to the tenant admin when not yet configured */}
+          {showOmadaSetup && (
+            <div className="mt-6">
+              <OmadaQuickSetup tenantSlug={slug} />
+            </div>
+          )}
 
           {/* Search form — GET method so the code appears in the URL */}
           <form method="GET" action={`/t/${slug}/voucher`} className="mt-6 flex gap-2">
