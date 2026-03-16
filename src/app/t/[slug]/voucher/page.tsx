@@ -1,11 +1,8 @@
-import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { AppTopbar } from "@/components/app-topbar";
 import { OmadaQuickSetup } from "@/components/omada-quick-setup";
-import { SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
 import {
   getPackageById,
-  getSessionUser,
   getTenantBySlug,
   getTransactionByVoucherCode,
   getVoucherPoolEntryByCode,
@@ -117,18 +114,8 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
   const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
 
-  // Check if the logged-in user is the tenant admin so we can show Omada setup
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
-  const sessionUser = sessionToken ? await getSessionUser(sessionToken) : null;
-  const isTenantAdmin =
-    sessionUser !== null &&
-    (sessionUser.role === "admin" ||
-      (sessionUser.role === "tenant" && sessionUser.tenantId === tenant.id));
-  const omadaConfig = isTenantAdmin
-    ? await resolveTenantOmadaConfigIfPresent(tenant.id)
-    : null;
-  const showOmadaSetup = isTenantAdmin && omadaConfig === null;
+  const omadaConfig = await resolveTenantOmadaConfigIfPresent(tenant.id);
+  const showOmadaSetup = omadaConfig === null;
 
   const rawCode =
     typeof resolvedSearchParams.code === "string" ? resolvedSearchParams.code : "";
