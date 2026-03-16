@@ -27,10 +27,10 @@ export function OmadaQuickSetup({ tenantSlug }: Props) {
     setSites([]);
     setFetching(true);
     try {
-      const res = await fetch(`/api/t/${tenantSlug}/admin/architecture/discover-sites`, {
+      const res = await fetch(`/api/t/${tenantSlug}/voucher/discover-sites`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ omada: { apiBaseUrl, omadacId, clientId, clientSecret } }),
+        body: JSON.stringify({ apiBaseUrl, omadacId, clientId, clientSecret }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -51,12 +51,10 @@ export function OmadaQuickSetup({ tenantSlug }: Props) {
     setSaveError(null);
     setSaving(true);
     try {
-      const res = await fetch(`/api/t/${tenantSlug}/admin/architecture`, {
-        method: "PATCH",
+      const res = await fetch(`/api/t/${tenantSlug}/voucher/save-omada`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          omada: { apiBaseUrl, omadacId, siteId, clientId, clientSecret },
-        }),
+        body: JSON.stringify({ apiBaseUrl, omadacId, siteId, clientId, clientSecret }),
       });
       const data = await res.json();
       if (!res.ok) {
