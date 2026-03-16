@@ -122,17 +122,19 @@ export async function verifyAndProcess(params: {
   });
   const paystackStatus = verification.status?.toLowerCase();
   if (paystackStatus !== "success") {
-    // Keep checkout resumable while payment is still in-flight on Paystack.
-    if (paystackStatus === "pending" || paystackStatus === "ongoing") {
-      return { status: "pending" as const };
+    // These are definitive failures from Paystack — payment will never complete.
+    if (paystackStatus === "failed" || paystackStatus === "reversed") {
+      await markTransactionFailed({
+        tenantId: params.tenantId,
+        reference: params.reference,
+        status: "paystack_failed",
+      });
+      return { status: "not_success" as const };
     }
 
-    await markTransactionFailed({
-      tenantId: params.tenantId,
-      reference: params.reference,
-      status: "paystack_failed",
-    });
-    return { status: "not_success" as const };
+    // Everything else (pending, ongoing, abandoned, queued, unknown) means
+    // Paystack hasn't finalised yet. Leave as pending so the poller retries.
+    return { status: "pending" as const };
   }
 
   const amountNgn = Math.round(verification.amount / 100);
