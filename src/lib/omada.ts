@@ -40,6 +40,27 @@ function normalizeBaseUrl(value: string) {
   return value.trim().replace(/\/+$/, "");
 }
 
+function buildBaseUrlCandidates(value: string) {
+  const normalized = normalizeBaseUrl(value);
+  const candidates = [normalized];
+
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.hostname.includes("-omada-controller.tplinkcloud.com")) {
+      const northbound = new URL(parsed.toString());
+      northbound.hostname = northbound.hostname.replace(
+        "-omada-controller.tplinkcloud.com",
+        "-omada-northbound.tplinkcloud.com",
+      );
+      candidates.push(normalizeBaseUrl(northbound.toString()));
+    }
+  } catch {
+    // Keep the original value only when URL parsing fails.
+  }
+
+  return [...new Set(candidates)];
+}
+
 function timeoutSignal(ms: number) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
@@ -99,30 +120,67 @@ export async function getOmadaAccessToken(config: TenantOmadaOpenApiConfig) {
   return token;
 }
 
+async function resolveOmadaAccess(config: TenantOmadaOpenApiConfig) {
+  const candidates = buildBaseUrlCandidates(config.apiBaseUrl);
+  let lastError: Error | null = null;
+
+  for (const baseUrl of candidates) {
+    try {
+      const token = await getOmadaAccessToken({ ...config, apiBaseUrl: baseUrl });
+      return { baseUrl, token };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Omada token request failed");
+    }
+  }
+
+  throw lastError ?? new Error("Unable to obtain Omada access token");
+}
+
 export async function listOmadaSites(params: {
   apiBaseUrl: string;
   omadacId: string;
   clientId: string;
   clientSecret: string;
 }) {
-  const baseUrl = normalizeBaseUrl(params.apiBaseUrl);
-  const token = await getOmadaAccessToken({
+  const access = await resolveOmadaAccess({
     apiBaseUrl: params.apiBaseUrl,
     omadacId: params.omadacId,
     siteId: "__unused__",
     clientId: params.clientId,
     clientSecret: params.clientSecret,
   });
-  const listUrl = `${baseUrl}/openapi/v1/${encodeURIComponent(params.omadacId)}/sites?page=1&pageSize=1000`;
+  const sitePath = `/openapi/v1/${encodeURIComponent(params.omadacId)}/sites`;
+  const listUrls = [
+    `${access.baseUrl}${sitePath}?page=1&pageSize=1000`,
+    // Compatibility fallback for controllers/proxies that normalize pagination names.
+    `${access.baseUrl}${sitePath}?currentPage=1&currentSize=1000`,
+  ];
 
-  const data = await omadaRequest<OmadaSiteGrid>(listUrl, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `AccessToken=${token}`,
-    },
-  });
+  let data: OmadaResponse<OmadaSiteGrid> | null = null;
+  let lastError: Error | null = null;
+  for (const listUrl of listUrls) {
+    try {
+      data = await omadaRequest<OmadaSiteGrid>(listUrl, {
+        headers: {
+          Accept: "application/json",
+          Authorization: `AccessToken=${access.token}`,
+        },
+      });
+      break;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Unable to fetch Omada sites");
+    }
+  }
 
-  return (data.result?.data ?? [])
+  if (!data) {
+    throw lastError ?? new Error("Unable to fetch Omada sites");
+  }
+
+  const rows = Array.isArray(data.result?.data)
+    ? data.result?.data
+    : [];
+
+  return rows
     .map((site) => ({
       siteId: site.siteId?.trim() || "",
       name: site.name?.trim() || "",
@@ -139,10 +197,9 @@ type ProvisionParams = {
 };
 
 export async function provisionOmadaVouchers(params: ProvisionParams) {
-  const baseUrl = normalizeBaseUrl(params.config.apiBaseUrl);
-  const token = await getOmadaAccessToken(params.config);
+  const access = await resolveOmadaAccess(params.config);
 
-  const createUrl = `${baseUrl}/openapi/v1/${encodeURIComponent(params.config.omadacId)}/sites/${encodeURIComponent(
+  const createUrl = `${access.baseUrl}/openapi/v1/${encodeURIComponent(params.config.omadacId)}/sites/${encodeURIComponent(
     params.config.siteId,
   )}/hotspot/voucher-groups`;
 
@@ -171,7 +228,7 @@ export async function provisionOmadaVouchers(params: ProvisionParams) {
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      Authorization: `AccessToken=${token}`,
+      Authorization: `AccessToken=${access.token}`,
     },
     body: JSON.stringify(createBody),
   });
@@ -179,7 +236,7 @@ export async function provisionOmadaVouchers(params: ProvisionParams) {
   const groupId = created.result?.id;
   if (!groupId) throw new Error("Omada voucher group ID missing in response");
 
-  const detailUrl = `${baseUrl}/openapi/v1/${encodeURIComponent(params.config.omadacId)}/sites/${encodeURIComponent(
+  const detailUrl = `${access.baseUrl}/openapi/v1/${encodeURIComponent(params.config.omadacId)}/sites/${encodeURIComponent(
     params.config.siteId,
   )}/hotspot/voucher-groups/${encodeURIComponent(groupId)}`;
 
@@ -189,7 +246,7 @@ export async function provisionOmadaVouchers(params: ProvisionParams) {
       {
         headers: {
           Accept: "application/json",
-          Authorization: `AccessToken=${token}`,
+          Authorization: `AccessToken=${access.token}`,
         },
       },
     );
@@ -213,8 +270,11 @@ export async function provisionOmadaVouchers(params: ProvisionParams) {
 type OmadaVoucherDetailRow = {
   id?: string | null;
   code?: string | null;
-  // Omada Open API v1: 0 = UNUSED, 1 = USED, 2 = EXPIRED (inferred from community docs)
+  // Official schema (SimpleVoucherOpenApiVO): 0 = unused, 1 = in use, 2 = expired.
   status?: number | null;
+  startTime?: number | null;
+  timeUsedSec?: number | null;
+  timeLeftSec?: number | null;
   usedAt?: number | null;    // epoch ms
   expireAt?: number | null;  // epoch ms
   duration?: number | null;  // minutes
@@ -232,6 +292,7 @@ type OmadaVoucherGroupListResult = {
 
 type OmadaVoucherGroupDetailResult = {
   totalRows?: number;
+  duration?: number | null;
   data?: OmadaVoucherDetailRow[];
 };
 
@@ -251,27 +312,25 @@ const MAX_LOOKUP_GROUPS = 20;
  * Searches the most recent voucher groups on the Omada controller for a
  * specific code and returns its live usage status.
  *
- * Works with all Omada controller types (Cloud, OC200, OC300, Software) that
- * expose the Open API v1 voucher-groups endpoint (requires controller v5.15+
- * for Software/Hardware controllers; available on all Cloud controller versions).
+ * Works with controller deployments that expose the Open API v1 hotspot
+ * voucher endpoints.
  *
  * Returns { found: false, unavailable: true } when the controller is
- * unreachable or does not support the endpoint (e.g. Software < v5.15).
+ * unreachable or does not support the endpoint.
  */
 export async function lookupOmadaVoucherStatus(
   config: TenantOmadaOpenApiConfig,
   targetCode: string,
 ): Promise<OmadaVoucherLookupResult> {
-  const baseUrl = normalizeBaseUrl(config.apiBaseUrl);
-  let token: string;
+  let access: { baseUrl: string; token: string };
   try {
-    token = await getOmadaAccessToken(config);
+    access = await resolveOmadaAccess(config);
   } catch {
     return { found: false, unavailable: true };
   }
 
-  const siteBase = `${baseUrl}/openapi/v1/${encodeURIComponent(config.omadacId)}/sites/${encodeURIComponent(config.siteId)}/hotspot`;
-  const headers = { Accept: "application/json", Authorization: `AccessToken=${token}` };
+  const siteBase = `${access.baseUrl}/openapi/v1/${encodeURIComponent(config.omadacId)}/sites/${encodeURIComponent(config.siteId)}/hotspot`;
+  const headers = { Accept: "application/json", Authorization: `AccessToken=${access.token}` };
 
   let groupsData: OmadaResponse<OmadaVoucherGroupListResult>;
   try {
@@ -305,15 +364,39 @@ export async function lookupOmadaVoucherStatus(
     if (match) {
       let status: "UNUSED" | "USED" | "EXPIRED" | "UNKNOWN" = "UNKNOWN";
       if (match.status === 0) status = "UNUSED";
+      // Official docs call status=1 "in use"; we map it to "USED" for the existing UI badge.
       else if (match.status === 1) status = "USED";
       else if (match.status === 2) status = "EXPIRED";
+
+      const expireAtMs =
+        typeof match.expireAt === "number"
+          ? match.expireAt
+          : typeof match.startTime === "number"
+          ? match.startTime
+          : null;
+      let durationMinutes =
+        typeof match.duration === "number"
+          ? match.duration
+          : typeof detail.result?.duration === "number"
+          ? detail.result.duration
+          : null;
+      if (
+        durationMinutes == null &&
+        typeof match.timeUsedSec === "number" &&
+        typeof match.timeLeftSec === "number"
+      ) {
+        const totalSeconds = match.timeUsedSec + match.timeLeftSec;
+        if (totalSeconds > 0) {
+          durationMinutes = Math.max(1, Math.ceil(totalSeconds / 60));
+        }
+      }
 
       return {
         found: true,
         status,
         usedAt: match.usedAt ? new Date(match.usedAt).toISOString() : null,
-        expireAt: match.expireAt ? new Date(match.expireAt).toISOString() : null,
-        durationMinutes: match.duration ?? null,
+        expireAt: expireAtMs ? new Date(expireAtMs).toISOString() : null,
+        durationMinutes,
       };
     }
   }
@@ -322,16 +405,15 @@ export async function lookupOmadaVoucherStatus(
 }
 
 export async function testOmadaOpenApiConnection(config: TenantOmadaOpenApiConfig) {
-  const baseUrl = normalizeBaseUrl(config.apiBaseUrl);
-  const token = await getOmadaAccessToken(config);
-  const probeUrl = `${baseUrl}/openapi/v1/${encodeURIComponent(config.omadacId)}/sites/${encodeURIComponent(
+  const access = await resolveOmadaAccess(config);
+  const probeUrl = `${access.baseUrl}/openapi/v1/${encodeURIComponent(config.omadacId)}/sites/${encodeURIComponent(
     config.siteId,
   )}/hotspot/voucher-groups?page=1&pageSize=1`;
 
   await omadaRequest<Record<string, unknown>>(probeUrl, {
     headers: {
       Accept: "application/json",
-      Authorization: `AccessToken=${token}`,
+      Authorization: `AccessToken=${access.token}`,
     },
   });
 

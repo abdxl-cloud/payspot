@@ -13,7 +13,7 @@ type Props = {
   params: Promise<{ slug: string }>;
 };
 
-const codeSchema = z.string().min(1).max(64).transform((v) => v.trim());
+const codeSchema = z.string().trim().min(1).max(64);
 
 export async function GET(request: Request, { params }: Props) {
   const { slug } = await params;
@@ -68,7 +68,7 @@ export async function GET(request: Request, { params }: Props) {
       : null;
 
   // Live status from Omada controller (Open API v1).
-  // Works on all controller types at v5.15+ (Cloud, OC200, OC300, Software).
+  // Works on controllers that expose hotspot voucher lookup endpoints.
   // null  = Omada not configured for this tenant (section hidden in UI)
   // error = Omada is configured but the lookup failed (shown as an error in UI)
   type OmadaStatusPayload =

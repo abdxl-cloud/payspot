@@ -244,7 +244,7 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                   ) : result.omadaResult && !result.omadaResult.found && result.omadaResult.unavailable ? (
                     <p className="mt-2 text-sm text-slate-500">
                       The Omada controller could not be reached or does not support live
-                      voucher lookup (requires controller v5.15+ or Cloud controller).
+                      voucher lookup on this deployment.
                     </p>
                   ) : result.omadaResult && !result.omadaResult.found ? (
                     <p className="mt-2 text-sm text-slate-500">
