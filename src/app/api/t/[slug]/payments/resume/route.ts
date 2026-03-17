@@ -7,6 +7,7 @@ import {
   getTransactionByReferenceEmail,
   getTransactionByReferencePhone,
   requireTenantPaystackSecretKey,
+  resetTransactionToPending,
 } from "@/lib/store";
 import { getResumeTtlMs } from "@/lib/payments";
 
@@ -93,6 +94,24 @@ export async function POST(request: Request, { params }: Props) {
       });
     } catch (error) {
       console.error("Resume verification failed", error);
+    }
+  }
+
+  // If Paystack previously marked this as failed, double-check with Paystack
+  // before showing the customer a failure screen — OPay and some banks report
+  // "abandoned" mid-flow even when the money has already left the account.
+  if (transaction.payment_status === "paystack_failed") {
+    try {
+      const paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
+      await resetTransactionToPending({ tenantId: tenant.id, reference });
+      await verifyAndProcess({
+        tenantId: tenant.id,
+        reference,
+        expectedAmountNgn: transaction.amount_ngn,
+        paystackSecretKey,
+      });
+    } catch (error) {
+      console.error("Re-verification of paystack_failed transaction failed", error);
     }
   }
 

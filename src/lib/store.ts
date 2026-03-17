@@ -2050,6 +2050,23 @@ export async function markTransactionFailed(params: {
   return result.changes;
 }
 
+export async function resetTransactionToPending(params: {
+  tenantId: string;
+  reference: string;
+}) {
+  const db = getDb();
+  const result = await db
+    .prepare(
+      `
+      UPDATE transactions
+      SET payment_status = 'pending'
+      WHERE tenant_id = ? AND reference = ? AND payment_status = 'paystack_failed'
+    `,
+    )
+    .run(params.tenantId, params.reference);
+  return result.changes;
+}
+
 export async function completeTransaction(params: {
   tenantId: string;
   reference: string;
