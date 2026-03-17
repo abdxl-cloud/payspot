@@ -67,12 +67,29 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
         </div>
       );
     }
-    await verifyAndProcess({
-      tenantId: tenant.id,
-      reference,
-      expectedAmountNgn: transaction.amount_ngn,
-      paystackSecretKey,
-    });
+    try {
+      await verifyAndProcess({
+        tenantId: tenant.id,
+        reference,
+        expectedAmountNgn: transaction.amount_ngn,
+        paystackSecretKey,
+      });
+    } catch (error) {
+      console.error("Payment verification failed", error);
+      return (
+        <div className="app-shell">
+          <div className="app-container max-w-3xl py-12 sm:py-20">
+            <div className="status-card">
+              <h1 className="status-title">Unable to verify payment right now</h1>
+              <p className="status-copy">
+                We could not reach the payment provider to confirm this transaction. Please refresh shortly.
+              </p>
+              <p className="mt-2 text-sm text-slate-500">Reference: {reference}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
   const updated = await getTransaction(tenant.id, reference);

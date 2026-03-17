@@ -47,17 +47,20 @@ export async function POST(request: Request, { params }: Props) {
 
   const { reference, phone, email } = parsed.data;
   const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
-  if (!email && !phone) {
+  if (accountAccessMode && !email) {
+    return Response.json({ error: "Email is required" }, { status: 400 });
+  }
+  if (!accountAccessMode && !email && !phone) {
     return Response.json({ error: "Email is required" }, { status: 400 });
   }
 
   // account mode: match by email column; voucher mode: match by phone column
   // (voucher transactions store email in the phone column since we switched from phone to email)
   const transaction = accountAccessMode
-    ? await getTransactionByReferenceEmail(tenant.id, reference, email!)
+    ? await getTransactionByReferenceEmail(tenant.id, reference, email ?? "")
     : email
       ? await getTransactionByReferencePhone(tenant.id, reference, email)
-      : await getTransactionByReferencePhone(tenant.id, reference, phone!);
+      : await getTransactionByReferencePhone(tenant.id, reference, phone ?? "");
 
   if (!transaction) {
     return Response.json({ error: "Transaction not found" }, { status: 404 });

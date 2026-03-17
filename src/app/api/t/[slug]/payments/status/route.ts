@@ -40,13 +40,15 @@ export async function POST(request: Request, { params }: Props) {
   if (accountAccessMode && !email) {
     return Response.json({ error: "Email is required" }, { status: 400 });
   }
-  if (!accountAccessMode && !phone) {
-    return Response.json({ error: "Phone is required" }, { status: 400 });
+  if (!accountAccessMode && !email && !phone) {
+    return Response.json({ error: "Email is required" }, { status: 400 });
   }
 
   const transaction = accountAccessMode
-    ? await getTransactionByReferenceEmail(tenant.id, reference, email!)
-    : await getTransactionByReferencePhone(tenant.id, reference, phone!);
+    ? await getTransactionByReferenceEmail(tenant.id, reference, email ?? "")
+    : email
+      ? await getTransactionByReferencePhone(tenant.id, reference, email)
+      : await getTransactionByReferencePhone(tenant.id, reference, phone ?? "");
 
   if (!transaction) {
     return Response.json({ error: "Transaction not found" }, { status: 404 });
