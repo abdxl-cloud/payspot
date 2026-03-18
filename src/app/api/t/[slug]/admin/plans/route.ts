@@ -96,6 +96,8 @@ export async function POST(request: Request, { params }: Props) {
   const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
   const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
+  const voucherDurationRequired =
+    !accountAccessMode && tenant.voucher_source_mode !== "mikrotik_rest";
 
   const body = (await request.json()) as {
     code?: string;
@@ -155,9 +157,9 @@ export async function POST(request: Request, { params }: Props) {
   ) {
     return Response.json({ error: "availableFrom must be before availableTo" }, { status: 400 });
   }
-  if (!accountAccessMode && durationMinutes === null) {
+  if (voucherDurationRequired && durationMinutes === null) {
     return Response.json(
-      { error: "durationMinutes is required for voucher access plans." },
+      { error: "durationMinutes is required unless you are using MikroTik direct mode." },
       { status: 400 },
     );
   }
@@ -233,6 +235,8 @@ export async function PATCH(request: Request, { params }: Props) {
   const access = await normalizeTenantAccess(request, tenant.id);
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
   const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
+  const voucherDurationRequired =
+    !accountAccessMode && tenant.voucher_source_mode !== "mikrotik_rest";
 
   const body = (await request.json()) as {
     planId?: string;
@@ -358,9 +362,9 @@ export async function PATCH(request: Request, { params }: Props) {
   ) {
     return Response.json({ error: "availableFrom must be before availableTo" }, { status: 400 });
   }
-  if (!accountAccessMode && nextDuration === null) {
+  if (voucherDurationRequired && nextDuration === null) {
     return Response.json(
-      { error: "durationMinutes is required for voucher access plans." },
+      { error: "durationMinutes is required unless you are using MikroTik direct mode." },
       { status: 400 },
     );
   }

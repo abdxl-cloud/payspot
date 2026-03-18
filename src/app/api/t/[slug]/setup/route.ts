@@ -32,7 +32,7 @@ const schema = z.object({
   architecture: z
     .object({
       accessMode: z.enum(["voucher_access", "account_access"]).optional(),
-      voucherSourceMode: z.enum(["import_csv", "omada_openapi"]).optional(),
+      voucherSourceMode: z.enum(["import_csv", "omada_openapi", "mikrotik_rest"]).optional(),
       portalAuthMode: z.enum(["omada_builtin", "external_radius_portal"]).optional(),
       omada: z
         .object({
@@ -43,6 +43,16 @@ const schema = z.object({
           clientSecret: z.string().max(500).optional(),
           hotspotOperatorUsername: z.string().max(200).optional(),
           hotspotOperatorPassword: z.string().max(500).optional(),
+        })
+        .optional(),
+      mikrotik: z
+        .object({
+          baseUrl: z.string().max(300).optional(),
+          username: z.string().max(200).optional(),
+          password: z.string().max(500).optional(),
+          hotspotServer: z.string().max(200).optional(),
+          defaultProfile: z.string().max(200).optional(),
+          verifyTls: z.boolean().optional(),
         })
         .optional(),
       radius: z
@@ -144,6 +154,22 @@ export async function POST(request: Request, { params }: Props) {
       return Response.json({ error: "Omada client secret is required for API automation." }, { status: 400 });
     }
   }
+  if (
+    parsed.data.architecture?.voucherSourceMode === "mikrotik_rest" &&
+    selectedAccessMode === "voucher_access"
+  ) {
+    const mikrotik = parsed.data.architecture.mikrotik;
+    const hasSavedPassword = !!tenant.mikrotik_password_enc;
+    if (!mikrotik?.baseUrl?.trim()) {
+      return Response.json({ error: "MikroTik base URL is required for direct mode." }, { status: 400 });
+    }
+    if (!mikrotik.username?.trim()) {
+      return Response.json({ error: "MikroTik username is required for direct mode." }, { status: 400 });
+    }
+    if (!mikrotik.password?.trim() && !hasSavedPassword) {
+      return Response.json({ error: "MikroTik password is required for direct mode." }, { status: 400 });
+    }
+  }
 
   if (requestedSlug !== tenant.slug && !await isTenantSlugAvailable(requestedSlug)) {
     return Response.json({ error: "That link name is not available" }, { status: 409 });
@@ -197,6 +223,16 @@ export async function POST(request: Request, { params }: Props) {
                 parsed.data.architecture.omada.hotspotOperatorUsername?.trim() || undefined,
               hotspotOperatorPassword:
                 parsed.data.architecture.omada.hotspotOperatorPassword?.trim() || undefined,
+            }
+          : undefined,
+        mikrotik: parsed.data.architecture.mikrotik
+          ? {
+              baseUrl: parsed.data.architecture.mikrotik.baseUrl?.trim(),
+              username: parsed.data.architecture.mikrotik.username?.trim(),
+              password: parsed.data.architecture.mikrotik.password?.trim() || undefined,
+              hotspotServer: parsed.data.architecture.mikrotik.hotspotServer?.trim() || undefined,
+              defaultProfile: parsed.data.architecture.mikrotik.defaultProfile?.trim() || undefined,
+              verifyTls: parsed.data.architecture.mikrotik.verifyTls,
             }
           : undefined,
         radius: parsed.data.architecture.radius

@@ -14,11 +14,14 @@ export async function GET(_request: Request, { params }: Props) {
   const accessMode = tenant.portal_auth_mode === "external_radius_portal"
     ? "account_access"
     : "voucher_access";
+  const autoProvisionVoucherMode =
+    tenant.voucher_source_mode === "omada_openapi" ||
+    tenant.voucher_source_mode === "mikrotik_rest";
   const packages = (await getPackagesWithAvailability(tenant.id))
     .filter((pkg) =>
       accessMode === "account_access"
         ? pkg.price_ngn > 0
-        : tenant.voucher_source_mode === "omada_openapi"
+        : autoProvisionVoucherMode
         ? pkg.price_ngn > 0
         : pkg.price_ngn > 0 && pkg.total_count > 0,
     )
@@ -34,7 +37,7 @@ export async function GET(_request: Request, { params }: Props) {
       availableCount:
         accessMode === "account_access"
           ? 999999
-          : tenant.voucher_source_mode === "omada_openapi"
+          : autoProvisionVoucherMode
           ? Math.max(1, pkg.available_count)
           : pkg.available_count,
     }));

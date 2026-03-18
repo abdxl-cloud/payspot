@@ -26,6 +26,9 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
   const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
   const portalContext = getCaptivePortalContextFromSearchParams(resolvedSearchParams);
+  const autoProvisionVoucherMode =
+    tenant.voucher_source_mode === "omada_openapi" ||
+    tenant.voucher_source_mode === "mikrotik_rest";
 
   if (tenant.status !== "active") {
     return (
@@ -51,7 +54,7 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
     .filter((pkg) =>
       normalizeAccessMode(tenant.portal_auth_mode) === "account_access"
         ? pkg.price_ngn > 0
-        : tenant.voucher_source_mode === "omada_openapi"
+        : autoProvisionVoucherMode
         ? pkg.price_ngn > 0
         : pkg.price_ngn > 0 && pkg.total_count > 0,
     )
@@ -67,7 +70,7 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
       availableCount:
         normalizeAccessMode(tenant.portal_auth_mode) === "account_access"
           ? 999999
-          : tenant.voucher_source_mode === "omada_openapi"
+          : autoProvisionVoucherMode
           ? Math.max(1, pkg.available_count)
           : pkg.available_count,
     }));

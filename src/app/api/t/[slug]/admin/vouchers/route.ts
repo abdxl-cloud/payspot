@@ -142,12 +142,16 @@ export async function POST(request: Request, { params }: Props) {
   const voucherSourceMode =
     tenant.voucher_source_mode === "omada_openapi"
       ? "omada_openapi"
+      : tenant.voucher_source_mode === "mikrotik_rest"
+        ? "mikrotik_rest"
       : "import_csv";
-  if (voucherSourceMode === "omada_openapi") {
+  if (voucherSourceMode === "omada_openapi" || voucherSourceMode === "mikrotik_rest") {
     return Response.json(
       {
         error:
-          "Manual voucher creation is disabled in Omada API automation mode. Vouchers are provisioned automatically on customer payment.",
+          voucherSourceMode === "omada_openapi"
+            ? "Manual voucher creation is disabled in Omada API automation mode. Vouchers are provisioned automatically on customer payment."
+            : "Manual voucher creation is disabled in MikroTik direct mode. Vouchers are created automatically on customer payment.",
       },
       { status: 409 },
     );
@@ -180,8 +184,14 @@ export async function POST(request: Request, { params }: Props) {
     .prepare(
       "SELECT id, duration_minutes FROM voucher_packages WHERE tenant_id = ? AND id = ?",
     )
-    .get(tenant.id, packageId) as { id: string; duration_minutes: number } | undefined;
+    .get(tenant.id, packageId) as { id: string; duration_minutes: number | null } | undefined;
   if (!pkg) return Response.json({ error: "Invalid packageId" }, { status: 400 });
+  if (pkg.duration_minutes == null) {
+    return Response.json(
+      { error: "This plan has no duration. Add a duration before using CSV/manual voucher inventory." },
+      { status: 409 },
+    );
+  }
 
   if (useManualCode) {
     const result = await db

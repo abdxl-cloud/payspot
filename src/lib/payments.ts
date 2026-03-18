@@ -3,17 +3,133 @@ import {
   type CaptivePortalContext,
 } from "@/lib/captive-portal";
 import { getAppEnv, getEnv } from "@/lib/env";
+import { ensureHotspotVoucher } from "@/lib/mikrotik";
 import {
+  completeTransaction,
   activateSubscriberAccessForTransaction,
   getPackageById,
   getTenantById,
   getTransaction,
   markTransactionFailed,
+  markTransactionProcessing,
+  resolveTenantMikrotikConfigIfPresent,
   transactionAssignVoucher,
 } from "@/lib/store";
 import { sendVoucherSms } from "@/lib/termii";
 import { sendVoucherEmail } from "@/lib/mailer";
 import { verifyTransaction } from "@/lib/paystack";
+
+async function sendVoucherNotifications(params: {
+  tenantId: string;
+  transaction: {
+    email: string;
+    phone: string;
+    reference: string;
+    package_id: string;
+  };
+  voucherCode: string;
+}) {
+  const pkg = await getPackageById(params.tenantId, params.transaction.package_id);
+  if (!pkg) return;
+
+  const message = [
+    "Payment confirmed!",
+    `Voucher: ${params.voucherCode}`,
+    `Package: ${pkg.name}`,
+    "Connect to WiFi and enter your code.",
+  ].join("\n");
+
+  try {
+    await sendVoucherSms({
+      phone: params.transaction.phone,
+      message,
+      channel: "dnd",
+    });
+  } catch (error) {
+    console.error("SMS delivery failed", error);
+  }
+
+  try {
+    await sendVoucherEmail({
+      to: params.transaction.email,
+      voucherCode: params.voucherCode,
+      packageName: pkg.name,
+      reference: params.transaction.reference,
+    });
+  } catch (error) {
+    console.error("Voucher email delivery failed", error);
+  }
+}
+
+async function provisionMikrotikVoucherForTransaction(params: {
+  tenantId: string;
+  reference: string;
+}) {
+  const transaction = await getTransaction(params.tenantId, params.reference);
+  if (!transaction) {
+    return { status: "missing" as const };
+  }
+  if (transaction.payment_status === "success" && transaction.voucher_code) {
+    return {
+      status: "already" as const,
+      voucherCode: transaction.voucher_code,
+    };
+  }
+
+  await markTransactionProcessing({
+    tenantId: params.tenantId,
+    reference: params.reference,
+  });
+
+  const [pkg, mikrotikConfig] = await Promise.all([
+    getPackageById(params.tenantId, transaction.package_id),
+    resolveTenantMikrotikConfigIfPresent(params.tenantId),
+  ]);
+
+  if (!pkg || !mikrotikConfig) {
+    await markTransactionFailed({
+      tenantId: params.tenantId,
+      reference: params.reference,
+      status: "mikrotik_config_missing",
+    });
+    return { status: "config_missing" as const };
+  }
+
+  const voucherCode = transaction.reference.trim().toUpperCase();
+
+  try {
+    await ensureHotspotVoucher({
+      config: mikrotikConfig,
+      username: voucherCode,
+      password: voucherCode,
+      comment: `PaySpot:${transaction.reference}`,
+      durationMinutes: pkg.duration_minutes,
+      dataLimitMb: pkg.data_limit_mb,
+    });
+
+    const paidAt = new Date().toISOString();
+    await completeTransaction({
+      tenantId: params.tenantId,
+      reference: params.reference,
+      voucherCode,
+      paidAt,
+    });
+
+    return { status: "assigned" as const, voucherCode };
+  } catch (error) {
+    console.error("[payments] MikroTik provisioning failed", {
+      tenantId: params.tenantId,
+      reference: params.reference,
+      error: error instanceof Error ? error.message : error,
+    });
+    await markTransactionFailed({
+      tenantId: params.tenantId,
+      reference: params.reference,
+      status: "mikrotik_provision_failed",
+    });
+    return { status: "failed" as const };
+  }
+}
 
 export async function handleSuccessfulPayment(params: {
   tenantId: string;
@@ -64,47 +180,31 @@ export async function handleSuccessfulPayment(params: {
     };
   }
 
-  const result = await transactionAssignVoucher({
-    tenantId: params.tenantId,
-    reference: params.reference,
-    email: transaction.email,
-    phone: transaction.phone,
-    packageId: transaction.package_id,
-  });
+  let result:
+    | { status: "already" | "assigned"; voucherCode: string }
+    | { status: string; voucherCode?: string };
+  if (tenant?.voucher_source_mode === "mikrotik_rest") {
+    result = await provisionMikrotikVoucherForTransaction(params);
+  } else {
+    result = await transactionAssignVoucher({
+      tenantId: params.tenantId,
+      reference: params.reference,
+      email: transaction.email,
+      phone: transaction.phone,
+      packageId: transaction.package_id,
+    });
+  }
 
   if (result.status === "assigned" || result.status === "already") {
-    const pkg = await getPackageById(params.tenantId, transaction.package_id);
-    if (pkg) {
-      const message = [
-        "Payment confirmed!",
-        `Voucher: ${result.voucherCode}`,
-        `Package: ${pkg.name}`,
-        "Connect to WiFi and enter your code.",
-      ].join("\n");
-
-      try {
-        await sendVoucherSms({
-          phone: transaction.phone,
-          message,
-          channel: "dnd",
-        });
-      } catch (error) {
-        console.error("SMS delivery failed", error);
-      }
-
-      if (result.voucherCode) {
-        try {
-          await sendVoucherEmail({
-            to: transaction.email,
-            voucherCode: result.voucherCode,
-            packageName: pkg.name,
-            reference: transaction.reference,
-          });
-        } catch (error) {
-          console.error("Voucher email delivery failed", error);
-        }
-      }
+    const voucherCode = result.voucherCode;
+    if (!voucherCode) {
+      return result;
     }
+    await sendVoucherNotifications({
+      tenantId: params.tenantId,
+      transaction,
+      voucherCode,
+    });
   }
 
   return result;

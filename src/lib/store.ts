@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { getDb } from "@/lib/db";
-import { provisionOmadaVouchers } from "@/lib/omada";
+import type { TenantMikrotikConfig } from "@/lib/mikrotik";
 import { isPaystackSecretKey } from "@/lib/paystack-key";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { decryptSecret, encryptSecret } from "@/lib/secrets";
@@ -24,13 +24,19 @@ export type TenantRow = {
   omada_client_secret_enc: string | null;
   omada_hotspot_operator_username: string | null;
   omada_hotspot_operator_password_enc: string | null;
+  mikrotik_base_url: string | null;
+  mikrotik_username: string | null;
+  mikrotik_password_enc: string | null;
+  mikrotik_hotspot_server: string | null;
+  mikrotik_default_profile: string | null;
+  mikrotik_verify_tls: number;
   radius_adapter_secret_enc: string | null;
   radius_adapter_secret_last4: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type VoucherSourceMode = "import_csv" | "omada_openapi";
+export type VoucherSourceMode = "import_csv" | "omada_openapi" | "mikrotik_rest";
 export type PortalAuthMode =
   | "omada_builtin"
   | "external_radius_portal";
@@ -47,6 +53,14 @@ export type TenantArchitecture = {
     hasClientSecret: boolean;
     hotspotOperatorUsername: string;
     hasHotspotOperatorPassword: boolean;
+  };
+  mikrotik: {
+    baseUrl: string;
+    username: string;
+    hasPassword: boolean;
+    hotspotServer: string;
+    defaultProfile: string;
+    verifyTls: boolean;
   };
   radius: {
     hasAdapterSecret: boolean;
@@ -82,6 +96,15 @@ type TenantOmadaOpenApiCredentialsOverrides = Partial<{
   omadacId: string;
   clientId: string;
   clientSecret: string;
+}>;
+
+type TenantMikrotikConfigOverrides = Partial<{
+  baseUrl: string;
+  username: string;
+  password: string;
+  hotspotServer: string;
+  defaultProfile: string;
+  verifyTls: boolean;
 }>;
 
 export type TenantRequestRow = {
@@ -254,6 +277,7 @@ function normalizeVoucherSourceMode(
   value: string | null | undefined,
 ): VoucherSourceMode {
   if (value === "omada_openapi") return "omada_openapi";
+  if (value === "mikrotik_rest") return "mikrotik_rest";
   return "import_csv";
 }
 
@@ -1536,6 +1560,14 @@ export async function getTenantArchitecture(tenantId: string) {
       hotspotOperatorUsername: tenant.omada_hotspot_operator_username ?? "",
       hasHotspotOperatorPassword: !!tenant.omada_hotspot_operator_password_enc,
     },
+    mikrotik: {
+      baseUrl: tenant.mikrotik_base_url ?? "",
+      username: tenant.mikrotik_username ?? "",
+      hasPassword: !!tenant.mikrotik_password_enc,
+      hotspotServer: tenant.mikrotik_hotspot_server ?? "",
+      defaultProfile: tenant.mikrotik_default_profile ?? "",
+      verifyTls: tenant.mikrotik_verify_tls !== 0,
+    },
     radius: {
       hasAdapterSecret: !!tenant.radius_adapter_secret_enc,
       adapterSecretLast4: tenant.radius_adapter_secret_last4 ?? "",
@@ -1556,6 +1588,14 @@ export async function setTenantArchitecture(params: {
     clientSecret?: string | null;
     hotspotOperatorUsername?: string;
     hotspotOperatorPassword?: string | null;
+  };
+  mikrotik?: {
+    baseUrl?: string;
+    username?: string;
+    password?: string | null;
+    hotspotServer?: string;
+    defaultProfile?: string;
+    verifyTls?: boolean;
   };
   radius?: {
     adapterSecret?: string | null;
@@ -1599,6 +1639,21 @@ export async function setTenantArchitecture(params: {
   const hotspotOperatorUsername = params.omada?.hotspotOperatorUsername !== undefined
     ? params.omada.hotspotOperatorUsername.trim()
     : (tenant.omada_hotspot_operator_username ?? "");
+  const mikrotikBaseUrl = params.mikrotik?.baseUrl !== undefined
+    ? params.mikrotik.baseUrl.trim()
+    : (tenant.mikrotik_base_url ?? "");
+  const mikrotikUsername = params.mikrotik?.username !== undefined
+    ? params.mikrotik.username.trim()
+    : (tenant.mikrotik_username ?? "");
+  const mikrotikHotspotServer = params.mikrotik?.hotspotServer !== undefined
+    ? params.mikrotik.hotspotServer.trim()
+    : (tenant.mikrotik_hotspot_server ?? "");
+  const mikrotikDefaultProfile = params.mikrotik?.defaultProfile !== undefined
+    ? params.mikrotik.defaultProfile.trim()
+    : (tenant.mikrotik_default_profile ?? "");
+  const mikrotikVerifyTls = params.mikrotik?.verifyTls !== undefined
+    ? params.mikrotik.verifyTls
+    : tenant.mikrotik_verify_tls !== 0;
 
   let omadaClientSecretEnc = tenant.omada_client_secret_enc;
   if (params.omada && "clientSecret" in params.omada) {
@@ -1617,6 +1672,16 @@ export async function setTenantArchitecture(params: {
       omadaHotspotOperatorPasswordEnc = null;
     } else {
       omadaHotspotOperatorPasswordEnc = encryptSecret(next.trim());
+    }
+  }
+
+  let mikrotikPasswordEnc = tenant.mikrotik_password_enc;
+  if (params.mikrotik && "password" in params.mikrotik) {
+    const next = params.mikrotik.password;
+    if (next == null || next.trim() === "") {
+      mikrotikPasswordEnc = null;
+    } else {
+      mikrotikPasswordEnc = encryptSecret(next.trim());
     }
   }
 
@@ -1651,6 +1716,19 @@ export async function setTenantArchitecture(params: {
       };
     }
   }
+  if (effectiveVoucherSourceMode === "mikrotik_rest") {
+    const missing: Array<"baseUrl" | "username" | "password"> = [];
+    if (!mikrotikBaseUrl) missing.push("baseUrl");
+    if (!mikrotikUsername) missing.push("username");
+    if (!mikrotikPasswordEnc) missing.push("password");
+
+    if (missing.length > 0) {
+      return {
+        status: "incomplete_mikrotik_rest" as const,
+        missing,
+      };
+    }
+  }
 
   await db
     .prepare(
@@ -1665,6 +1743,12 @@ export async function setTenantArchitecture(params: {
           omada_client_secret_enc = ?,
           omada_hotspot_operator_username = ?,
           omada_hotspot_operator_password_enc = ?,
+          mikrotik_base_url = ?,
+          mikrotik_username = ?,
+          mikrotik_password_enc = ?,
+          mikrotik_hotspot_server = ?,
+          mikrotik_default_profile = ?,
+          mikrotik_verify_tls = ?,
           radius_adapter_secret_enc = ?,
           radius_adapter_secret_last4 = ?,
           updated_at = ?
@@ -1681,6 +1765,12 @@ export async function setTenantArchitecture(params: {
       omadaClientSecretEnc,
       hotspotOperatorUsername || null,
       omadaHotspotOperatorPasswordEnc,
+      mikrotikBaseUrl || null,
+      mikrotikUsername || null,
+      mikrotikPasswordEnc,
+      mikrotikHotspotServer || null,
+      mikrotikDefaultProfile || null,
+      mikrotikVerifyTls ? 1 : 0,
       radiusAdapterSecretEnc,
       radiusAdapterSecretLast4,
       now,
@@ -1760,6 +1850,77 @@ export async function resolveTenantOmadaOpenApiConfigForTesting(params: {
       clientId,
       clientSecret,
     } satisfies TenantOmadaOpenApiConfig,
+  };
+}
+
+export async function resolveTenantMikrotikConfigIfPresent(tenantId: string) {
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) return null;
+  if (normalizePortalAuthMode(tenant.portal_auth_mode) === "external_radius_portal") {
+    return null;
+  }
+  if (normalizeVoucherSourceMode(tenant.voucher_source_mode) !== "mikrotik_rest") {
+    return null;
+  }
+
+  if (!tenant.mikrotik_base_url || !tenant.mikrotik_username || !tenant.mikrotik_password_enc) {
+    return null;
+  }
+
+  return {
+    baseUrl: tenant.mikrotik_base_url,
+    username: tenant.mikrotik_username,
+    password: decryptSecret(tenant.mikrotik_password_enc),
+    hotspotServer: tenant.mikrotik_hotspot_server ?? "",
+    defaultProfile: tenant.mikrotik_default_profile ?? "",
+    verifyTls: tenant.mikrotik_verify_tls !== 0,
+  } satisfies TenantMikrotikConfig;
+}
+
+export async function resolveTenantMikrotikConfigForTesting(params: {
+  tenantId: string;
+  overrides?: TenantMikrotikConfigOverrides;
+}) {
+  const tenant = await getTenantById(params.tenantId);
+  if (!tenant) return { status: "missing" as const };
+
+  const baseUrl = params.overrides?.baseUrl?.trim() || tenant.mikrotik_base_url || "";
+  const username = params.overrides?.username?.trim() || tenant.mikrotik_username || "";
+  const hotspotServer = params.overrides?.hotspotServer?.trim() || tenant.mikrotik_hotspot_server || "";
+  const defaultProfile = params.overrides?.defaultProfile?.trim() || tenant.mikrotik_default_profile || "";
+  const overridePassword = params.overrides?.password?.trim() || "";
+  const password = overridePassword || (
+    tenant.mikrotik_password_enc
+      ? decryptSecret(tenant.mikrotik_password_enc)
+      : ""
+  );
+  const verifyTls =
+    params.overrides?.verifyTls !== undefined
+      ? params.overrides.verifyTls
+      : tenant.mikrotik_verify_tls !== 0;
+
+  const missing: Array<"baseUrl" | "username" | "password"> = [];
+  if (!baseUrl) missing.push("baseUrl");
+  if (!username) missing.push("username");
+  if (!password) missing.push("password");
+
+  if (missing.length > 0) {
+    return {
+      status: "incomplete" as const,
+      missing,
+    };
+  }
+
+  return {
+    status: "ok" as const,
+    config: {
+      baseUrl,
+      username,
+      password,
+      hotspotServer,
+      defaultProfile,
+      verifyTls,
+    } satisfies TenantMikrotikConfig,
   };
 }
 
@@ -2582,22 +2743,5 @@ export async function getVoucherPoolEntryByCode(tenantId: string, voucherCode: s
 }
 
 export async function resolveTenantOmadaConfigIfPresent(tenantId: string) {
-  const tenant = await getTenantById(tenantId);
-  if (!tenant) return null;
-  if (
-    !tenant.omada_api_base_url ||
-    !tenant.omada_omadac_id ||
-    !tenant.omada_site_id ||
-    !tenant.omada_client_id ||
-    !tenant.omada_client_secret_enc
-  ) {
-    return null;
-  }
-  return {
-    apiBaseUrl: tenant.omada_api_base_url,
-    omadacId: tenant.omada_omadac_id,
-    siteId: tenant.omada_site_id,
-    clientId: tenant.omada_client_id,
-    clientSecret: decryptSecret(tenant.omada_client_secret_enc),
-  } satisfies TenantOmadaOpenApiConfig;
+  return await resolveTenantOmadaOpenApiConfig(tenantId);
 }

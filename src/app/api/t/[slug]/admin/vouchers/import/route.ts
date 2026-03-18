@@ -8,7 +8,7 @@ type Props = {
   params: Promise<{ slug: string }>;
 };
 
-type PackageLite = { id: string; code: string; duration_minutes: number };
+type PackageLite = { id: string; code: string; duration_minutes: number | null };
 
 type NormalizedRow = {
   code: string | null;
@@ -246,11 +246,13 @@ export async function POST(request: Request, { params }: Props) {
       return Response.json({ error: "Tenant not found" }, { status: 404 });
     }
 
-    if (tenant.voucher_source_mode === "omada_openapi") {
+    if (tenant.voucher_source_mode === "omada_openapi" || tenant.voucher_source_mode === "mikrotik_rest") {
       return Response.json(
         {
           error:
-            "CSV import is disabled in Omada API automation mode. Vouchers are provisioned automatically after customer payment.",
+            tenant.voucher_source_mode === "omada_openapi"
+              ? "CSV import is disabled in Omada API automation mode. Vouchers are provisioned automatically after customer payment."
+              : "CSV import is disabled in MikroTik direct mode. Vouchers are created automatically after customer payment.",
         },
         { status: 409 },
       );
@@ -358,6 +360,11 @@ export async function POST(request: Request, { params }: Props) {
           });
           pkg = created.pkg;
           if (created.created) packagesCreated += 1;
+        }
+
+        if (pkg.duration_minutes == null) {
+          missingPlan += 1;
+          continue;
         }
 
         const exists = await db

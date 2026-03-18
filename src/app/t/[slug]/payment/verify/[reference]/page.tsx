@@ -205,6 +205,10 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
         "We received a payment in an unsupported currency.",
       init_failed: "We could not start this payment. Please try again.",
       voucher_unavailable: "Payment succeeded but no voucher was available. Contact us at payspot@abdxl.cloud.",
+      mikrotik_config_missing:
+        "Payment succeeded, but MikroTik voucher delivery is not configured correctly. Contact us at payspot@abdxl.cloud.",
+      mikrotik_provision_failed:
+        "Payment succeeded, but PaySpot could not create your MikroTik voucher. Contact us at payspot@abdxl.cloud.",
       access_activation_failed:
         "Payment succeeded but account access could not be activated. Contact us at payspot@abdxl.cloud.",
       plan_window_unusable:

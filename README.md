@@ -6,13 +6,14 @@ Each tenant gets:
 - Isolated vouchers and sales
 - Their own Paystack secret key for separate payouts
 
-Voucher codes are generated in Omada, exported as CSV, imported into a PostgreSQL voucher pool, and
-assigned to customers only after successful payment verification.
+Voucher codes can be imported from CSV, generated in Omada via OpenAPI, or provisioned directly on
+MikroTik HotSpot via RouterOS REST after successful payment verification.
 
 ## Core Flow
 1. Customer visits `/t/<slug>`, selects a package and pays via Paystack.
 2. We verify the transaction (webhook + server-side verification) using the tenant Paystack key.
-3. We atomically assign an unused voucher from the tenant's pool.
+3. We either atomically assign an unused voucher from the tenant's pool or auto-provision a voucher on
+   the configured controller/router backend.
 4. We show the voucher on-screen and send it via SMS (Termii).
 
 ## Routes
@@ -63,6 +64,7 @@ Tenant admins can set architecture options in `/t/<slug>/admin`:
 - `Voucher source`:
   - `import_csv` (default, safest)
   - `omada_openapi` (generate in Omada via OpenAPI and mirror into local pool)
+  - `mikrotik_rest` (create HotSpot users directly on MikroTik after payment)
 - `Portal auth architecture`:
   - `omada_builtin`
   - `external_portal_api`
@@ -108,6 +110,30 @@ Those routes are from Omada’s official OpenAPI document (`/v3/api-docs`) and a
 The admin Architecture section also includes a `Test Omada connection` action, which validates:
 - access token retrieval
 - tenant site API reachability (`GET /openapi/v1/{omadacId}/sites/{siteId}/hotspot/voucher-groups?page=1&pageSize=1`)
+
+## MikroTik Direct HotSpot Mode
+When `mikrotik_rest` is enabled, PaySpot provisions a RouterOS HotSpot user after each successful
+payment instead of pulling from local inventory.
+
+Tenant architecture fields:
+- Base URL
+- REST username
+- REST password
+- Optional hotspot server
+- Optional default profile
+- TLS verify toggle
+
+PaySpot maps existing plan fields automatically:
+- `durationMinutes` -> RouterOS `limit-uptime`
+- `dataLimitMb` -> RouterOS `limit-bytes-total`
+- voucher code -> Paystack transaction reference
+- password -> same as voucher code
+
+Operational notes:
+- Customer device does not need to be on the same network as PaySpot.
+- PaySpot server must be able to reach the MikroTik REST endpoint.
+- Manual voucher creation/import is disabled in this mode because vouchers are provisioned on payment.
+- Use the tenant admin `Test MikroTik connection` action before going live.
 
 CLI importer:
 ```bash

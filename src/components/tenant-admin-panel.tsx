@@ -74,7 +74,7 @@ type VoucherRow = {
 
 type ArchitectureConfig = {
   accessMode: "voucher_access" | "account_access";
-  voucherSourceMode: "import_csv" | "omada_openapi";
+  voucherSourceMode: "import_csv" | "omada_openapi" | "mikrotik_rest";
   omada: {
     apiBaseUrl: string;
     omadacId: string;
@@ -83,6 +83,14 @@ type ArchitectureConfig = {
     hasClientSecret: boolean;
     hotspotOperatorUsername: string;
     hasHotspotOperatorPassword: boolean;
+  };
+  mikrotik: {
+    baseUrl: string;
+    username: string;
+    hasPassword: boolean;
+    hotspotServer: string;
+    defaultProfile: string;
+    verifyTls: boolean;
   };
   radius: {
     hasAdapterSecret: boolean;
@@ -244,6 +252,10 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [omadaSiteOptions, setOmadaSiteOptions] = useState<OmadaSiteOption[]>([]);
   const [omadaClientSecret, setOmadaClientSecret] = useState("");
   const [omadaHotspotOperatorPassword, setOmadaHotspotOperatorPassword] = useState("");
+  const [mikrotikTestLoading, setMikrotikTestLoading] = useState(false);
+  const [mikrotikTestNotice, setMikrotikTestNotice] = useState<string | null>(null);
+  const [mikrotikTestError, setMikrotikTestError] = useState<string | null>(null);
+  const [mikrotikPassword, setMikrotikPassword] = useState("");
 
   const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
   const [vouchersError, setVouchersError] = useState<string | null>(null);
@@ -476,7 +488,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
   const voucherSourceMode = architecture?.voucherSourceMode ?? null;
   const isCsvMode = voucherSourceMode === "import_csv";
-  const isApiAutomationMode = voucherSourceMode === "omada_openapi";
+  const isOmadaMode = voucherSourceMode === "omada_openapi";
+  const isMikrotikMode = voucherSourceMode === "mikrotik_rest";
+  const isApiAutomationMode = isOmadaMode || isMikrotikMode;
   const isExternalAccessMode = architecture?.accessMode === "account_access";
   const hasArchitectureConfigured = !!architecture;
   const hasPlans = plans.length > 0;
@@ -496,6 +510,10 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     setArchitectureSaving(true);
     setArchitectureError(null);
     setArchitectureNotice(null);
+    setMikrotikTestError(null);
+    setMikrotikTestNotice(null);
+    setOmadaTestError(null);
+    setOmadaTestNotice(null);
     try {
       const response = await fetch(`/api/t/${tenantSlug}/admin/architecture`, {
         method: "PATCH",
@@ -512,6 +530,14 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             hotspotOperatorUsername: architecture.omada.hotspotOperatorUsername.trim(),
             hotspotOperatorPassword: omadaHotspotOperatorPassword || undefined,
           },
+          mikrotik: {
+            baseUrl: architecture.mikrotik.baseUrl.trim(),
+            username: architecture.mikrotik.username.trim(),
+            password: mikrotikPassword || undefined,
+            hotspotServer: architecture.mikrotik.hotspotServer.trim(),
+            defaultProfile: architecture.mikrotik.defaultProfile.trim(),
+            verifyTls: architecture.mikrotik.verifyTls,
+          },
         }),
       });
       const data = await readJsonResponse<{ error?: string; architecture?: ArchitectureConfig }>(response);
@@ -520,6 +546,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setArchitectureNotice("Architecture settings saved.");
       setOmadaClientSecret("");
       setOmadaHotspotOperatorPassword("");
+      setMikrotikPassword("");
       setShowArchitectureModal(false);
     } catch (error) {
       setArchitectureError(
@@ -562,6 +589,54 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setOmadaTestError(error instanceof Error ? error.message : "Omada test failed.");
     } finally {
       setOmadaTestLoading(false);
+    }
+  }
+
+  async function testMikrotikConnection() {
+    if (!architecture) return;
+
+    setMikrotikTestLoading(true);
+    setMikrotikTestError(null);
+    setMikrotikTestNotice(null);
+
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/architecture/test-mikrotik`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mikrotik: {
+            baseUrl: architecture.mikrotik.baseUrl.trim(),
+            username: architecture.mikrotik.username.trim(),
+            password: mikrotikPassword || undefined,
+            hotspotServer: architecture.mikrotik.hotspotServer.trim(),
+            defaultProfile: architecture.mikrotik.defaultProfile.trim(),
+            verifyTls: architecture.mikrotik.verifyTls,
+          },
+        }),
+      });
+      const data = await readJsonResponse<{
+        error?: string;
+        message?: string;
+        latencyMs?: number;
+        info?: { version?: string | null; boardName?: string | null; uptime?: string | null };
+      }>(response);
+      if (!response.ok) {
+        const fallback = `MikroTik test failed (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).`;
+        throw new Error(data?.error || fallback);
+      }
+      const latency = typeof data?.latencyMs === "number" ? ` (${data.latencyMs}ms)` : "";
+      const details = [
+        data?.info?.boardName ? `board ${data.info.boardName}` : null,
+        data?.info?.version ? `RouterOS ${data.info.version}` : null,
+        data?.info?.uptime ? `uptime ${data.info.uptime}` : null,
+      ].filter(Boolean).join(" | ");
+      setMikrotikTestNotice(
+        `${data?.message || "MikroTik connection successful."}${latency}${details ? ` | ${details}` : ""}`,
+      );
+    } catch (error) {
+      setMikrotikTestError(error instanceof Error ? error.message : "MikroTik test failed.");
+    } finally {
+      setMikrotikTestLoading(false);
     }
   }
 
@@ -638,7 +713,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     const availableTo = localInputToIso(newPlanAvailableTo);
     const normalizedDuration = duration ?? null;
     const normalizedDataLimit = dataLimitMb ?? null;
-    const accountAccessMode = architecture?.accessMode === "account_access";
+    const durationRequired =
+      architecture?.accessMode !== "account_access" &&
+      architecture?.voucherSourceMode !== "mikrotik_rest";
     if (
       !newPlanName.trim() ||
       (normalizedDuration !== null && (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0)) ||
@@ -657,8 +734,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setPlansError("Plan available-from must be before available-to.");
       return;
     }
-    if (!accountAccessMode && normalizedDuration === null) {
-      setPlansError("Duration is required for voucher access plans.");
+    if (durationRequired && normalizedDuration === null) {
+      setPlansError("Duration is required unless you are using MikroTik direct mode.");
       return;
     }
     if (normalizedDuration === null && normalizedDataLimit === null) {
@@ -716,7 +793,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     const availableFrom = localInputToIso(draft.availableFrom);
     const availableTo = localInputToIso(draft.availableTo);
     const normalizedDuration = draft.duration.trim() ? duration ?? null : null;
-    const accountAccessMode = architecture?.accessMode === "account_access";
+    const durationRequired =
+      architecture?.accessMode !== "account_access" &&
+      architecture?.voucherSourceMode !== "mikrotik_rest";
     if (
       !draft.name.trim() ||
       !draft.code.trim() ||
@@ -736,8 +815,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setPlansError(`Availability window is invalid for ${plan.name}.`);
       return;
     }
-    if (!accountAccessMode && normalizedDuration === null) {
-      setPlansError("Duration is required for voucher access plans.");
+    if (durationRequired && normalizedDuration === null) {
+      setPlansError("Duration is required unless you are using MikroTik direct mode.");
       return;
     }
     if (normalizedDuration === null && dataLimitMb === null) {
@@ -954,7 +1033,30 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   return (
     <>
       <div className="grid gap-5">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={refreshAll}
+            disabled={statsLoading || plansLoading || vouchersLoading}
+            aria-label="Refresh dashboard data"
+            title="Refresh all"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-indigo-200 hover:text-indigo-600 disabled:opacity-50"
+          >
+            <RefreshCw className={["size-3.5", statsLoading || plansLoading || vouchersLoading ? "animate-spin" : ""].join(" ")} />
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={jumpToVoucherTools}
+            aria-label="Quick actions"
+            title="Quick actions"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-indigo-200 hover:text-indigo-600"
+          >
+            <Plus className="size-3.5" />
+            Quick actions
+          </button>
+        </div>
+        <div className="grid gap-3 grid-cols-2 [&>*:last-child]:col-span-2 sm:grid-cols-3 sm:[&>*:last-child]:col-span-1 lg:grid-cols-5">
           <StatTile label="Revenue" value={money(stats?.transactions.revenueNgn ?? 0)} />
           <StatTile label="Successful payments" value={String(stats?.transactions.success ?? 0)} />
           <StatTile label="Total vouchers" value={String(voucherTotals.total)} />
@@ -1111,6 +1213,18 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <AlertDescription>{omadaTestNotice}</AlertDescription>
           </Alert>
         ) : null}
+        {mikrotikTestError ? (
+          <Alert variant="destructive" className="mt-4">
+            <AlertTitle>MikroTik test failed</AlertTitle>
+            <AlertDescription>{mikrotikTestError}</AlertDescription>
+          </Alert>
+        ) : null}
+        {mikrotikTestNotice ? (
+          <Alert variant="success" className="mt-4">
+            <AlertTitle>MikroTik test passed</AlertTitle>
+            <AlertDescription>{mikrotikTestNotice}</AlertDescription>
+          </Alert>
+        ) : null}
         </section>
 
         <section id="ops-plans" className="panel-surface">
@@ -1125,7 +1239,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Button>
         </div>
 
-        <div className="mt-3 space-y-3 xl:hidden">
+        <div className="mt-3 space-y-3 lg:hidden">
           {plans.map((plan) => {
             const draft = planDrafts[plan.id];
             if (!draft) return null;
@@ -1299,8 +1413,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           ) : null}
         </div>
 
-        <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200/85 bg-white xl:block">
-          <table className="w-full min-w-[1180px] text-sm">
+        <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200/85 bg-white lg:block [&_input]:h-8 [&_input]:px-2 [&_input]:text-xs [&_input]:shadow-none">
+          <table className="w-full min-w-[1060px] text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
               <tr>
                 <th className="px-3 py-2">Code</th>
@@ -1409,7 +1523,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                         placeholder="500MB / 1.5GB / 2TB"
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 min-w-[170px]">
                       <Input
                         type="datetime-local"
                         value={draft.availableFrom}
@@ -1421,7 +1535,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                         }
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 min-w-[170px]">
                       <Input
                         type="datetime-local"
                         value={draft.availableTo}
@@ -1525,7 +1639,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 ? isExternalAccessMode
                   ? "External account-access mode: voucher inventory is bypassed. Use subscriber monitoring and RADIUS accounting."
                   : isApiAutomationMode
-                  ? "API automation mode: vouchers are created automatically after each successful customer payment."
+                  ? isOmadaMode
+                    ? "Omada automation mode: vouchers are created automatically after each successful customer payment."
+                    : "MikroTik direct mode: vouchers are created automatically after each successful customer payment."
                   : hasPlans
                     ? "CSV mode: create manually, batch generate, or import CSV."
                     : "CSV mode active. Create at least one plan before adding or generating vouchers."
@@ -1564,12 +1680,12 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             value={voucherQuery}
             onChange={(event) => setVoucherQuery(event.target.value)}
           />
-          <select value={voucherStatus} onChange={(event) => setVoucherStatus(event.target.value)}>
+          <select className="h-11" value={voucherStatus} onChange={(event) => setVoucherStatus(event.target.value)}>
             <option value="all">All statuses</option>
             <option value="UNUSED">Unused</option>
             <option value="ASSIGNED">Assigned</option>
           </select>
-          <select value={voucherPlan} onChange={(event) => setVoucherPlan(event.target.value)}>
+          <select className="h-11" value={voucherPlan} onChange={(event) => setVoucherPlan(event.target.value)}>
             <option value="all">All plans</option>
             {plans.map((plan) => (
               <option key={plan.id} value={plan.id}>
@@ -1582,17 +1698,14 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Button>
         </div>
 
-        <div className="mt-3 space-y-3 xl:hidden">
+        <div className="mt-3 space-y-3 lg:hidden">
           {vouchers.map((row) => (
             <article key={row.id} className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-900 break-all">{row.voucherCode}</p>
-                  <p className="text-xs text-slate-500">{row.packageName}</p>
-                </div>
+              <div className="flex items-start gap-3">
                 <input
                   aria-label={`Select voucher ${row.voucherCode}`}
                   type="checkbox"
+                  className="mt-1 shrink-0"
                   checked={selectedVoucherIds.includes(row.id)}
                   onChange={(event) =>
                     setSelectedVoucherIds((prev) =>
@@ -1600,6 +1713,10 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                     )
                   }
                 />
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-900 break-all">{row.voucherCode}</p>
+                  <p className="text-xs text-slate-500">{row.packageName}</p>
+                </div>
               </div>
               <div className="mt-2">
                 {row.status === "UNUSED" ? (
@@ -1621,8 +1738,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           ) : null}
         </div>
 
-        <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200/85 bg-white xl:block">
-          <table className="w-full min-w-[1060px] text-sm">
+        <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200/85 bg-white lg:block">
+          <table className="w-full min-w-[800px] text-sm">
             <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
               <tr>
                 <th className="px-3 py-2"></th>
@@ -1685,6 +1802,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               <Trash2 className="size-4" />
               Delete
             </Button>
+            <span className="mx-1 h-5 w-px shrink-0 bg-slate-200" />
             <Button
               type="button"
               variant="outline"
@@ -1775,6 +1893,14 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   <CircleHelp className="size-3.5" />
                   Omada setup help
                 </Link>
+              ) : architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "mikrotik_rest" ? (
+                <Link
+                  href="/help/mikrotik-rest"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  <CircleHelp className="size-3.5" />
+                  MikroTik setup help
+                </Link>
               ) : architecture.accessMode === "account_access" ? (
                 <Link
                   href="/help/external-radius"
@@ -1830,6 +1956,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 >
                   <option value="import_csv">Import CSV (default)</option>
                   <option value="omada_openapi">Omada OpenAPI sync</option>
+                  <option value="mikrotik_rest">MikroTik direct (REST)</option>
                 </select>
                 {architecture.accessMode === "account_access" ? (
                   <p className="text-xs text-slate-500">
@@ -1953,6 +2080,88 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               </div>
             ) : null}
 
+            {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "mikrotik_rest" ? (
+              <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">MikroTik REST credentials</p>
+                <p className="mt-2 text-xs text-slate-600">
+                  Enter the router or controller URL once. PaySpot will create the hotspot user automatically after successful payment using the plan&apos;s duration and data limit.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Input
+                    value={architecture.mikrotik.baseUrl}
+                    onChange={(event) =>
+                      setArchitecture((prev) =>
+                        prev
+                          ? { ...prev, mikrotik: { ...prev.mikrotik, baseUrl: event.target.value } }
+                          : prev,
+                      )
+                    }
+                    placeholder="https://router.example.com"
+                  />
+                  <Input
+                    value={architecture.mikrotik.username}
+                    onChange={(event) =>
+                      setArchitecture((prev) =>
+                        prev
+                          ? { ...prev, mikrotik: { ...prev.mikrotik, username: event.target.value } }
+                          : prev,
+                      )
+                    }
+                    placeholder="REST username"
+                  />
+                  <Input
+                    type="password"
+                    value={mikrotikPassword}
+                    onChange={(event) => setMikrotikPassword(event.target.value)}
+                    placeholder={
+                      architecture.mikrotik.hasPassword
+                        ? "REST password (leave blank to keep)"
+                        : "REST password"
+                    }
+                  />
+                  <Input
+                    value={architecture.mikrotik.hotspotServer}
+                    onChange={(event) =>
+                      setArchitecture((prev) =>
+                        prev
+                          ? { ...prev, mikrotik: { ...prev.mikrotik, hotspotServer: event.target.value } }
+                          : prev,
+                      )
+                    }
+                    placeholder="Hotspot server (optional)"
+                  />
+                  <Input
+                    value={architecture.mikrotik.defaultProfile}
+                    onChange={(event) =>
+                      setArchitecture((prev) =>
+                        prev
+                          ? { ...prev, mikrotik: { ...prev.mikrotik, defaultProfile: event.target.value } }
+                          : prev,
+                      )
+                    }
+                    placeholder="Default profile (optional)"
+                  />
+                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={architecture.mikrotik.verifyTls}
+                      onChange={(event) =>
+                        setArchitecture((prev) =>
+                          prev
+                            ? { ...prev, mikrotik: { ...prev.mikrotik, verifyTls: event.target.checked } }
+                            : prev,
+                        )
+                      }
+                    />
+                    Verify TLS certificate
+                  </label>
+                </div>
+                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  Voucher code = transaction reference. Password = same as voucher code. Duration and data limit come from each PaySpot plan.
+                </div>
+              </div>
+            ) : null}
+
             {architecture.accessMode === "account_access" ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">External RADIUS adapter</p>
@@ -1978,7 +2187,17 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   {omadaTestLoading ? "Testing..." : "Test Omada connection"}
                 </Button>
               ) : null}
-              <Button type="submit" disabled={architectureSaving || omadaTestLoading}>
+              {architecture.voucherSourceMode === "mikrotik_rest" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={testMikrotikConnection}
+                  disabled={mikrotikTestLoading || architectureSaving}
+                >
+                  {mikrotikTestLoading ? "Testing..." : "Test MikroTik connection"}
+                </Button>
+              ) : null}
+              <Button type="submit" disabled={architectureSaving || omadaTestLoading || mikrotikTestLoading}>
                 {architectureSaving ? "Saving..." : "Save architecture"}
               </Button>
             </div>
@@ -2038,7 +2257,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   : "Duration: invalid format"
               ) : architecture?.accessMode === "account_access"
                 ? "Duration: optional (leave blank for unlimited time)"
-                : "Duration: required for voucher plans"}
+                : architecture?.voucherSourceMode === "mikrotik_rest"
+                  ? "Duration: optional in MikroTik mode (data-only plans supported)"
+                  : "Duration: required for voucher plans"}
               {" | "}
               {newPlanPrice.trim() ? (
                 Number.isFinite(parsedNewPlanPrice ?? Number.NaN)
@@ -2143,57 +2364,6 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </ModalShell>
       ) : null}
 
-      <div className="fixed right-4 top-1/2 z-40 hidden -translate-y-1/2 lg:flex lg:flex-col lg:gap-1.5">
-        <button
-          type="button"
-          onClick={refreshAll}
-          disabled={statsLoading || plansLoading || vouchersLoading}
-          aria-label="Refresh dashboard data"
-          title="Refresh"
-          className="group inline-flex size-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-500 shadow-[var(--shadow-sm)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-white hover:text-indigo-600 hover:shadow-[var(--shadow-md)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <RefreshCw
-            className={[
-              "size-3.5 transition-transform",
-              statsLoading || plansLoading || vouchersLoading ? "animate-spin" : "group-hover:rotate-180 duration-500",
-            ].join(" ")}
-          />
-        </button>
-        <button
-          type="button"
-          onClick={jumpToVoucherTools}
-          aria-label="Go to voucher tools"
-          title="Voucher tools"
-          className="inline-flex size-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-500 shadow-[var(--shadow-sm)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-white hover:text-indigo-600 hover:shadow-[var(--shadow-md)]"
-        >
-          <Plus className="size-3.5" />
-        </button>
-      </div>
-
-      <div className="fixed bottom-5 right-4 z-40 flex items-center gap-2 lg:hidden">
-        <button
-          type="button"
-          onClick={refreshAll}
-          disabled={statsLoading || plansLoading || vouchersLoading}
-          aria-label="Refresh dashboard data"
-          className="inline-flex size-10 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-500 shadow-[var(--shadow-md)] backdrop-blur-sm transition-all hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <RefreshCw
-            className={[
-              "size-4",
-              statsLoading || plansLoading || vouchersLoading ? "animate-spin" : "",
-            ].join(" ")}
-          />
-        </button>
-        <button
-          type="button"
-          onClick={jumpToVoucherTools}
-          aria-label="Go to voucher tools"
-          className="inline-flex size-10 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 text-slate-500 shadow-[var(--shadow-md)] backdrop-blur-sm transition-all hover:text-indigo-600"
-        >
-          <Plus className="size-4" />
-        </button>
-      </div>
     </>
   );
 }

@@ -120,6 +120,12 @@ async function initSchema() {
       omada_client_secret_enc TEXT,
       omada_hotspot_operator_username TEXT,
       omada_hotspot_operator_password_enc TEXT,
+      mikrotik_base_url TEXT,
+      mikrotik_username TEXT,
+      mikrotik_password_enc TEXT,
+      mikrotik_hotspot_server TEXT,
+      mikrotik_default_profile TEXT,
+      mikrotik_verify_tls INTEGER NOT NULL DEFAULT 1,
       radius_adapter_secret_enc TEXT,
       radius_adapter_secret_last4 TEXT,
       created_at TEXT NOT NULL,
@@ -343,6 +349,18 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS omada_hotspot_operator_username TEXT;
     ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS omada_hotspot_operator_password_enc TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS mikrotik_base_url TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS mikrotik_username TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS mikrotik_password_enc TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS mikrotik_hotspot_server TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS mikrotik_default_profile TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS mikrotik_verify_tls INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS radius_adapter_secret_enc TEXT;
     ALTER TABLE tenants

@@ -24,7 +24,7 @@ async function normalizeTenantAccess(request: Request, tenantId: string) {
 
 const schema = z.object({
   accessMode: z.enum(["voucher_access", "account_access"]).optional(),
-  voucherSourceMode: z.enum(["import_csv", "omada_openapi"]).optional(),
+  voucherSourceMode: z.enum(["import_csv", "omada_openapi", "mikrotik_rest"]).optional(),
   portalAuthMode: z
     .enum(["omada_builtin", "external_radius_portal"])
     .optional(),
@@ -37,6 +37,16 @@ const schema = z.object({
       clientSecret: z.string().max(500).optional(),
       hotspotOperatorUsername: z.string().max(200).optional(),
       hotspotOperatorPassword: z.string().max(500).optional(),
+    })
+    .optional(),
+  mikrotik: z
+    .object({
+      baseUrl: z.string().max(300).optional(),
+      username: z.string().max(200).optional(),
+      password: z.string().max(500).optional(),
+      hotspotServer: z.string().max(200).optional(),
+      defaultProfile: z.string().max(200).optional(),
+      verifyTls: z.boolean().optional(),
     })
     .optional(),
   radius: z
@@ -105,6 +115,19 @@ export async function PATCH(request: Request, { params }: Props) {
             : undefined,
       }
     : undefined;
+  const mikrotikPatch = parsed.data.mikrotik
+    ? {
+        baseUrl: parsed.data.mikrotik.baseUrl?.trim(),
+        username: parsed.data.mikrotik.username?.trim(),
+        password:
+          parsed.data.mikrotik.password !== undefined
+            ? parsed.data.mikrotik.password.trim()
+            : undefined,
+        hotspotServer: parsed.data.mikrotik.hotspotServer?.trim(),
+        defaultProfile: parsed.data.mikrotik.defaultProfile?.trim(),
+        verifyTls: parsed.data.mikrotik.verifyTls,
+      }
+    : undefined;
 
   try {
     const result = await setTenantArchitecture({
@@ -113,6 +136,7 @@ export async function PATCH(request: Request, { params }: Props) {
       voucherSourceMode: parsed.data.voucherSourceMode as VoucherSourceMode | undefined,
       portalAuthMode: parsed.data.portalAuthMode as PortalAuthMode | undefined,
       omada: omadaPatch,
+      mikrotik: mikrotikPatch,
       radius: radiusPatch,
     });
 
@@ -123,6 +147,15 @@ export async function PATCH(request: Request, { params }: Props) {
       return Response.json(
         {
           error: `Cannot set voucher source to omada_openapi. Missing required Omada fields: ${result.missing.join(", ")}`,
+          missing: result.missing,
+        },
+        { status: 400 },
+      );
+    }
+    if (result.status === "incomplete_mikrotik_rest") {
+      return Response.json(
+        {
+          error: `Cannot set voucher source to mikrotik_rest. Missing required MikroTik fields: ${result.missing.join(", ")}`,
           missing: result.missing,
         },
         { status: 400 },
