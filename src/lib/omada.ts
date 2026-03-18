@@ -32,6 +32,16 @@ type OmadaSiteGrid = {
   }>;
 };
 
+export type OmadaDebugInfo = {
+  stage: "token" | "site_list";
+  attemptedBaseUrls?: string[];
+  attemptedUrls?: string[];
+  attempts?: Array<{
+    target: string;
+    message: string;
+  }>;
+};
+
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_POLL_ATTEMPTS = 15;
 const POLL_INTERVAL_MS = 750;
@@ -97,6 +107,25 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function toErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unexpected Omada error";
+}
+
+class OmadaDebugError extends Error {
+  debug: OmadaDebugInfo;
+
+  constructor(message: string, debug: OmadaDebugInfo) {
+    super(message);
+    this.name = "OmadaDebugError";
+    this.debug = debug;
+  }
+}
+
+export function extractOmadaDebugInfo(error: unknown): OmadaDebugInfo | null {
+  if (error instanceof OmadaDebugError) return error.debug;
+  return null;
+}
+
 export async function getOmadaAccessToken(config: TenantOmadaOpenApiConfig) {
   const baseUrl = normalizeBaseUrl(config.apiBaseUrl);
   const tokenUrl = `${baseUrl}/openapi/authorize/token?grant_type=client_credentials`;
@@ -123,17 +152,27 @@ export async function getOmadaAccessToken(config: TenantOmadaOpenApiConfig) {
 async function resolveOmadaAccess(config: TenantOmadaOpenApiConfig) {
   const candidates = buildBaseUrlCandidates(config.apiBaseUrl);
   let lastError: Error | null = null;
+  const attempts: Array<{ target: string; message: string }> = [];
 
   for (const baseUrl of candidates) {
     try {
       const token = await getOmadaAccessToken({ ...config, apiBaseUrl: baseUrl });
       return { baseUrl, token };
     } catch (error) {
+      const message = toErrorMessage(error);
+      attempts.push({
+        target: `${baseUrl}/openapi/authorize/token?grant_type=client_credentials`,
+        message,
+      });
       lastError = error instanceof Error ? error : new Error("Omada token request failed");
     }
   }
 
-  throw lastError ?? new Error("Unable to obtain Omada access token");
+  throw new OmadaDebugError(lastError?.message ?? "Unable to obtain Omada access token", {
+    stage: "token",
+    attemptedBaseUrls: candidates,
+    attempts,
+  });
 }
 
 export async function listOmadaSites(params: {
@@ -158,6 +197,7 @@ export async function listOmadaSites(params: {
 
   let data: OmadaResponse<OmadaSiteGrid> | null = null;
   let lastError: Error | null = null;
+  const attempts: Array<{ target: string; message: string }> = [];
   for (const listUrl of listUrls) {
     try {
       data = await omadaRequest<OmadaSiteGrid>(listUrl, {
@@ -168,12 +208,18 @@ export async function listOmadaSites(params: {
       });
       break;
     } catch (error) {
+      attempts.push({ target: listUrl, message: toErrorMessage(error) });
       lastError = error instanceof Error ? error : new Error("Unable to fetch Omada sites");
     }
   }
 
   if (!data) {
-    throw lastError ?? new Error("Unable to fetch Omada sites");
+    throw new OmadaDebugError(lastError?.message ?? "Unable to fetch Omada sites", {
+      stage: "site_list",
+      attemptedBaseUrls: [access.baseUrl],
+      attemptedUrls: listUrls,
+      attempts,
+    });
   }
 
   const rows = Array.isArray(data.result?.data)

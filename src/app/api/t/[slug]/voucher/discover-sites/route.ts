@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getTenantBySlug } from "@/lib/store";
-import { listOmadaSites } from "@/lib/omada";
+import { extractOmadaDebugInfo, listOmadaSites } from "@/lib/omada";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -29,6 +29,7 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ ok: true, omadacId: parsed.data.omadacId, sites });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unable to discover Omada sites";
-    return Response.json({ error: message }, { status: 502 });
+    const debug = extractOmadaDebugInfo(err);
+    return Response.json({ error: message, debug }, { status: 502 });
   }
 }

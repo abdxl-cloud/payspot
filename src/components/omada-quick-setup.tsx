@@ -3,6 +3,12 @@
 import { useState } from "react";
 
 type Site = { siteId: string; name: string };
+type DiscoverSitesDebug = {
+  stage?: "token" | "site_list";
+  attemptedBaseUrls?: string[];
+  attemptedUrls?: string[];
+  attempts?: Array<{ target: string; message: string }>;
+};
 
 type Props = {
   tenantSlug: string;
@@ -17,6 +23,7 @@ export function OmadaQuickSetup({ tenantSlug }: Props) {
 
   const [sites, setSites] = useState<Site[]>([]);
   const [fetchingError, setFetchingError] = useState<string | null>(null);
+  const [fetchingDebug, setFetchingDebug] = useState<DiscoverSitesDebug | null>(null);
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -24,6 +31,7 @@ export function OmadaQuickSetup({ tenantSlug }: Props) {
 
   async function handleFetchSites() {
     setFetchingError(null);
+    setFetchingDebug(null);
     setSites([]);
     setFetching(true);
     try {
@@ -35,6 +43,7 @@ export function OmadaQuickSetup({ tenantSlug }: Props) {
       const data = await res.json();
       if (!res.ok) {
         setFetchingError(data.error ?? "Failed to fetch sites");
+        setFetchingDebug(data.debug ?? null);
         return;
       }
       setSites(data.sites ?? []);
@@ -140,6 +149,31 @@ export function OmadaQuickSetup({ tenantSlug }: Props) {
           <p className="text-xs text-red-600">{fetchingError}</p>
         )}
       </div>
+      {fetchingDebug && (
+        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          <p className="font-semibold">Debug details</p>
+          <p className="mt-1">
+            Stage: <span className="font-mono">{fetchingDebug.stage ?? "unknown"}</span>
+          </p>
+          {(fetchingDebug.attemptedBaseUrls ?? []).length > 0 && (
+            <p className="mt-1 break-all">
+              Base URLs:{" "}
+              <span className="font-mono">
+                {(fetchingDebug.attemptedBaseUrls ?? []).join(", ")}
+              </span>
+            </p>
+          )}
+          {(fetchingDebug.attempts ?? []).length > 0 && (
+            <div className="mt-2 space-y-1">
+              {(fetchingDebug.attempts ?? []).map((attempt, index) => (
+                <p key={`${attempt.target}:${index}`} className="break-all">
+                  <span className="font-mono">{attempt.target}</span>: {attempt.message}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {sites.length > 0 && (
         <div className="mt-3">

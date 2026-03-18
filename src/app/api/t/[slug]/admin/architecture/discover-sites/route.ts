@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getSessionUserFromRequest } from "@/lib/auth";
-import { listOmadaSites } from "@/lib/omada";
+import { extractOmadaDebugInfo, listOmadaSites } from "@/lib/omada";
 import {
   getTenantBySlug,
   resolveTenantOmadaOpenApiCredentialsForTesting,
@@ -80,8 +80,9 @@ export async function POST(request: Request, { params }: Props) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to discover Omada sites";
+    const debug = extractOmadaDebugInfo(error);
     return Response.json(
-      { error: `Unable to discover Omada sites: ${message}` },
+      { error: `Unable to discover Omada sites: ${message}`, debug },
       { status: 502 },
     );
   }
