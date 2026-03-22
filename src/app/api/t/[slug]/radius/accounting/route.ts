@@ -1,9 +1,11 @@
 import { z } from "zod";
 import {
+  getRadiusVoucherAccessState,
   getPortalSubscriberByEmail,
   getSubscriberAccessState,
   getTenantBySlug,
   recordRadiusAccountingEvent,
+  recordRadiusVoucherAccountingEvent,
   verifyTenantRadiusAdapterSecret,
 } from "@/lib/store";
 import { getDb } from "@/lib/db";
@@ -30,6 +32,7 @@ const schema = z.object({
   sessionId: z.string().min(3),
   subscriberId: z.string().optional(),
   entitlementId: z.string().optional(),
+  transactionReference: z.string().optional(),
   username: z.string().optional(),
   inputOctets: z.coerce.number().nonnegative().optional(),
   outputOctets: z.coerce.number().nonnegative().optional(),
@@ -97,6 +100,125 @@ export async function POST(request: Request, { params }: Props) {
 
   let subscriberId = parsed.data.subscriberId;
   let entitlementId = parsed.data.entitlementId;
+  let transactionReference = parsed.data.transactionReference?.trim() || undefined;
+  const voucherMode =
+    tenant.portal_auth_mode === "external_radius_voucher" ||
+    tenant.voucher_source_mode === "radius_voucher";
+
+  if (voucherMode) {
+    if (!transactionReference) {
+      const db = getDb();
+      const existingVoucher = await db
+        .prepare(
+          `
+          SELECT transaction_reference
+          FROM radius_voucher_sessions
+          WHERE tenant_id = ? AND session_id = ?
+        `,
+        )
+        .get(tenant.id, parsed.data.sessionId) as
+        | { transaction_reference: string }
+        | undefined;
+      transactionReference = transactionReference ?? existingVoucher?.transaction_reference;
+
+      if (!transactionReference && parsed.data.callingStationId) {
+        const byStation = await db
+          .prepare(
+            `
+            SELECT transaction_reference
+            FROM radius_voucher_sessions
+            WHERE tenant_id = ?
+              AND UPPER(COALESCE(calling_station_id, '')) = UPPER(?)
+              AND status = 'active'
+              AND (? = '' OR COALESCE(nas_ip_address, '') = ?)
+            ORDER BY last_update_at DESC
+            LIMIT 1
+          `,
+          )
+          .get(
+            tenant.id,
+            parsed.data.callingStationId,
+            parsed.data.nasIpAddress ?? "",
+            parsed.data.nasIpAddress ?? "",
+          ) as
+          | { transaction_reference: string }
+          | undefined;
+        transactionReference = transactionReference ?? byStation?.transaction_reference;
+      }
+    }
+
+    if (!transactionReference && parsed.data.username) {
+      const db = getDb();
+      const byVoucherCode = await db
+        .prepare(
+          `
+          SELECT reference
+          FROM transactions
+          WHERE tenant_id = ?
+            AND payment_status = 'success'
+            AND UPPER(COALESCE(voucher_code, '')) = UPPER(?)
+          ORDER BY paid_at DESC
+          LIMIT 1
+        `,
+        )
+        .get(tenant.id, parsed.data.username.trim()) as
+        | { reference: string }
+        | undefined;
+      transactionReference = transactionReference ?? byVoucherCode?.reference;
+    }
+
+    if (!transactionReference) {
+      return Response.json(
+        { error: "transactionReference is required for this voucher session." },
+        { status: 400 },
+      );
+    }
+
+    await recordRadiusVoucherAccountingEvent({
+      tenantId: tenant.id,
+      transactionReference,
+      sessionId: parsed.data.sessionId,
+      event: normalizedEvent as "start" | "interim" | "stop",
+      inputOctets,
+      outputOctets,
+      callingStationId: parsed.data.callingStationId,
+      calledStationId: parsed.data.calledStationId,
+      nasIpAddress: parsed.data.nasIpAddress,
+    });
+
+    const access = await getRadiusVoucherAccessState({
+      tenantId: tenant.id,
+      reference: transactionReference,
+    });
+
+    let shouldDisconnect = false;
+    let disconnectReason: string | null = null;
+
+    if (
+      normalizedEvent !== "stop" &&
+      access.state === "ended" &&
+      (access.reason === "data_limit_reached" ||
+        access.reason === "plan_expired" ||
+        access.reason === "no_active_voucher")
+    ) {
+      shouldDisconnect = true;
+      disconnectReason = access.reason;
+    }
+
+    if (!shouldDisconnect && normalizedEvent !== "stop" && access.state === "active" && access.package.max_devices) {
+      const maxDevices = access.package.max_devices;
+      if (Number.isFinite(maxDevices) && maxDevices > 0 && access.usage.activeSessions > maxDevices) {
+        shouldDisconnect = true;
+        disconnectReason = "session_limit_reached";
+      }
+    }
+
+    return Response.json({
+      ok: true,
+      disconnect: shouldDisconnect,
+      reason: shouldDisconnect ? disconnectReason : null,
+    });
+  }
 
   if (!subscriberId || !entitlementId) {
     const db = getDb();

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  authorizeVoucherRadiusAccess,
   authorizeSubscriberRadiusAccess,
   getTenantBySlug,
   verifyTenantRadiusAdapterSecret,
@@ -49,14 +50,77 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const auth = await authorizeSubscriberRadiusAccess({
+  const voucherMode =
+    tenant.portal_auth_mode === "external_radius_voucher" ||
+    tenant.voucher_source_mode === "radius_voucher";
+  const reauthIntervalSeconds = getRadiusReauthIntervalSeconds();
+  if (voucherMode) {
+    const authResult = await authorizeVoucherRadiusAccess({
+      tenantId: tenant.id,
+      username: parsed.data.username,
+      password: parsed.data.password,
+      callingStationId: parsed.data.callingStationId,
+    });
+    if (authResult.status !== "ok") {
+      const reasonMessages: Record<string, string> = {
+        invalid_credentials: "Invalid voucher code or password.",
+        no_active_voucher: "This voucher is not active.",
+        plan_expired: "Your plan has expired.",
+        data_limit_reached: "Your data limit has been reached.",
+        session_limit_reached:
+          "Maximum devices reached for this plan. Disconnect another device and try again.",
+      };
+      return Response.json({
+        accept: false,
+        reason: reasonMessages[authResult.status] ?? authResult.status,
+        reasonCode: authResult.status,
+      });
+    }
+
+    const endsAt = authResult.endsAt;
+    const hasTimeLimit = !!endsAt;
+    const timeoutSeconds = hasTimeLimit
+      ? Math.floor((new Date(endsAt as string).getTime() - Date.now()) / 1000)
+      : null;
+    if (hasTimeLimit && (!Number.isFinite(timeoutSeconds) || (timeoutSeconds as number) <= 0)) {
+      return Response.json({
+        accept: false,
+        reason: "Your plan has expired.",
+        reasonCode: "plan_expired",
+      });
+    }
+
+    let sessionTimeout: number | undefined;
+    if (hasTimeLimit) {
+      sessionTimeout = Math.max(1, timeoutSeconds as number);
+    }
+    if (reauthIntervalSeconds) {
+      sessionTimeout =
+        sessionTimeout === undefined
+          ? reauthIntervalSeconds
+          : Math.min(sessionTimeout, reauthIntervalSeconds);
+    }
+
+    return Response.json({
+      accept: true,
+      transactionReference: authResult.transaction.reference,
+      reply: {
+        sessionTimeout,
+        maxDevices: authResult.package.max_devices,
+        bandwidthProfile: authResult.package.bandwidth_profile,
+        dataLimitMb: authResult.package.data_limit_mb,
+        planEndsAt: authResult.endsAt ?? undefined,
+      },
+    });
+  }
+
+  const authResult = await authorizeSubscriberRadiusAccess({
     tenantId: tenant.id,
     username: parsed.data.username,
     password: parsed.data.password,
     callingStationId: parsed.data.callingStationId,
   });
-
-  if (auth.status !== "ok") {
+  if (authResult.status !== "ok") {
     const reasonMessages: Record<string, string> = {
       invalid_credentials: "Invalid email or password.",
       no_active_plan: "No active plan found for this account.",
@@ -67,14 +131,15 @@ export async function POST(request: Request, { params }: Props) {
     };
     return Response.json({
       accept: false,
-      reason: reasonMessages[auth.status] ?? auth.status,
-      reasonCode: auth.status,
+      reason: reasonMessages[authResult.status] ?? authResult.status,
+      reasonCode: authResult.status,
     });
   }
 
-  const hasTimeLimit = !!auth.entitlement.ends_at;
+  const endsAt = authResult.entitlement.ends_at;
+  const hasTimeLimit = !!endsAt;
   const timeoutSeconds = hasTimeLimit
-    ? Math.floor((new Date(auth.entitlement.ends_at as string).getTime() - Date.now()) / 1000)
+    ? Math.floor((new Date(endsAt as string).getTime() - Date.now()) / 1000)
     : null;
   if (hasTimeLimit && (!Number.isFinite(timeoutSeconds) || (timeoutSeconds as number) <= 0)) {
     return Response.json({
@@ -84,7 +149,6 @@ export async function POST(request: Request, { params }: Props) {
     });
   }
 
-  const reauthIntervalSeconds = getRadiusReauthIntervalSeconds();
   let sessionTimeout: number | undefined;
   if (hasTimeLimit) {
     sessionTimeout = Math.max(1, timeoutSeconds as number);
@@ -98,14 +162,14 @@ export async function POST(request: Request, { params }: Props) {
 
   return Response.json({
     accept: true,
-    subscriberId: auth.subscriber.id,
-    entitlementId: auth.entitlement.id,
+    subscriberId: authResult.subscriber.id,
+    entitlementId: authResult.entitlement.id,
     reply: {
       sessionTimeout,
-      maxDevices: auth.entitlement.max_devices,
-      bandwidthProfile: auth.entitlement.bandwidth_profile,
-      dataLimitMb: auth.entitlement.data_limit_mb,
-      planEndsAt: auth.entitlement.ends_at ?? undefined,
+      maxDevices: authResult.entitlement.max_devices,
+      bandwidthProfile: authResult.entitlement.bandwidth_profile,
+      dataLimitMb: authResult.entitlement.data_limit_mb,
+      planEndsAt: authResult.entitlement.ends_at ?? undefined,
     },
   });
 }

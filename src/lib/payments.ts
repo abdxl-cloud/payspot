@@ -131,6 +131,48 @@ async function provisionMikrotikVoucherForTransaction(params: {
   }
 }
 
+async function provisionRadiusVoucherForTransaction(params: {
+  tenantId: string;
+  reference: string;
+}) {
+  const transaction = await getTransaction(params.tenantId, params.reference);
+  if (!transaction) {
+    return { status: "missing" as const };
+  }
+  if (transaction.payment_status === "success" && transaction.voucher_code) {
+    return {
+      status: "already" as const,
+      voucherCode: transaction.voucher_code,
+    };
+  }
+
+  const processing = await markTransactionProcessing({
+    tenantId: params.tenantId,
+    reference: params.reference,
+  });
+  if (processing === 0) {
+    const existing = await getTransaction(params.tenantId, params.reference);
+    if (existing?.payment_status === "success" && existing.voucher_code) {
+      return {
+        status: "already" as const,
+        voucherCode: existing.voucher_code,
+      };
+    }
+    return { status: "skipped" as const };
+  }
+
+  const voucherCode = transaction.reference.trim().toUpperCase();
+  const paidAt = new Date().toISOString();
+  await completeTransaction({
+    tenantId: params.tenantId,
+    reference: params.reference,
+    voucherCode,
+    paidAt,
+  });
+
+  return { status: "assigned" as const, voucherCode };
+}
+
 export async function handleSuccessfulPayment(params: {
   tenantId: string;
   reference: string;
@@ -185,6 +227,8 @@ export async function handleSuccessfulPayment(params: {
     | { status: string; voucherCode?: string };
   if (tenant?.voucher_source_mode === "mikrotik_rest") {
     result = await provisionMikrotikVoucherForTransaction(params);
+  } else if (tenant?.voucher_source_mode === "radius_voucher") {
+    result = await provisionRadiusVoucherForTransaction(params);
   } else {
     result = await transactionAssignVoucher({
       tenantId: params.tenantId,

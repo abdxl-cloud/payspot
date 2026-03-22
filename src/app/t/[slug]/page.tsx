@@ -28,7 +28,8 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
   const portalContext = getCaptivePortalContextFromSearchParams(resolvedSearchParams);
   const autoProvisionVoucherMode =
     tenant.voucher_source_mode === "omada_openapi" ||
-    tenant.voucher_source_mode === "mikrotik_rest";
+    tenant.voucher_source_mode === "mikrotik_rest" ||
+    tenant.voucher_source_mode === "radius_voucher";
 
   if (tenant.status !== "active") {
     return (

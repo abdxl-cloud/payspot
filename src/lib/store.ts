@@ -36,10 +36,11 @@ export type TenantRow = {
   updated_at: string;
 };
 
-export type VoucherSourceMode = "import_csv" | "omada_openapi" | "mikrotik_rest";
+export type VoucherSourceMode = "import_csv" | "omada_openapi" | "mikrotik_rest" | "radius_voucher";
 export type PortalAuthMode =
   | "omada_builtin"
-  | "external_radius_portal";
+  | "external_radius_portal"
+  | "external_radius_voucher";
 export type AccessMode = "voucher_access" | "account_access";
 
 export type TenantArchitecture = {
@@ -238,7 +239,17 @@ export type SubscriberAccessEndReason =
   | "data_limit_reached"
   | "no_active_plan";
 
+export type RadiusVoucherAccessEndReason =
+  | "plan_expired"
+  | "data_limit_reached"
+  | "no_active_voucher";
+
 export type SubscriberAccessUsage = {
+  usedBytes: number;
+  activeSessions: number;
+};
+
+export type RadiusVoucherUsage = {
   usedBytes: number;
   activeSessions: number;
 };
@@ -255,6 +266,24 @@ export type SubscriberAccessState =
       reason: SubscriberAccessEndReason;
       entitlement: SubscriberEntitlementRow | null;
       usage: SubscriberAccessUsage | null;
+    };
+
+export type RadiusVoucherAccessState =
+  | {
+      state: "active";
+      reason: null;
+      transaction: TransactionRow;
+      package: PackageRow;
+      usage: RadiusVoucherUsage;
+      endsAt: string | null;
+    }
+  | {
+      state: "ended";
+      reason: RadiusVoucherAccessEndReason;
+      transaction: TransactionRow | null;
+      package: PackageRow | null;
+      usage: RadiusVoucherUsage | null;
+      endsAt: string | null;
     };
 
 function nowIso() {
@@ -278,11 +307,13 @@ function normalizeVoucherSourceMode(
 ): VoucherSourceMode {
   if (value === "omada_openapi") return "omada_openapi";
   if (value === "mikrotik_rest") return "mikrotik_rest";
+  if (value === "radius_voucher") return "radius_voucher";
   return "import_csv";
 }
 
 function normalizePortalAuthMode(value: string | null | undefined): PortalAuthMode {
   if (value === "external_radius_portal") return "external_radius_portal";
+  if (value === "external_radius_voucher") return "external_radius_voucher";
   return "omada_builtin";
 }
 
@@ -935,6 +966,140 @@ export async function getRadiusUsageForEntitlements(params: {
   );
 }
 
+export async function getRadiusUsageForVoucherTransactions(params: {
+  tenantId: string;
+  references: string[];
+}) {
+  if (params.references.length === 0) {
+    return new Map<string, RadiusVoucherUsage>();
+  }
+
+  const db = getDb();
+  const cutoffIso = getRadiusActiveCutoffIso();
+  const placeholders = params.references.map(() => "?").join(", ");
+  const rows = await db
+    .prepare(
+      `
+      SELECT
+        transaction_reference,
+        COALESCE(SUM(input_octets + output_octets), 0) as used_bytes,
+        COUNT(
+          DISTINCT CASE
+            WHEN status = 'active' AND last_update_at >= ?
+              THEN COALESCE(NULLIF(calling_station_id, ''), session_id)
+            ELSE NULL
+          END
+        ) as active_sessions
+      FROM radius_voucher_sessions
+      WHERE tenant_id = ?
+        AND transaction_reference IN (${placeholders})
+      GROUP BY transaction_reference
+    `,
+    )
+    .all(cutoffIso, params.tenantId, ...params.references) as Array<{
+    transaction_reference: string;
+    used_bytes: number;
+    active_sessions: number;
+  }>;
+
+  return new Map(
+    rows.map((row) => [
+      row.transaction_reference,
+      {
+        usedBytes: Number(row.used_bytes ?? 0),
+        activeSessions: Number(row.active_sessions ?? 0),
+      },
+    ]),
+  );
+}
+
+export async function getRadiusUsageForVoucherTransaction(params: {
+  tenantId: string;
+  reference: string;
+}) {
+  const result = await getRadiusUsageForVoucherTransactions({
+    tenantId: params.tenantId,
+    references: [params.reference],
+  });
+  return result.get(params.reference) ?? { usedBytes: 0, activeSessions: 0 };
+}
+
+export async function getRadiusVoucherAccessState(params: {
+  tenantId: string;
+  reference: string;
+}): Promise<RadiusVoucherAccessState> {
+  const transaction = await getTransaction(params.tenantId, params.reference);
+  if (!transaction || transaction.payment_status !== "success" || !transaction.voucher_code) {
+    return {
+      state: "ended",
+      reason: "no_active_voucher",
+      transaction: null,
+      package: null,
+      usage: null,
+      endsAt: null,
+    };
+  }
+
+  const pkg = await getPackageById(params.tenantId, transaction.package_id);
+  if (!pkg) {
+    return {
+      state: "ended",
+      reason: "no_active_voucher",
+      transaction,
+      package: null,
+      usage: null,
+      endsAt: null,
+    };
+  }
+
+  const usage = await getRadiusUsageForVoucherTransaction({
+    tenantId: params.tenantId,
+    reference: transaction.reference,
+  });
+
+  const endsAt =
+    transaction.paid_at && pkg.duration_minutes && pkg.duration_minutes > 0
+      ? new Date(new Date(transaction.paid_at).getTime() + pkg.duration_minutes * 60 * 1000).toISOString()
+      : null;
+  if (endsAt) {
+    const endsMs = parseIsoTime(endsAt);
+    if (Number.isFinite(endsMs) && endsMs <= Date.now()) {
+      return {
+        state: "ended",
+        reason: "plan_expired",
+        transaction,
+        package: pkg,
+        usage,
+        endsAt,
+      };
+    }
+  }
+
+  const allowedBytes =
+    pkg.data_limit_mb && pkg.data_limit_mb > 0
+      ? pkg.data_limit_mb * 1024 * 1024
+      : null;
+  if (allowedBytes !== null && usage.usedBytes >= allowedBytes) {
+    return {
+      state: "ended",
+      reason: "data_limit_reached",
+      transaction,
+      package: pkg,
+      usage,
+      endsAt,
+    };
+  }
+
+  return {
+    state: "active",
+    reason: null,
+    transaction,
+    package: pkg,
+    usage,
+    endsAt,
+  };
+}
+
 export async function resolveTenantRadiusAdapterSecret(tenantId: string) {
   const tenant = await getTenantById(tenantId);
   if (!tenant?.radius_adapter_secret_enc) return null;
@@ -1006,6 +1171,73 @@ export async function authorizeSubscriberRadiusAccess(params: {
     status: "ok" as const,
     subscriber,
     entitlement,
+    activeSessionCount,
+  };
+}
+
+export async function authorizeVoucherRadiusAccess(params: {
+  tenantId: string;
+  username: string;
+  password: string;
+  callingStationId?: string | null;
+}) {
+  const transaction = await getTransactionByVoucherCode(params.tenantId, params.username);
+  if (!transaction?.voucher_code) return { status: "invalid_credentials" as const };
+
+  const normalizedPassword = params.password.trim().toUpperCase();
+  const normalizedVoucherCode = transaction.voucher_code.trim().toUpperCase();
+  if (normalizedPassword !== normalizedVoucherCode) {
+    return { status: "invalid_credentials" as const };
+  }
+
+  const accessState = await getRadiusVoucherAccessState({
+    tenantId: params.tenantId,
+    reference: transaction.reference,
+  });
+  if (accessState.state === "ended") {
+    return { status: accessState.reason };
+  }
+
+  const db = getDb();
+  const callingStationId = normalizeStationId(params.callingStationId);
+  const cutoffIso = getRadiusActiveCutoffIso();
+  const activeSessionCountRow = await db
+    .prepare(
+      `
+      SELECT COUNT(DISTINCT COALESCE(NULLIF(calling_station_id, ''), session_id)) as count
+      FROM radius_voucher_sessions
+      WHERE tenant_id = ?
+        AND transaction_reference = ?
+        AND status = 'active'
+        AND last_update_at >= ?
+        AND (? = '' OR UPPER(COALESCE(calling_station_id, '')) != ?)
+    `,
+    )
+    .get(
+      params.tenantId,
+      transaction.reference,
+      cutoffIso,
+      callingStationId,
+      callingStationId,
+    ) as
+    | { count: number }
+    | undefined;
+  const activeSessionCount = Number(activeSessionCountRow?.count ?? 0);
+  const maxDevices = accessState.package.max_devices;
+  if (
+    maxDevices !== null &&
+    Number.isFinite(maxDevices) &&
+    maxDevices > 0 &&
+    activeSessionCount >= maxDevices
+  ) {
+    return { status: "session_limit_reached" as const };
+  }
+
+  return {
+    status: "ok" as const,
+    transaction,
+    package: accessState.package,
+    endsAt: accessState.endsAt,
     activeSessionCount,
   };
 }
@@ -1119,6 +1351,125 @@ export async function recordRadiusAccountingEvent(params: {
     ).run(
       params.subscriberId,
       params.entitlementId,
+      normalizedCallingStationId || null,
+      params.calledStationId ?? null,
+      params.nasIpAddress ?? null,
+      Math.max(0, Math.floor(params.inputOctets ?? existing.input_octets ?? 0)),
+      Math.max(0, Math.floor(params.outputOctets ?? existing.output_octets ?? 0)),
+      newStatus,
+      now,
+      newStoppedAt,
+      existing.id,
+    );
+  });
+
+  await run();
+}
+
+export async function recordRadiusVoucherAccountingEvent(params: {
+  tenantId: string;
+  transactionReference: string;
+  sessionId: string;
+  event: "start" | "interim" | "stop";
+  inputOctets?: number;
+  outputOctets?: number;
+  callingStationId?: string | null;
+  calledStationId?: string | null;
+  nasIpAddress?: string | null;
+}) {
+  const db = getDb();
+  const now = nowIso();
+  const normalizedCallingStationId = normalizeStationId(params.callingStationId);
+  const run = db.transaction(async () => {
+    if (normalizedCallingStationId && (params.event === "start" || params.event === "interim")) {
+      await db.prepare(
+        `
+        UPDATE radius_voucher_sessions
+        SET status = 'stopped',
+            stopped_at = ?,
+            last_update_at = ?
+        WHERE tenant_id = ?
+          AND transaction_reference = ?
+          AND status = 'active'
+          AND UPPER(COALESCE(calling_station_id, '')) = ?
+          AND session_id != ?
+      `,
+      ).run(
+        now,
+        now,
+        params.tenantId,
+        params.transactionReference,
+        normalizedCallingStationId,
+        params.sessionId,
+      );
+    }
+
+    const existing = await db
+      .prepare(
+        `
+        SELECT *
+        FROM radius_voucher_sessions
+        WHERE tenant_id = ? AND session_id = ?
+      `,
+      )
+      .get(params.tenantId, params.sessionId) as
+      | {
+          id: string;
+          input_octets: number;
+          output_octets: number;
+          status: string;
+          stopped_at: string | null;
+        }
+      | undefined;
+
+    if (!existing) {
+      const initialStatus = params.event === "stop" ? "stopped" : "active";
+      await db.prepare(
+        `
+        INSERT INTO radius_voucher_sessions (
+          id, tenant_id, transaction_reference, session_id,
+          calling_station_id, called_station_id, nas_ip_address, status,
+          input_octets, output_octets, started_at, last_update_at, stopped_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      ).run(
+        randomUUID(),
+        params.tenantId,
+        params.transactionReference,
+        params.sessionId,
+        normalizedCallingStationId || null,
+        params.calledStationId ?? null,
+        params.nasIpAddress ?? null,
+        initialStatus,
+        Math.max(0, Math.floor(params.inputOctets ?? 0)),
+        Math.max(0, Math.floor(params.outputOctets ?? 0)),
+        now,
+        now,
+        params.event === "stop" ? now : null,
+      );
+      return;
+    }
+
+    const alreadyStopped = existing.status === "stopped";
+    const newStatus = params.event === "stop" || alreadyStopped ? "stopped" : "active";
+    const newStoppedAt = params.event === "stop" ? now : (existing.stopped_at ?? null);
+
+    await db.prepare(
+      `
+      UPDATE radius_voucher_sessions
+      SET transaction_reference = ?,
+          calling_station_id = COALESCE(?, calling_station_id),
+          called_station_id = COALESCE(?, called_station_id),
+          nas_ip_address = COALESCE(?, nas_ip_address),
+          input_octets = ?,
+          output_octets = ?,
+          status = ?,
+          last_update_at = ?,
+          stopped_at = ?
+      WHERE id = ?
+    `,
+    ).run(
+      params.transactionReference,
       normalizedCallingStationId || null,
       params.calledStationId ?? null,
       params.nasIpAddress ?? null,
@@ -1293,6 +1644,7 @@ export async function deleteTenant(tenantId: string) {
 
     await db.prepare("DELETE FROM users WHERE tenant_id = ?").run(tenantId);
     await db.prepare("DELETE FROM radius_accounting_sessions WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM radius_voucher_sessions WHERE tenant_id = ?").run(tenantId);
     await db.prepare("DELETE FROM subscriber_entitlements WHERE tenant_id = ?").run(tenantId);
     await db.prepare("DELETE FROM portal_subscriber_sessions WHERE subscriber_id IN (SELECT id FROM portal_subscribers WHERE tenant_id = ?)").run(tenantId);
     await db.prepare("DELETE FROM portal_subscribers WHERE tenant_id = ?").run(tenantId);
@@ -1610,16 +1962,24 @@ export async function setTenantArchitecture(params: {
   const voucherSourceMode = params.voucherSourceMode
     ? normalizeVoucherSourceMode(params.voucherSourceMode)
     : normalizeVoucherSourceMode(tenant.voucher_source_mode);
+  const existingPortalAuthMode = normalizePortalAuthMode(tenant.portal_auth_mode);
   const accessMode = params.accessMode
     ? normalizeAccessMode(params.accessMode)
-    : normalizePortalAuthMode(tenant.portal_auth_mode) === "external_radius_portal"
+    : existingPortalAuthMode === "external_radius_portal"
       ? "account_access"
       : "voucher_access";
+  const requestedPortalAuthMode = params.portalAuthMode
+    ? normalizePortalAuthMode(params.portalAuthMode)
+    : undefined;
   const portalAuthMode = accessMode === "account_access"
     ? "external_radius_portal"
-    : params.portalAuthMode
-      ? normalizePortalAuthMode(params.portalAuthMode)
-      : "omada_builtin";
+    : voucherSourceMode === "radius_voucher"
+      ? "external_radius_voucher"
+      : requestedPortalAuthMode && requestedPortalAuthMode !== "external_radius_portal"
+        ? requestedPortalAuthMode
+        : existingPortalAuthMode === "external_radius_voucher"
+          ? "omada_builtin"
+          : "omada_builtin";
   const effectiveVoucherSourceMode = portalAuthMode === "external_radius_portal"
     ? "import_csv"
     : voucherSourceMode;
@@ -1695,7 +2055,10 @@ export async function setTenantArchitecture(params: {
     }
   }
 
-  if (portalAuthMode === "external_radius_portal" && !radiusAdapterSecretEnc) {
+  if (
+    (portalAuthMode === "external_radius_portal" || portalAuthMode === "external_radius_voucher") &&
+    !radiusAdapterSecretEnc
+  ) {
     const generated = generateRadiusAdapterSecret();
     radiusAdapterSecretEnc = encryptSecret(generated);
     radiusAdapterSecretLast4 = generated.slice(-4);

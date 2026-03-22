@@ -144,14 +144,22 @@ export async function POST(request: Request, { params }: Props) {
       ? "omada_openapi"
       : tenant.voucher_source_mode === "mikrotik_rest"
         ? "mikrotik_rest"
+        : tenant.voucher_source_mode === "radius_voucher"
+          ? "radius_voucher"
       : "import_csv";
-  if (voucherSourceMode === "omada_openapi" || voucherSourceMode === "mikrotik_rest") {
+  if (
+    voucherSourceMode === "omada_openapi" ||
+    voucherSourceMode === "mikrotik_rest" ||
+    voucherSourceMode === "radius_voucher"
+  ) {
     return Response.json(
       {
         error:
           voucherSourceMode === "omada_openapi"
             ? "Manual voucher creation is disabled in Omada API automation mode. Vouchers are provisioned automatically on customer payment."
-            : "Manual voucher creation is disabled in MikroTik direct mode. Vouchers are created automatically on customer payment.",
+            : voucherSourceMode === "mikrotik_rest"
+              ? "Manual voucher creation is disabled in MikroTik direct mode. Vouchers are created automatically on customer payment."
+              : "Manual voucher creation is disabled in RADIUS voucher mode. Vouchers are issued automatically after customer payment.",
       },
       { status: 409 },
     );

@@ -142,7 +142,8 @@ export async function POST(request: Request, { params }: Props) {
   const available = await getAvailableCount(tenant.id, pkg.id);
   const autoProvisionVoucherMode =
     tenant.voucher_source_mode === "omada_openapi" ||
-    tenant.voucher_source_mode === "mikrotik_rest";
+    tenant.voucher_source_mode === "mikrotik_rest" ||
+    tenant.voucher_source_mode === "radius_voucher";
   if (!accountAccessMode && !autoProvisionVoucherMode && available <= 0) {
     return Response.json(
       { error: "No vouchers available for this package" },

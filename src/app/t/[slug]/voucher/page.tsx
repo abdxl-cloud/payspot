@@ -3,6 +3,7 @@ import { AppTopbar } from "@/components/app-topbar";
 import { OmadaQuickSetup } from "@/components/omada-quick-setup";
 import {
   getPackageById,
+  getRadiusVoucherAccessState,
   getTenantBySlug,
   getTransactionByVoucherCode,
   getVoucherPoolEntryByCode,
@@ -37,12 +38,27 @@ function formatDuration(minutes: number | null | undefined) {
   return days === 1 ? "1 day" : `${days} days`;
 }
 
+function formatBytes(bytes: number | null | undefined) {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const digits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+}
+
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     UNUSED:   { label: "Unused",   cls: "bg-amber-100 text-amber-800" },
     ASSIGNED: { label: "Issued",   cls: "bg-sky-100 text-sky-800" },
     USED:     { label: "Used",     cls: "bg-emerald-100 text-emerald-800" },
     EXPIRED:  { label: "Expired",  cls: "bg-red-100 text-red-800" },
+    ACTIVE:   { label: "Active",   cls: "bg-emerald-100 text-emerald-800" },
     UNKNOWN:  { label: "Unknown",  cls: "bg-slate-100 text-slate-600" },
   };
   const { label, cls } = map[status] ?? { label: status, cls: "bg-slate-100 text-slate-600" };
@@ -53,19 +69,24 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-async function lookupVoucher(tenantId: string, rawCode: string) {
-  const code = rawCode.trim();
+async function lookupVoucher(params: {
+  tenantId: string;
+  rawCode: string;
+  omadaEnabled: boolean;
+  radiusVoucherMode: boolean;
+}) {
+  const code = params.rawCode.trim();
   if (!code) return null;
 
   const [transaction, poolEntry] = await Promise.all([
-    getTransactionByVoucherCode(tenantId, code),
-    getVoucherPoolEntryByCode(tenantId, code),
+    getTransactionByVoucherCode(params.tenantId, code),
+    getVoucherPoolEntryByCode(params.tenantId, code),
   ]);
 
   if (!transaction && !poolEntry) return null;
 
   const packageId = transaction?.package_id ?? poolEntry?.package_id;
-  const pkg = packageId ? await getPackageById(tenantId, packageId) : null;
+  const pkg = packageId ? await getPackageById(params.tenantId, packageId) : null;
 
   let estimatedExpiresAt: string | null = null;
   if (transaction?.paid_at && pkg?.duration_minutes && pkg.duration_minutes > 0) {
@@ -86,16 +107,39 @@ async function lookupVoucher(tenantId: string, rawCode: string) {
 
   let omadaResult: OmadaVoucherLookupResult | null = null;
   let omadaError: string | null = null;
-
-  const omadaConfig = await resolveTenantOmadaConfigIfPresent(tenantId);
-  if (omadaConfig) {
+  if (params.omadaEnabled) {
+    const omadaConfig = await resolveTenantOmadaConfigIfPresent(params.tenantId);
     try {
-      omadaResult = await lookupOmadaVoucherStatus(omadaConfig, code);
+      if (omadaConfig) {
+        omadaResult = await lookupOmadaVoucherStatus(omadaConfig, code);
+      }
     } catch (err) {
       omadaError = err instanceof Error ? err.message : "Unexpected error during Omada lookup";
-      console.error("[voucher] Omada lookup failed", { tenantId, code, error: omadaError });
+      console.error("[voucher] Omada lookup failed", { tenantId: params.tenantId, code, error: omadaError });
     }
   }
+
+  const radiusVoucher =
+    params.radiusVoucherMode && transaction
+      ? await getRadiusVoucherAccessState({
+          tenantId: params.tenantId,
+          reference: transaction.reference,
+        })
+      : null;
+  const dataLimitBytes =
+    pkg?.data_limit_mb && pkg.data_limit_mb > 0 ? pkg.data_limit_mb * 1024 * 1024 : null;
+  const remainingBytes =
+    radiusVoucher && dataLimitBytes !== null && radiusVoucher.usage
+      ? Math.max(0, dataLimitBytes - radiusVoucher.usage.usedBytes)
+      : null;
+  const displayStatus =
+    radiusVoucher?.state === "active"
+      ? radiusVoucher.usage.usedBytes > 0 || radiusVoucher.usage.activeSessions > 0
+        ? "USED"
+        : "ACTIVE"
+      : radiusVoucher?.reason
+        ? "EXPIRED"
+        : poolStatus ?? "UNKNOWN";
 
   return {
     code: code.toUpperCase(),
@@ -103,8 +147,20 @@ async function lookupVoucher(tenantId: string, rawCode: string) {
     purchasedAt: transaction?.paid_at ?? poolEntry?.assigned_at ?? null,
     estimatedExpiresAt,
     poolStatus,
+    displayStatus,
     omadaResult,
     omadaError,
+    radiusVoucher: radiusVoucher
+      ? {
+          state: radiusVoucher.state,
+          reason: radiusVoucher.reason,
+          usedBytes: radiusVoucher.usage?.usedBytes ?? 0,
+          activeSessions: radiusVoucher.usage?.activeSessions ?? 0,
+          endsAt: radiusVoucher.endsAt,
+          dataLimitBytes,
+          remainingBytes,
+        }
+      : null,
   };
 }
 
@@ -115,12 +171,22 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
   if (!tenant) notFound();
 
   const omadaConfig = await resolveTenantOmadaConfigIfPresent(tenant.id);
-  const showOmadaSetup = omadaConfig === null;
+  const showOmadaSetup = tenant.voucher_source_mode === "omada_openapi" && omadaConfig === null;
+  const radiusVoucherMode =
+    tenant.portal_auth_mode === "external_radius_voucher" ||
+    tenant.voucher_source_mode === "radius_voucher";
 
   const rawCode =
     typeof resolvedSearchParams.code === "string" ? resolvedSearchParams.code : "";
 
-  const result = rawCode ? await lookupVoucher(tenant.id, rawCode) : null;
+  const result = rawCode
+    ? await lookupVoucher({
+        tenantId: tenant.id,
+        rawCode,
+        omadaEnabled: tenant.voucher_source_mode === "omada_openapi",
+        radiusVoucherMode,
+      })
+    : null;
   const notFound_ = rawCode && !result;
 
   return (
@@ -220,16 +286,76 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                       </p>
                     </div>
                   )}
-                  {result.poolStatus && (
+                  {(result.displayStatus || result.poolStatus) && (
                     <div>
                       <p className="font-medium text-slate-500">Status</p>
-                      <StatusBadge status={result.poolStatus} />
+                      <StatusBadge status={result.displayStatus ?? result.poolStatus ?? "UNKNOWN"} />
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Omada live status — only rendered when Omada is configured */}
+              {result.radiusVoucher ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">
+                    RADIUS usage
+                  </p>
+                  <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <p className="font-medium text-amber-800/70">Access state</p>
+                      <StatusBadge status={result.radiusVoucher.state === "active" ? "ACTIVE" : "EXPIRED"} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-amber-800/70">Active sessions</p>
+                      <p className="font-semibold text-amber-950">{result.radiusVoucher.activeSessions}</p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-amber-800/70">Used data</p>
+                      <p className="font-semibold text-amber-950">
+                        {formatBytes(result.radiusVoucher.usedBytes) ?? "-"}
+                      </p>
+                    </div>
+                    {result.radiusVoucher.dataLimitBytes !== null ? (
+                      <div>
+                        <p className="font-medium text-amber-800/70">Data cap</p>
+                        <p className="font-semibold text-amber-950">
+                          {formatBytes(result.radiusVoucher.dataLimitBytes) ?? "-"}
+                        </p>
+                      </div>
+                    ) : null}
+                    {result.radiusVoucher.remainingBytes !== null ? (
+                      <div>
+                        <p className="font-medium text-amber-800/70">Remaining data</p>
+                        <p className="font-semibold text-amber-950">
+                          {formatBytes(result.radiusVoucher.remainingBytes) ?? "-"}
+                        </p>
+                      </div>
+                    ) : null}
+                    {result.radiusVoucher.endsAt ? (
+                      <div>
+                        <p className="font-medium text-amber-800/70">Access ends</p>
+                        <p className="font-semibold text-amber-950">
+                          {formatDate(result.radiusVoucher.endsAt) ?? "-"}
+                        </p>
+                      </div>
+                    ) : null}
+                    {result.radiusVoucher.reason ? (
+                      <div className="sm:col-span-2">
+                        <p className="font-medium text-amber-800/70">Reason</p>
+                        <p className="font-semibold text-amber-950">
+                          {result.radiusVoucher.reason === "data_limit_reached"
+                            ? "Data limit reached"
+                            : result.radiusVoucher.reason === "plan_expired"
+                              ? "Plan expired"
+                              : "Voucher is no longer active"}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Omada live status - only rendered when Omada is configured */}
               {(result.omadaResult !== null || result.omadaError !== null) && (
                 <div className={`rounded-2xl border px-5 py-5 ${result.omadaError ? "border-red-200 bg-red-50" : "border-slate-200 bg-white"}`}>
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">

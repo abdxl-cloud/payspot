@@ -97,7 +97,9 @@ export async function POST(request: Request, { params }: Props) {
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
   const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
   const voucherDurationRequired =
-    !accountAccessMode && tenant.voucher_source_mode !== "mikrotik_rest";
+    !accountAccessMode &&
+    tenant.voucher_source_mode !== "mikrotik_rest" &&
+    tenant.voucher_source_mode !== "radius_voucher";
 
   const body = (await request.json()) as {
     code?: string;
@@ -159,7 +161,7 @@ export async function POST(request: Request, { params }: Props) {
   }
   if (voucherDurationRequired && durationMinutes === null) {
     return Response.json(
-      { error: "durationMinutes is required unless you are using MikroTik direct mode." },
+      { error: "durationMinutes is required unless you are using MikroTik direct mode or RADIUS voucher mode." },
       { status: 400 },
     );
   }
@@ -236,7 +238,9 @@ export async function PATCH(request: Request, { params }: Props) {
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
   const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
   const voucherDurationRequired =
-    !accountAccessMode && tenant.voucher_source_mode !== "mikrotik_rest";
+    !accountAccessMode &&
+    tenant.voucher_source_mode !== "mikrotik_rest" &&
+    tenant.voucher_source_mode !== "radius_voucher";
 
   const body = (await request.json()) as {
     planId?: string;
@@ -364,7 +368,7 @@ export async function PATCH(request: Request, { params }: Props) {
   }
   if (voucherDurationRequired && nextDuration === null) {
     return Response.json(
-      { error: "durationMinutes is required unless you are using MikroTik direct mode." },
+      { error: "durationMinutes is required unless you are using MikroTik direct mode or RADIUS voucher mode." },
       { status: 400 },
     );
   }

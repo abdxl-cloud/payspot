@@ -246,13 +246,19 @@ export async function POST(request: Request, { params }: Props) {
       return Response.json({ error: "Tenant not found" }, { status: 404 });
     }
 
-    if (tenant.voucher_source_mode === "omada_openapi" || tenant.voucher_source_mode === "mikrotik_rest") {
+    if (
+      tenant.voucher_source_mode === "omada_openapi" ||
+      tenant.voucher_source_mode === "mikrotik_rest" ||
+      tenant.voucher_source_mode === "radius_voucher"
+    ) {
       return Response.json(
         {
           error:
             tenant.voucher_source_mode === "omada_openapi"
               ? "CSV import is disabled in Omada API automation mode. Vouchers are provisioned automatically after customer payment."
-              : "CSV import is disabled in MikroTik direct mode. Vouchers are created automatically after customer payment.",
+              : tenant.voucher_source_mode === "mikrotik_rest"
+                ? "CSV import is disabled in MikroTik direct mode. Vouchers are created automatically after customer payment."
+                : "CSV import is disabled in RADIUS voucher mode. Vouchers are issued automatically after customer payment.",
         },
         { status: 409 },
       );

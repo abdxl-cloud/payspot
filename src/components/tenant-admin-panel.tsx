@@ -74,7 +74,7 @@ type VoucherRow = {
 
 type ArchitectureConfig = {
   accessMode: "voucher_access" | "account_access";
-  voucherSourceMode: "import_csv" | "omada_openapi" | "mikrotik_rest";
+  voucherSourceMode: "import_csv" | "omada_openapi" | "mikrotik_rest" | "radius_voucher";
   omada: {
     apiBaseUrl: string;
     omadacId: string;
@@ -490,7 +490,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const isCsvMode = voucherSourceMode === "import_csv";
   const isOmadaMode = voucherSourceMode === "omada_openapi";
   const isMikrotikMode = voucherSourceMode === "mikrotik_rest";
-  const isApiAutomationMode = isOmadaMode || isMikrotikMode;
+  const isRadiusVoucherMode = voucherSourceMode === "radius_voucher";
+  const isApiAutomationMode = isOmadaMode || isMikrotikMode || isRadiusVoucherMode;
   const isExternalAccessMode = architecture?.accessMode === "account_access";
   const hasArchitectureConfigured = !!architecture;
   const hasPlans = plans.length > 0;
@@ -715,7 +716,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     const normalizedDataLimit = dataLimitMb ?? null;
     const durationRequired =
       architecture?.accessMode !== "account_access" &&
-      architecture?.voucherSourceMode !== "mikrotik_rest";
+      architecture?.voucherSourceMode !== "mikrotik_rest" &&
+      architecture?.voucherSourceMode !== "radius_voucher";
     if (
       !newPlanName.trim() ||
       (normalizedDuration !== null && (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0)) ||
@@ -735,7 +737,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       return;
     }
     if (durationRequired && normalizedDuration === null) {
-      setPlansError("Duration is required unless you are using MikroTik direct mode.");
+      setPlansError("Duration is required unless you are using MikroTik direct mode or RADIUS voucher mode.");
       return;
     }
     if (normalizedDuration === null && normalizedDataLimit === null) {
@@ -795,7 +797,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     const normalizedDuration = draft.duration.trim() ? duration ?? null : null;
     const durationRequired =
       architecture?.accessMode !== "account_access" &&
-      architecture?.voucherSourceMode !== "mikrotik_rest";
+      architecture?.voucherSourceMode !== "mikrotik_rest" &&
+      architecture?.voucherSourceMode !== "radius_voucher";
     if (
       !draft.name.trim() ||
       !draft.code.trim() ||
@@ -816,7 +819,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       return;
     }
     if (durationRequired && normalizedDuration === null) {
-      setPlansError("Duration is required unless you are using MikroTik direct mode.");
+      setPlansError("Duration is required unless you are using MikroTik direct mode or RADIUS voucher mode.");
       return;
     }
     if (normalizedDuration === null && dataLimitMb === null) {
@@ -1641,7 +1644,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   : isApiAutomationMode
                   ? isOmadaMode
                     ? "Omada automation mode: vouchers are created automatically after each successful customer payment."
-                    : "MikroTik direct mode: vouchers are created automatically after each successful customer payment."
+                    : isMikrotikMode
+                      ? "MikroTik direct mode: vouchers are created automatically after each successful customer payment."
+                      : "RADIUS voucher mode: vouchers are issued automatically after each successful customer payment."
                   : hasPlans
                     ? "CSV mode: create manually, batch generate, or import CSV."
                     : "CSV mode active. Create at least one plan before adding or generating vouchers."
@@ -1901,6 +1906,14 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   <CircleHelp className="size-3.5" />
                   MikroTik setup help
                 </Link>
+              ) : architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "radius_voucher" ? (
+                <Link
+                  href="/help/radius-voucher"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                >
+                  <CircleHelp className="size-3.5" />
+                  RADIUS voucher help
+                </Link>
               ) : architecture.accessMode === "account_access" ? (
                 <Link
                   href="/help/external-radius"
@@ -1957,6 +1970,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   <option value="import_csv">Import CSV (default)</option>
                   <option value="omada_openapi">Omada OpenAPI sync</option>
                   <option value="mikrotik_rest">MikroTik direct (REST)</option>
+                  <option value="radius_voucher">External RADIUS voucher mode</option>
                 </select>
                 {architecture.accessMode === "account_access" ? (
                   <p className="text-xs text-slate-500">
@@ -2162,7 +2176,29 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               </div>
             ) : null}
 
-            {architecture.accessMode === "account_access" ? (
+            {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "radius_voucher" ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">RADIUS voucher adapter</p>
+                <p className="mt-2 text-xs text-amber-900/80">
+                  PaySpot issues the voucher immediately after payment. Your external RADIUS service should call the PaySpot
+                  adapter endpoints to authorize the voucher and report accounting updates.
+                </p>
+                <div className="mt-3 rounded-xl border border-amber-300 bg-white/80 px-3 py-2 text-xs text-amber-900">
+                  <p><code>POST /api/t/&lt;slug&gt;/radius/authorize</code></p>
+                  <p><code>POST /api/t/&lt;slug&gt;/radius/accounting</code></p>
+                  <p className="mt-2">Voucher code = transaction reference. Password = same as voucher code.</p>
+                </div>
+                {architecture.radius?.hasAdapterSecret ? (
+                  <p className="mt-3 text-xs text-amber-900/80">
+                    Current adapter secret fingerprint: <code>****{architecture.radius.adapterSecretLast4}</code>
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {architecture.accessMode === "account_access" || (
+              architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "radius_voucher"
+            ) ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">External RADIUS adapter</p>
                 <p className="mt-2 text-xs text-amber-900/80">
@@ -2257,8 +2293,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   : "Duration: invalid format"
               ) : architecture?.accessMode === "account_access"
                 ? "Duration: optional (leave blank for unlimited time)"
-                : architecture?.voucherSourceMode === "mikrotik_rest"
-                  ? "Duration: optional in MikroTik mode (data-only plans supported)"
+                : architecture?.voucherSourceMode === "mikrotik_rest" || architecture?.voucherSourceMode === "radius_voucher"
+                  ? "Duration: optional in MikroTik or RADIUS voucher mode (data-only plans supported)"
                   : "Duration: required for voucher plans"}
               {" | "}
               {newPlanPrice.trim() ? (

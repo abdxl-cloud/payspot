@@ -16,7 +16,8 @@ export async function GET(_request: Request, { params }: Props) {
     : "voucher_access";
   const autoProvisionVoucherMode =
     tenant.voucher_source_mode === "omada_openapi" ||
-    tenant.voucher_source_mode === "mikrotik_rest";
+    tenant.voucher_source_mode === "mikrotik_rest" ||
+    tenant.voucher_source_mode === "radius_voucher";
   const packages = (await getPackagesWithAvailability(tenant.id))
     .filter((pkg) =>
       accessMode === "account_access"

@@ -304,6 +304,23 @@ async function initSchema() {
       UNIQUE (tenant_id, session_id)
     );
 
+    CREATE TABLE IF NOT EXISTS radius_voucher_sessions (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      transaction_reference TEXT NOT NULL REFERENCES transactions(reference),
+      session_id TEXT NOT NULL,
+      calling_station_id TEXT,
+      called_station_id TEXT,
+      nas_ip_address TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      input_octets BIGINT NOT NULL DEFAULT 0,
+      output_octets BIGINT NOT NULL DEFAULT 0,
+      started_at TEXT NOT NULL,
+      last_update_at TEXT NOT NULL,
+      stopped_at TEXT,
+      UNIQUE (tenant_id, session_id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_voucher_packages_tenant_active
       ON voucher_packages(tenant_id, active);
     CREATE INDEX IF NOT EXISTS idx_voucher_pool_tenant_status
@@ -328,6 +345,10 @@ async function initSchema() {
       ON radius_accounting_sessions(tenant_id, subscriber_id, status);
     CREATE INDEX IF NOT EXISTS idx_radius_accounting_tenant_entitlement
       ON radius_accounting_sessions(tenant_id, entitlement_id);
+    CREATE INDEX IF NOT EXISTS idx_radius_voucher_sessions_tenant_reference
+      ON radius_voucher_sessions(tenant_id, transaction_reference);
+    CREATE INDEX IF NOT EXISTS idx_radius_voucher_sessions_tenant_reference_status
+      ON radius_voucher_sessions(tenant_id, transaction_reference, status);
   `);
 
   await p.query(`

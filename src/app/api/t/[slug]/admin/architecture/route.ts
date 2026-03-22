@@ -24,9 +24,9 @@ async function normalizeTenantAccess(request: Request, tenantId: string) {
 
 const schema = z.object({
   accessMode: z.enum(["voucher_access", "account_access"]).optional(),
-  voucherSourceMode: z.enum(["import_csv", "omada_openapi", "mikrotik_rest"]).optional(),
+  voucherSourceMode: z.enum(["import_csv", "omada_openapi", "mikrotik_rest", "radius_voucher"]).optional(),
   portalAuthMode: z
-    .enum(["omada_builtin", "external_radius_portal"])
+    .enum(["omada_builtin", "external_radius_portal", "external_radius_voucher"])
     .optional(),
   omada: z
     .object({

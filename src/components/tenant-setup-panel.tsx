@@ -21,12 +21,12 @@ type Props = {
 
 type SlugState = "idle" | "checking" | "available" | "taken" | "invalid";
 type SetupStepKey = "slug" | "password" | "paystack" | "architecture" | "voucher";
-type ArchitecturePreset = "import_csv" | "api_automation" | "external_radius_portal";
+type ArchitecturePreset = "import_csv" | "api_automation" | "radius_voucher" | "external_radius_portal";
 
 type TenantArchitectureResponse = {
   architecture?: {
     accessMode: "voucher_access" | "account_access";
-    voucherSourceMode: "import_csv" | "omada_openapi";
+    voucherSourceMode: "import_csv" | "omada_openapi" | "mikrotik_rest" | "radius_voucher";
     omada: {
       apiBaseUrl: string;
       omadacId: string;
@@ -160,6 +160,8 @@ export function TenantSetupPanel({
           setArchitecturePreset("external_radius_portal");
         } else if (architecture.voucherSourceMode === "omada_openapi") {
           setArchitecturePreset("api_automation");
+        } else if (architecture.voucherSourceMode === "radius_voucher") {
+          setArchitecturePreset("radius_voucher");
         } else {
           setArchitecturePreset("import_csv");
         }
@@ -185,7 +187,7 @@ export function TenantSetupPanel({
   const requiresVoucherImport = requireVoucherImport && architecturePreset === "import_csv";
 
   const architectureComplete = useMemo(() => {
-    if (architecturePreset === "external_radius_portal") return true;
+    if (architecturePreset === "external_radius_portal" || architecturePreset === "radius_voucher") return true;
     if (architecturePreset !== "api_automation") return true;
     if (!omadaApiBaseUrl.trim()) return false;
     if (!omadaOmadacId.trim()) return false;
@@ -341,7 +343,12 @@ export function TenantSetupPanel({
               architecturePreset === "external_radius_portal"
                 ? "account_access"
                 : "voucher_access",
-            voucherSourceMode: architecturePreset === "api_automation" ? "omada_openapi" : "import_csv",
+            voucherSourceMode:
+              architecturePreset === "api_automation"
+                ? "omada_openapi"
+                : architecturePreset === "radius_voucher"
+                  ? "radius_voucher"
+                  : "import_csv",
             omada:
               architecturePreset === "api_automation"
                 ? {
@@ -357,7 +364,9 @@ export function TenantSetupPanel({
                   }
                 : undefined,
             radius:
-              architecturePreset === "external_radius_portal" ? {} : undefined,
+              architecturePreset === "external_radius_portal" || architecturePreset === "radius_voucher"
+                ? {}
+                : undefined,
           },
         }),
       });
@@ -519,7 +528,7 @@ export function TenantSetupPanel({
                 >
                   <p className="text-sm font-semibold text-slate-900">Voucher access</p>
                   <p className="mt-1 text-xs text-slate-600">
-                    Users buy voucher-based plans. Choose CSV or Omada OpenAPI provisioning below.
+                    Users buy voucher-based plans. Choose CSV, Omada OpenAPI, or external RADIUS voucher provisioning below.
                   </p>
                 </button>
 
@@ -567,6 +576,18 @@ export function TenantSetupPanel({
                       ].join(" ")}
                     >
                       Omada OpenAPI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setArchitecturePreset("radius_voucher")}
+                      className={[
+                        "rounded-xl border px-3 py-2 text-left transition",
+                        architecturePreset === "radius_voucher"
+                          ? "border-indigo-300 bg-indigo-50"
+                          : "border-slate-200 bg-white hover:bg-slate-50",
+                      ].join(" ")}
+                    >
+                      External RADIUS vouchers
                     </button>
                   </div>
                 </div>
@@ -634,6 +655,23 @@ export function TenantSetupPanel({
                     className="inline-flex w-fit rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-100"
                   >
                     Open Omada setup guide
+                  </Link>
+                </div>
+              ) : architecturePreset === "radius_voucher" ? (
+                <div className="grid gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="rounded-xl border border-amber-300 bg-white/70 p-3 text-xs text-amber-900">
+                    Voucher mode selected. PaySpot will issue voucher codes after payment and your external RADIUS service
+                    will enforce duration, data cap, device limits, and accounting.
+                  </div>
+                  <p className="text-xs text-amber-900/80">
+                    Shared secret for the PaySpot RADIUS adapter endpoints is generated automatically by the system.
+                  </p>
+                  <Link
+                    href="/help/radius-voucher"
+                    className="inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                  >
+                    <CircleHelp className="size-3.5" />
+                    Open RADIUS voucher setup guide
                   </Link>
                 </div>
               ) : architecturePreset === "external_radius_portal" ? (
