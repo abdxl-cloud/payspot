@@ -2171,7 +2171,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   </label>
                 </div>
                 <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                  Voucher code = transaction reference. Password = same as voucher code. Duration and data limit come from each PaySpot plan.
+                  Voucher code is generated after payment. Password = same as voucher code. Duration and data limit come from each PaySpot plan.
                 </div>
               </div>
             ) : null}
@@ -2186,7 +2186,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 <div className="mt-3 rounded-xl border border-amber-300 bg-white/80 px-3 py-2 text-xs text-amber-900">
                   <p><code>POST /api/t/&lt;slug&gt;/radius/authorize</code></p>
                   <p><code>POST /api/t/&lt;slug&gt;/radius/accounting</code></p>
-                  <p className="mt-2">Voucher code = transaction reference. Password = same as voucher code.</p>
+                  <p className="mt-2">Voucher code is generated after payment. Password = same as voucher code.</p>
                 </div>
                 {architecture.radius?.hasAdapterSecret ? (
                   <p className="mt-3 text-xs text-amber-900/80">

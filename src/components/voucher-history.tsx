@@ -15,14 +15,20 @@ function formatTimeAgo(savedAt: number) {
   return "just now";
 }
 
-export function VoucherHistory({ tenantSlug }: { tenantSlug: string }) {
+export function VoucherHistory({
+  tenantSlug,
+  voucherSourceMode,
+}: {
+  tenantSlug: string;
+  voucherSourceMode?: string;
+}) {
   const [vouchers, setVouchers] = useState<StoredVoucher[]>([]);
   const [open, setOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   useEffect(() => {
-    setVouchers(readStoredVouchers(tenantSlug));
-  }, [tenantSlug]);
+    setVouchers(readStoredVouchers(tenantSlug, voucherSourceMode));
+  }, [tenantSlug, voucherSourceMode]);
 
   if (vouchers.length === 0) return null;
 
@@ -34,7 +40,7 @@ export function VoucherHistory({ tenantSlug }: { tenantSlug: string }) {
   }
 
   function handleRemove(code: string) {
-    removeStoredVoucher(tenantSlug, code);
+    removeStoredVoucher(tenantSlug, voucherSourceMode, code);
     setVouchers((prev) => prev.filter((v) => v.code !== code));
   }
 

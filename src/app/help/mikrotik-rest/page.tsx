@@ -123,7 +123,7 @@ const payspotFieldGuide = [
 const planMapping = [
   "Plan duration -> MikroTik `limit-uptime`",
   "Plan data limit -> MikroTik `limit-bytes-total`",
-  "Voucher code -> transaction reference",
+  "Voucher code -> generated after payment",
   "Voucher password -> same as voucher code",
 ] as const;
 

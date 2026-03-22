@@ -110,6 +110,7 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
             tenantSlug={tenant.slug}
             packages={packages}
             accessMode={normalizeAccessMode(tenant.portal_auth_mode)}
+            voucherSourceMode={tenant.voucher_source_mode ?? "import_csv"}
             portalContext={portalContext}
           />
         </div>

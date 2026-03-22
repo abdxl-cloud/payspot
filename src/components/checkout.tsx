@@ -54,6 +54,7 @@ type Props = {
   tenantSlug: string;
   packages: Package[];
   accessMode: "voucher_access" | "account_access";
+  voucherSourceMode?: string;
   portalContext?: CaptivePortalContext;
 };
 
@@ -341,7 +342,7 @@ function Stepper({
   );
 }
 
-export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Props) {
+export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, portalContext }: Props) {
   const [selected, setSelected] = useState<Package | null>(null);
   const [planQuery, setPlanQuery] = useState("");
   const [visiblePlanCount, setVisiblePlanCount] = useState(8);
@@ -1627,7 +1628,7 @@ export function Checkout({ tenantSlug, packages, accessMode, portalContext }: Pr
         </Card>
       ) : null}
 
-      <VoucherHistory tenantSlug={tenantSlug} />
+      <VoucherHistory tenantSlug={tenantSlug} voucherSourceMode={voucherSourceMode} />
 
     </div>
   );

@@ -126,7 +126,7 @@ Tenant architecture fields:
 PaySpot maps existing plan fields automatically:
 - `durationMinutes` -> RouterOS `limit-uptime`
 - `dataLimitMb` -> RouterOS `limit-bytes-total`
-- voucher code -> Paystack transaction reference
+- voucher code -> generated after successful payment
 - password -> same as voucher code
 
 Operational notes:

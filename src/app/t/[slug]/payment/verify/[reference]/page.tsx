@@ -119,6 +119,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
               <VoucherDisplay
                 code={updated.voucher_code ?? ""}
                 tenantSlug={tenant.slug}
+                voucherSourceMode={tenant.voucher_source_mode ?? "import_csv"}
                 planName={pkg?.name}
                 reference={reference}
               />

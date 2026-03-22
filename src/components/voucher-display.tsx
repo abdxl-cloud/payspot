@@ -7,17 +7,18 @@ import { saveVoucher } from "@/lib/voucher-storage";
 type Props = {
   code: string;
   tenantSlug?: string;
+  voucherSourceMode?: string;
   planName?: string;
   reference?: string;
 };
 
-export function VoucherDisplay({ code, tenantSlug, planName, reference }: Props) {
+export function VoucherDisplay({ code, tenantSlug, voucherSourceMode, planName, reference }: Props) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!code || !tenantSlug) return;
-    saveVoucher({ code, planName, reference, tenantSlug, savedAt: Date.now() });
-  }, [code, tenantSlug, planName, reference]);
+    saveVoucher({ code, planName, reference, tenantSlug, voucherSourceMode, savedAt: Date.now() });
+  }, [code, tenantSlug, voucherSourceMode, planName, reference]);
 
   function handleCopy() {
     navigator.clipboard.writeText(code).then(() => {
