@@ -2511,8 +2511,14 @@ export async function getTransactionByReferencePhone(
   if (!transaction) return undefined;
   const normalizedInput = normalizePhoneForLookup(phone);
   const normalizedStored = normalizePhoneForLookup(transaction.phone);
-  if (!normalizedInput || !normalizedStored) return undefined;
-  return normalizedInput === normalizedStored ? transaction : undefined;
+  if (normalizedInput && normalizedStored) {
+    return normalizedInput === normalizedStored ? transaction : undefined;
+  }
+
+  const rawInput = phone.trim().toLowerCase();
+  const rawStored = transaction.phone.trim().toLowerCase();
+  if (!rawInput || !rawStored) return undefined;
+  return rawInput === rawStored ? transaction : undefined;
 }
 
 export async function updateTransactionAuthUrl(params: {
