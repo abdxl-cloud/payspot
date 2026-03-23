@@ -23,11 +23,16 @@ export function AppTopbar({
           PaySpot
         </Link>
         <span className="app-topbar-divider" />
-        <p className="app-topbar-breadcrumb">{breadcrumb}</p>
+        <div className="app-topbar-context">
+          <p className="app-topbar-eyebrow">Workspace</p>
+          <p className="app-topbar-breadcrumb">{breadcrumb}</p>
+        </div>
       </div>
       <div className="app-topbar-right">
-        <span className="app-topbar-pill">{environment}</span>
-        <span className="app-topbar-account">{accountLabel}</span>
+        <div className="app-topbar-meta">
+          <span className="app-topbar-pill">{environment}</span>
+          <span className="app-topbar-account">{accountLabel}</span>
+        </div>
         {action}
       </div>
     </header>

@@ -495,6 +495,26 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const isExternalAccessMode = architecture?.accessMode === "account_access";
   const hasArchitectureConfigured = !!architecture;
   const hasPlans = plans.length > 0;
+  const overviewModeLabel = !hasArchitectureConfigured
+    ? "Architecture pending"
+    : isExternalAccessMode
+      ? "Account access"
+      : "Voucher access";
+  const overviewFlowLabel = !hasArchitectureConfigured
+    ? "Choose a voucher source"
+    : isExternalAccessMode
+      ? "External RADIUS flow"
+      : isCsvMode
+        ? "CSV inventory"
+        : isOmadaMode
+          ? "Omada automation"
+          : isMikrotikMode
+            ? "MikroTik automation"
+            : "RADIUS voucher mode";
+  const overviewPlanLabel = hasPlans ? `${plans.length} plan${plans.length === 1 ? "" : "s"} ready` : "No plans yet";
+  const overviewSubscriberLabel = subscribersLoading
+    ? "Refreshing subscribers"
+    : `${subscribers.length} subscriber${subscribers.length === 1 ? "" : "s"} visible`;
 
   async function refreshAll() {
     await Promise.all([loadStats(), loadPlans(), loadVouchers(), loadArchitecture(), loadSubscribers()]);
@@ -1035,73 +1055,105 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
   return (
     <>
-      <div className="grid gap-5">
-        <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={refreshAll}
-            disabled={statsLoading || plansLoading || vouchersLoading}
-            aria-label="Refresh dashboard data"
-            title="Refresh all"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-indigo-200 hover:text-indigo-600 disabled:opacity-50"
-          >
-            <RefreshCw className={["size-3.5", statsLoading || plansLoading || vouchersLoading ? "animate-spin" : ""].join(" ")} />
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={jumpToVoucherTools}
-            aria-label="Quick actions"
-            title="Quick actions"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-indigo-200 hover:text-indigo-600"
-          >
-            <Plus className="size-3.5" />
-            Quick actions
-          </button>
-        </div>
-        <div className="grid gap-3 grid-cols-2 [&>*:last-child]:col-span-2 sm:grid-cols-3 sm:[&>*:last-child]:col-span-1 lg:grid-cols-5">
-          <StatTile label="Revenue" value={money(stats?.transactions.revenueNgn ?? 0)} />
-          <StatTile label="Successful payments" value={String(stats?.transactions.success ?? 0)} />
-          <StatTile label="Total vouchers" value={String(voucherTotals.total)} />
-          <StatTile label="Unused vouchers" value={String(voucherTotals.unused)} />
-          <StatTile label="Assigned vouchers" value={String(voucherTotals.assigned)} />
-        </div>
-
-        {(stats?.voucherPool.length ?? 0) > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {stats?.voucherPool.slice(0, 6).map((item) => (
-              <div key={item.code} className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold leading-tight text-slate-900">{item.name}</p>
-                  <span className={[
-                    "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                    item.percentageRemaining > 30
-                      ? "bg-emerald-100 text-emerald-700"
-                      : item.percentageRemaining > 10
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-rose-100 text-rose-700",
-                  ].join(" ")}>
-                    {item.percentageRemaining.toFixed(0)}%
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">{item.unused}/{item.total} unused</p>
-                <div className="mt-3 h-1.5 rounded-full bg-slate-100">
-                  <div
-                    className={[
-                      "h-1.5 rounded-full transition-all duration-500",
-                      item.percentageRemaining > 30
-                        ? "bg-emerald-500"
-                        : item.percentageRemaining > 10
-                          ? "bg-amber-500"
-                          : "bg-rose-500",
-                    ].join(" ")}
-                    style={{ width: `${Math.min(100, Math.max(0, item.percentageRemaining))}%` }}
-                  />
-                </div>
+      <div className="grid gap-5 lg:gap-6">
+        <section className="panel-surface bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,251,255,0.96)_100%)]">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="section-kicker">Overview</p>
+              <h1 className="mt-2 font-display text-[clamp(2rem,3vw,3rem)] font-semibold tracking-tight text-slate-950">
+                Operations dashboard
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
+                Track voucher inventory, monitor subscribers, and manage plan availability from one desktop workspace.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
+                  Mode: <span className="font-semibold text-slate-950">{overviewModeLabel}</span>
+                </span>
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
+                  Flow: <span className="font-semibold text-slate-950">{overviewFlowLabel}</span>
+                </span>
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
+                  Plans: <span className="font-semibold text-slate-950">{overviewPlanLabel}</span>
+                </span>
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
+                  Subscribers: <span className="font-semibold text-slate-950">{overviewSubscriberLabel}</span>
+                </span>
               </div>
-            ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 rounded-[22px] border border-slate-200/90 bg-white/90 p-2 shadow-[var(--shadow-sm)]">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={refreshAll}
+                disabled={statsLoading || plansLoading || vouchersLoading}
+              >
+                <RefreshCw className={["size-3.5", statsLoading || plansLoading || vouchersLoading ? "animate-spin" : ""].join(" ")} />
+                Refresh dashboard
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={jumpToVoucherTools}>
+                <Plus className="size-3.5" />
+                Quick actions
+              </Button>
+            </div>
           </div>
-        ) : null}
+
+          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <StatTile label="Revenue" value={money(stats?.transactions.revenueNgn ?? 0)} />
+            <StatTile label="Successful payments" value={String(stats?.transactions.success ?? 0)} />
+            <StatTile label="Total vouchers" value={String(voucherTotals.total)} />
+            <StatTile label="Unused vouchers" value={String(voucherTotals.unused)} />
+            <StatTile label="Assigned vouchers" value={String(voucherTotals.assigned)} />
+          </div>
+
+          {(stats?.voucherPool.length ?? 0) > 0 ? (
+            <div className="mt-6">
+              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">Pool health</p>
+                  <p className="text-sm text-slate-600">Top plan pools with remaining voucher availability.</p>
+                </div>
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Inventory snapshot</p>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-3">
+              {stats?.voucherPool.slice(0, 6).map((item) => (
+                <div key={item.code} className="rounded-[24px] border border-slate-200/90 bg-white px-5 py-4 shadow-[var(--shadow-sm)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-lg font-semibold leading-tight text-slate-950">{item.name}</p>
+                      <p className="mt-1 text-sm text-slate-500">{item.unused}/{item.total} unused</p>
+                    </div>
+                    <span className={[
+                      "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
+                      item.percentageRemaining > 30
+                        ? "bg-emerald-100 text-emerald-700"
+                        : item.percentageRemaining > 10
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-rose-100 text-rose-700",
+                    ].join(" ")}>
+                      {item.percentageRemaining.toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="mt-4 h-2 rounded-full bg-slate-100">
+                    <div
+                      className={[
+                        "h-2 rounded-full transition-all duration-500",
+                        item.percentageRemaining > 30
+                          ? "bg-emerald-500"
+                          : item.percentageRemaining > 10
+                            ? "bg-amber-500"
+                            : "bg-rose-500",
+                      ].join(" ")}
+                      style={{ width: `${Math.min(100, Math.max(0, item.percentageRemaining))}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
 
         {statsError ? (
           <Alert variant="destructive">
@@ -1111,37 +1163,45 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         ) : null}
 
         <section id="ops-subscribers" className="panel-surface">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
               <p className="section-kicker">Live</p>
               <h2 className="mt-1 section-title">Subscriber monitoring</h2>
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
                 Monitor active plans, live sessions, and policy limits for account-based access.
               </p>
             </div>
-            <Button type="button" variant="outline" onClick={loadSubscribers} disabled={subscribersLoading}>
-              {subscribersLoading ? "Refreshing..." : "Refresh subscribers"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">
+                {subscribers.length} visible
+              </span>
+              <Button type="button" variant="outline" size="sm" onClick={loadSubscribers} disabled={subscribersLoading}>
+                {subscribersLoading ? "Refreshing..." : "Refresh subscribers"}
+              </Button>
+            </div>
           </div>
           {subscribersError ? (
-            <Alert variant="destructive" className="mt-3">
+            <Alert variant="destructive" className="mt-4">
               <AlertTitle>Subscribers failed</AlertTitle>
               <AlertDescription>{subscribersError}</AlertDescription>
             </Alert>
           ) : null}
-          <div className="mt-3 space-y-2">
+          <div className="mt-5 space-y-3">
             {subscribers.length === 0 && !subscribersLoading ? (
-              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-500">
-                No subscribers yet.
-              </p>
+              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50/85 px-5 py-6">
+                <p className="text-base font-semibold text-slate-900">No subscribers yet</p>
+                <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                  Subscriber records will appear here after customers start using account-based access and active sessions are detected.
+                </p>
+              </div>
             ) : null}
             {subscribers.map((row) => (
-              <div key={row.subscriberId} className="rounded-2xl border border-slate-200/85 bg-white px-4 py-3.5 shadow-[var(--shadow-sm)] transition-[box-shadow] duration-200 hover:shadow-[var(--shadow-md)]">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+              <div key={row.subscriberId} className="rounded-[24px] border border-slate-200/90 bg-white px-5 py-4 shadow-[var(--shadow-sm)] transition-[box-shadow] duration-200 hover:shadow-[var(--shadow-md)]">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-900">{row.fullName || row.email}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {row.email} {row.phone ? `· ${row.phone}` : ""}
+                    <p className="truncate text-base font-semibold text-slate-900">{row.fullName || row.email}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {row.email}{row.phone ? ` | ${row.phone}` : ""}
                     </p>
                   </div>
                   <Badge className={row.activeSessions > 0 ? "shrink-0 bg-emerald-600 text-white" : "shrink-0 bg-slate-400 text-white"}>
@@ -1149,14 +1209,14 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                   </Badge>
                 </div>
                 {row.entitlement ? (
-                  <div className="mt-3 grid gap-1.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
                     <span><span className="font-medium text-slate-700">Plan:</span> {row.entitlement.planName || row.entitlement.planCode || "-"}</span>
                     <span><span className="font-medium text-slate-700">Ends:</span> {dt(row.entitlement.endsAt)}</span>
                     <span><span className="font-medium text-slate-700">Devices:</span> {row.entitlement.maxDevices ?? "Unlimited"}</span>
                     <span><span className="font-medium text-slate-700">Profile:</span> {row.entitlement.bandwidthProfile || "-"}</span>
                   </div>
                 ) : (
-                  <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">No active entitlement.</p>
+                  <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">No active entitlement.</p>
                 )}
               </div>
             ))}
@@ -1164,32 +1224,43 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </section>
 
         <section id="ops-architecture" className="panel-surface">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
               <p className="section-kicker">Config</p>
               <h2 className="mt-1 section-title">Architecture settings</h2>
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
                 Keep advanced config out of the main screen. Open the editor only when needed.
               </p>
-              {architecture ? (
-                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
-                    Access mode: {architecture.accessMode}
-                  </span>
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">
-                    Voucher source: {architecture.accessMode === "account_access" ? "n/a" : architecture.voucherSourceMode}
-                  </span>
-                </div>
-              ) : null}
             </div>
-            <Button type="button" variant="outline" onClick={() => setShowArchitectureModal(true)}>
-              <Settings className="size-4" />
-              Configure architecture
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">
+                {hasArchitectureConfigured ? "Configured" : "Not configured"}
+              </span>
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowArchitectureModal(true)}>
+                <Settings className="size-4" />
+                Configure architecture
+              </Button>
+            </div>
           </div>
 
+          {architecture ? (
+            <div className="mt-5 rounded-[24px] border border-slate-200/90 bg-slate-50/90 px-5 py-4">
+              <div className="flex flex-wrap gap-2 text-sm text-slate-700">
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">
+                  Access mode: <span className="font-semibold text-slate-900">{architecture.accessMode}</span>
+                </span>
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">
+                  Voucher source: <span className="font-semibold text-slate-900">{architecture.accessMode === "account_access" ? "n/a" : architecture.voucherSourceMode}</span>
+                </span>
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-slate-600">
+                Keep credentials, adapter settings, and external access controls inside the modal so the main admin view stays readable.
+              </p>
+            </div>
+          ) : null}
+
           {architectureLoading ? (
-            <p className="mt-3 text-sm text-slate-600">Loading architecture settings...</p>
+            <p className="mt-4 text-sm text-slate-600">Loading architecture settings...</p>
           ) : null}
 
         {architectureError ? (
@@ -1231,13 +1302,15 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </section>
 
         <section id="ops-plans" className="panel-surface">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
             <p className="section-kicker">Plans</p>
             <h2 className="mt-1 section-title">Plan management</h2>
-            <p className="mt-1 text-sm text-slate-600">Create, update pricing, and toggle availability per plan.</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Keep plan values readable on desktop: code, pricing, limits, availability, and inventory stay grouped instead of squeezed into tiny cells.
+            </p>
           </div>
-          <Button type="button" variant="outline" onClick={() => setShowCreatePlanModal(true)}>
+          <Button type="button" variant="outline" size="sm" onClick={() => setShowCreatePlanModal(true)}>
             Add plan
           </Button>
         </div>
@@ -1416,206 +1489,262 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           ) : null}
         </div>
 
-        <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200/85 bg-white lg:block [&_input]:h-8 [&_input]:px-2 [&_input]:text-xs [&_input]:shadow-none">
-          <table className="w-full min-w-[1060px] text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Code</th>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Minutes</th>
-                <th className="px-3 py-2">Price</th>
-                <th className="px-3 py-2">Max devices</th>
-                <th className="px-3 py-2">Bandwidth profile</th>
-                <th className="px-3 py-2">Data MB</th>
-                <th className="px-3 py-2">Available from</th>
-                <th className="px-3 py-2">Available to</th>
-                <th className="px-3 py-2">Unused</th>
-                <th className="px-3 py-2">Assigned</th>
-                <th className="px-3 py-2">Active</th>
-                <th className="px-3 py-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plans.map((plan) => {
-                const draft = planDrafts[plan.id];
-                if (!draft) return null;
-                return (
-                  <tr key={plan.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-3 py-2">
-                      <Input
-                        value={draft.code}
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: { ...prev[plan.id], code: event.target.value },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        value={draft.name}
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: { ...prev[plan.id], name: event.target.value },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        value={draft.duration}
-                        inputMode="text"
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: { ...prev[plan.id], duration: event.target.value },
-                          }))
-                        }
-                        placeholder="1h / 2d / 1w"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        value={draft.price}
-                        inputMode="text"
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: { ...prev[plan.id], price: event.target.value },
-                          }))
-                        }
-                        placeholder="25k / NGN 12000"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        value={draft.maxDevices}
-                        inputMode="numeric"
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: { ...prev[plan.id], maxDevices: event.target.value },
-                          }))
-                        }
-                        placeholder="Blank = unlimited"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        value={draft.bandwidthProfile}
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: { ...prev[plan.id], bandwidthProfile: event.target.value },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        value={draft.dataLimitMb}
-                        inputMode="text"
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: { ...prev[plan.id], dataLimitMb: event.target.value },
-                          }))
-                        }
-                        placeholder="500MB / 1.5GB / 2TB"
-                      />
-                    </td>
-                    <td className="px-3 py-2 min-w-[170px]">
-                      <Input
-                        type="datetime-local"
-                        value={draft.availableFrom}
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: { ...prev[plan.id], availableFrom: event.target.value },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="px-3 py-2 min-w-[170px]">
-                      <Input
-                        type="datetime-local"
-                        value={draft.availableTo}
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: { ...prev[plan.id], availableTo: event.target.value },
-                          }))
-                        }
-                      />
-                    </td>
-                    <td className="px-3 py-2">{plan.unusedCount}</td>
-                    <td className="px-3 py-2">{plan.assignedCount}</td>
-                    <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={draft.active}
-                        aria-label={`Set ${plan.name} active`}
-                        title={draft.active ? "Active" : "Inactive"}
-                        onClick={() =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: { ...prev[plan.id], active: !prev[plan.id].active },
-                          }))
-                        }
-                        className={[
-                          "relative inline-flex h-6 w-10 items-center rounded-full border transition",
-                          draft.active
-                            ? "border-emerald-600 bg-emerald-600/90"
-                            : "border-slate-300 bg-slate-200",
-                        ].join(" ")}
-                      >
-                        <span
-                          className={[
-                            "inline-block size-4 rounded-full bg-white shadow-sm transition",
-                            draft.active ? "translate-x-5" : "translate-x-1",
-                          ].join(" ")}
-                        />
-                      </button>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="outline"
-                          onClick={() => savePlan(plan)}
-                          disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
-                          aria-label="Save plan"
-                          title="Save plan"
-                          className="size-8"
-                        >
-                          <Save className="size-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="destructive"
-                          onClick={() => deletePlan(plan)}
-                          disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
-                          aria-label="Delete plan"
-                          title="Delete plan"
-                          className="size-8"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                    </td>
+        <div className="mt-5 hidden lg:block">
+          <div className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1260px] table-fixed text-sm [&_input]:shadow-none">
+                <colgroup>
+                  <col className="w-[12%]" />
+                  <col className="w-[24%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[7%]" />
+                  <col className="w-[7%]" />
+                </colgroup>
+                <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Code</th>
+                    <th className="px-4 py-3">Plan details</th>
+                    <th className="px-4 py-3">Limits</th>
+                    <th className="px-4 py-3">Availability</th>
+                    <th className="px-4 py-3">Inventory</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Actions</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {plans.length === 0 && !plansLoading ? (
-            <p className="p-4 text-sm text-slate-600">No plans available.</p>
-          ) : null}
+                </thead>
+                <tbody>
+                  {plans.map((plan) => {
+                    const draft = planDrafts[plan.id];
+                    if (!draft) return null;
+                    return (
+                      <tr key={plan.id} className="align-top border-b border-slate-100 last:border-0">
+                        <td className="px-4 py-4">
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Code</p>
+                            <Input
+                              className="h-10 text-sm"
+                              value={draft.code}
+                              onChange={(event) =>
+                                setPlanDrafts((prev) => ({
+                                  ...prev,
+                                  [plan.id]: { ...prev[plan.id], code: event.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="space-y-3">
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Name</p>
+                              <Input
+                                className="h-10 text-sm"
+                                value={draft.name}
+                                onChange={(event) =>
+                                  setPlanDrafts((prev) => ({
+                                    ...prev,
+                                    [plan.id]: { ...prev[plan.id], name: event.target.value },
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="grid gap-3 xl:grid-cols-2">
+                              <div className="space-y-2">
+                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Duration</p>
+                                <Input
+                                  className="h-10 text-sm"
+                                  value={draft.duration}
+                                  inputMode="text"
+                                  onChange={(event) =>
+                                    setPlanDrafts((prev) => ({
+                                      ...prev,
+                                      [plan.id]: { ...prev[plan.id], duration: event.target.value },
+                                    }))
+                                  }
+                                  placeholder="1h / 2d / 1w"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Price</p>
+                                <Input
+                                  className="h-10 text-sm"
+                                  value={draft.price}
+                                  inputMode="text"
+                                  onChange={(event) =>
+                                    setPlanDrafts((prev) => ({
+                                      ...prev,
+                                      [plan.id]: { ...prev[plan.id], price: event.target.value },
+                                    }))
+                                  }
+                                  placeholder="25k / NGN 12000"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="grid gap-3">
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Max devices</p>
+                              <Input
+                                className="h-10 text-sm"
+                                value={draft.maxDevices}
+                                inputMode="numeric"
+                                onChange={(event) =>
+                                  setPlanDrafts((prev) => ({
+                                    ...prev,
+                                    [plan.id]: { ...prev[plan.id], maxDevices: event.target.value },
+                                  }))
+                                }
+                                placeholder="Blank = unlimited"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Data limit</p>
+                              <Input
+                                className="h-10 text-sm"
+                                value={draft.dataLimitMb}
+                                inputMode="text"
+                                onChange={(event) =>
+                                  setPlanDrafts((prev) => ({
+                                    ...prev,
+                                    [plan.id]: { ...prev[plan.id], dataLimitMb: event.target.value },
+                                  }))
+                                }
+                                placeholder="500MB / 1.5GB / 2TB"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Bandwidth profile</p>
+                              <Input
+                                className="h-10 text-sm"
+                                value={draft.bandwidthProfile}
+                                onChange={(event) =>
+                                  setPlanDrafts((prev) => ({
+                                    ...prev,
+                                    [plan.id]: { ...prev[plan.id], bandwidthProfile: event.target.value },
+                                  }))
+                                }
+                                placeholder="Bandwidth profile"
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="space-y-3">
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Available from</p>
+                              <Input
+                                className="h-10 text-sm"
+                                type="datetime-local"
+                                value={draft.availableFrom}
+                                onChange={(event) =>
+                                  setPlanDrafts((prev) => ({
+                                    ...prev,
+                                    [plan.id]: { ...prev[plan.id], availableFrom: event.target.value },
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Available to</p>
+                              <Input
+                                className="h-10 text-sm"
+                                type="datetime-local"
+                                value={draft.availableTo}
+                                onChange={(event) =>
+                                  setPlanDrafts((prev) => ({
+                                    ...prev,
+                                    [plan.id]: { ...prev[plan.id], availableTo: event.target.value },
+                                  }))
+                                }
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="space-y-2 text-sm text-slate-700">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                              <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Unused</p>
+                              <p className="mt-1 text-lg font-semibold text-slate-950">{plan.unusedCount}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                              <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Assigned</p>
+                              <p className="mt-1 text-lg font-semibold text-slate-950">{plan.assignedCount}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="space-y-3">
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={draft.active}
+                              aria-label={`Set ${plan.name} active`}
+                              title={draft.active ? "Active" : "Inactive"}
+                              onClick={() =>
+                                setPlanDrafts((prev) => ({
+                                  ...prev,
+                                  [plan.id]: { ...prev[plan.id], active: !prev[plan.id].active },
+                                }))
+                              }
+                              className={[
+                                "relative inline-flex h-6 w-10 items-center rounded-full border transition",
+                                draft.active
+                                  ? "border-emerald-600 bg-emerald-600/90"
+                                  : "border-slate-300 bg-slate-200",
+                              ].join(" ")}
+                            >
+                              <span
+                                className={[
+                                  "inline-block size-4 rounded-full bg-white shadow-sm transition",
+                                  draft.active ? "translate-x-5" : "translate-x-1",
+                                ].join(" ")}
+                              />
+                            </button>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                              <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Total</p>
+                              <p className="mt-1 text-lg font-semibold text-slate-950">{plan.totalCount}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex flex-col gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => savePlan(plan)}
+                              disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
+                              className="justify-center"
+                            >
+                              <Save className="size-3.5" />
+                              Save
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deletePlan(plan)}
+                              disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
+                              className="justify-center"
+                            >
+                              <Trash2 className="size-3.5" />
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {plans.length === 0 && !plansLoading ? (
+              <p className="p-4 text-sm text-slate-600">No plans available.</p>
+            ) : null}
+          </div>
         </div>
 
         {plansError ? (
@@ -1633,11 +1762,11 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </section>
 
         <section id="ops-vouchers" className="panel-surface">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-          <div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
             <p className="section-kicker">Inventory</p>
             <h2 className="mt-1 section-title">Voucher operations</h2>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
               {hasArchitectureConfigured
                 ? isExternalAccessMode
                   ? "External account-access mode: voucher inventory is bypassed. Use subscriber monitoring and RADIUS accounting."
@@ -1656,30 +1785,30 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           {hasArchitectureConfigured ? (
             <div className="flex flex-wrap items-center gap-2">
               {isCsvMode && hasPlans && !isExternalAccessMode ? (
-                <Button type="button" variant="outline" onClick={() => setShowCreateVoucherModal(true)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowCreateVoucherModal(true)}>
                   Add voucher
                 </Button>
               ) : null}
               {isCsvMode && hasPlans && !isExternalAccessMode ? (
-                <Button type="button" variant="outline" onClick={() => setShowGenerateVoucherModal(true)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowGenerateVoucherModal(true)}>
                   Batch generate
                 </Button>
               ) : null}
               {isCsvMode && !isExternalAccessMode ? (
-                <Button type="button" variant="outline" onClick={() => setShowImportVoucherModal(true)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowImportVoucherModal(true)}>
                   Import CSV
                 </Button>
               ) : null}
             </div>
           ) : (
-            <Button type="button" variant="outline" onClick={() => setShowArchitectureModal(true)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowArchitectureModal(true)}>
               <Settings className="size-4" />
               Configure architecture
             </Button>
           )}
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_170px_170px_auto]">
+        <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_220px_220px_auto]">
           <Input
             placeholder="Search voucher, plan, email, phone"
             value={voucherQuery}
@@ -1698,7 +1827,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               </option>
             ))}
           </select>
-          <Button type="button" variant="outline" onClick={loadVouchers} disabled={vouchersLoading}>
+          <Button type="button" variant="outline" size="sm" onClick={loadVouchers} disabled={vouchersLoading} className="xl:self-end">
             {vouchersLoading ? "Loading..." : "Refresh"}
           </Button>
         </div>
@@ -1743,67 +1872,96 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           ) : null}
         </div>
 
-        <div className="mt-3 hidden overflow-x-auto rounded-xl border border-slate-200/85 bg-white lg:block">
-          <table className="w-full min-w-[800px] text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
-              <tr>
-                <th className="px-3 py-2"></th>
-                <th className="px-3 py-2">Voucher</th>
-                <th className="px-3 py-2">Plan</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Assigned email</th>
-                <th className="px-3 py-2">Assigned phone</th>
-                <th className="px-3 py-2">Created</th>
-                <th className="px-3 py-2">Assigned</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vouchers.map((row) => (
-                <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-3 py-2">
-                    <input
-                      aria-label={`Select voucher ${row.voucherCode}`}
-                      type="checkbox"
-                      checked={selectedVoucherIds.includes(row.id)}
-                      onChange={(event) =>
-                        setSelectedVoucherIds((prev) =>
-                          event.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
-                        )
-                      }
-                    />
-                  </td>
-                  <td className="px-3 py-2 font-medium text-slate-900">{row.voucherCode}</td>
-                  <td className="px-3 py-2">{row.packageName}</td>
-                  <td className="px-3 py-2">
-                    {row.status === "UNUSED" ? (
-                      <Badge className="bg-emerald-700 text-white">UNUSED</Badge>
-                    ) : (
-                      <Badge className="bg-amber-600 text-white">ASSIGNED</Badge>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">{row.assignedToEmail || "-"}</td>
-                  <td className="px-3 py-2">{row.assignedToPhone || "-"}</td>
-                  <td className="px-3 py-2 text-xs text-slate-600">{dt(row.createdAt)}</td>
-                  <td className="px-3 py-2 text-xs text-slate-600">{dt(row.assignedAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {vouchers.length === 0 && !vouchersLoading ? (
-            <p className="p-4 text-sm text-slate-600">No vouchers found.</p>
-          ) : null}
+        <div className="mt-5 hidden lg:block">
+          <div className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1080px] table-fixed text-sm">
+                <colgroup>
+                  <col className="w-[5%]" />
+                  <col className="w-[17%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[30%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[10%]" />
+                </colgroup>
+                <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3"></th>
+                    <th className="px-4 py-3">Voucher</th>
+                    <th className="px-4 py-3">Plan</th>
+                    <th className="px-4 py-3">Assigned to</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Created</th>
+                    <th className="px-4 py-3">Assigned</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vouchers.map((row) => (
+                    <tr key={row.id} className="border-b border-slate-100 last:border-0">
+                      <td className="px-4 py-4 align-top">
+                        <input
+                          aria-label={`Select voucher ${row.voucherCode}`}
+                          type="checkbox"
+                          checked={selectedVoucherIds.includes(row.id)}
+                          onChange={(event) =>
+                            setSelectedVoucherIds((prev) =>
+                              event.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <div className="space-y-1">
+                          <p className="font-semibold break-all text-slate-950">{row.voucherCode}</p>
+                          <p className="text-xs uppercase tracking-[0.08em] text-slate-500">{row.packageCode}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <p className="font-medium text-slate-900">{row.packageName}</p>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <div className="space-y-2">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                            <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Email</p>
+                            <p className="mt-1 break-all text-sm text-slate-900">{row.assignedToEmail || "-"}</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                            <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Phone</p>
+                            <p className="mt-1 text-sm text-slate-900">{row.assignedToPhone || "-"}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        {row.status === "UNUSED" ? (
+                          <Badge className="bg-emerald-700 text-white">UNUSED</Badge>
+                        ) : (
+                          <Badge className="bg-amber-600 text-white">ASSIGNED</Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 align-top text-sm text-slate-600">{dt(row.createdAt)}</td>
+                      <td className="px-4 py-4 align-top text-sm text-slate-600">{dt(row.assignedAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {vouchers.length === 0 && !vouchersLoading ? (
+              <p className="p-4 text-sm text-slate-600">No vouchers found.</p>
+            ) : null}
+          </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-slate-600">
+        <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <p className="text-sm text-slate-600">
             Showing {vouchers.length} / {voucherTotal} | Selected {selectedVoucherIds.length}
           </p>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={reclaimSelected} disabled={selectedVoucherIds.length === 0}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={reclaimSelected} disabled={selectedVoucherIds.length === 0}>
               <ArchiveRestore className="size-4" />
               Unarchive
             </Button>
-            <Button type="button" variant="destructive" onClick={deleteSelected} disabled={selectedVoucherIds.length === 0}>
+            <Button type="button" variant="destructive" size="sm" onClick={deleteSelected} disabled={selectedVoucherIds.length === 0}>
               <Trash2 className="size-4" />
               Delete
             </Button>
@@ -1811,16 +1969,18 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={() => setVoucherPage((prev) => Math.max(1, prev - 1))}
               disabled={voucherPage <= 1}
             >
               <ChevronLeft className="size-4" />
               Prev
             </Button>
-            <span className="text-xs text-slate-600">{voucherPage} / {voucherTotalPages}</span>
+            <span className="text-sm text-slate-600">{voucherPage} / {voucherTotalPages}</span>
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={() => setVoucherPage((prev) => Math.min(voucherTotalPages, prev + 1))}
               disabled={voucherPage >= voucherTotalPages}
             >

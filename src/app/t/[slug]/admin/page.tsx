@@ -35,7 +35,7 @@ export default async function TenantAdminPage({ params }: Props) {
     <div className="app-shell">
       <div className="app-container">
         <AppTopbar
-          breadcrumb={`Tenant Admin / ${tenant.slug}`}
+          breadcrumb={`Tenant admin / ${tenant.slug}`}
           environment="Production"
           accountLabel={tenant.name}
           action={<LogoutButton />}
