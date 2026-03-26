@@ -96,36 +96,28 @@ function getVoucherModeMeta(mode: VoucherSourceMode) {
   if (mode === "radius_voucher") {
     return {
       label: "RADIUS voucher",
-      title: "Check voucher accounting for this tenant's RADIUS-issued vouchers.",
-      copy:
-        "This tenant validates voucher codes against successful PaySpot purchases and shows live RADIUS accounting when available.",
-      sourceLabel: "RADIUS-backed voucher purchases",
+      title: "Check your voucher",
+      copy: "Enter your code to see usage.",
     };
   }
   if (mode === "mikrotik_rest") {
     return {
       label: "MikroTik direct",
-      title: "Check voucher details for this tenant's MikroTik-issued vouchers.",
-      copy:
-        "This tenant checks voucher codes created after customer payment and shows the purchase-linked voucher details stored under this MikroTik flow.",
-      sourceLabel: "MikroTik direct voucher purchases",
+      title: "Check your voucher",
+      copy: "Enter your code to see details.",
     };
   }
   if (mode === "omada_openapi") {
     return {
       label: "Omada API",
-      title: "Check voucher details for this tenant's auto-provisioned vouchers.",
-      copy:
-        "This tenant checks vouchers issued through automated controller provisioning and limits results to vouchers generated under this tenant.",
-      sourceLabel: "API-provisioned voucher purchases",
+      title: "Check your voucher",
+      copy: "Enter your code to see details.",
     };
   }
   return {
     label: "Imported vouchers",
-    title: "Check voucher details for this tenant's imported voucher pool.",
-    copy:
-      "This tenant checks voucher codes from its imported inventory and purchase assignments only. Results never cross tenant boundaries.",
-    sourceLabel: "Imported inventory and assigned purchases",
+    title: "Check your voucher",
+    copy: "Enter your code to see details.",
   };
 }
 
@@ -324,9 +316,9 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
 
               <div className="soft-panel border-slate-200/95 bg-white/95 p-5 sm:p-6">
                 <p className="section-kicker">Search</p>
-                <h2 className="mt-1 section-title">Look up a voucher code</h2>
+                <h2 className="mt-1 section-title">Enter voucher code</h2>
                 <p className="mt-2 panel-copy">
-                  Use the voucher exactly as shown after payment. This tenant currently checks against {voucherModeMeta.sourceLabel.toLowerCase()}.
+                  Enter your voucher code.
                 </p>
 
                 <form method="GET" action={`/t/${slug}/voucher`} className="mt-5 grid gap-3">
@@ -350,7 +342,7 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                       className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-800 active:scale-[0.99]"
                     >
                       <Search className="size-4" />
-                      Check usage
+                      Check
                     </button>
                   </div>
                 </form>
@@ -373,39 +365,13 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                   <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                     <p className="text-sm font-semibold text-slate-800">No code yet</p>
                     <p className="mt-1 text-sm text-slate-600">
-                      Start with a voucher from your payment receipt or the hotspot access message.
+                      Enter your voucher code above.
                     </p>
                   </div>
                 )}
               </div>
             </div>
           </section>
-
-          {!rawCode ? (
-            <section className="grid gap-4 lg:grid-cols-3">
-              <div className="panel-surface lg:col-span-2">
-                <p className="section-kicker">What this page checks</p>
-                <h2 className="mt-1 section-title">Voucher state and accounting in one place</h2>
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <ResultMetric label="Status" value="Unused, active, used, or expired" tone="sky" />
-                  <ResultMetric
-                    label="Usage"
-                    value={radiusVoucherMode ? "Used data and remaining balance" : "Purchase-linked voucher details"}
-                    tone="amber"
-                  />
-                  <ResultMetric label="Timing" value="Purchase time and expiry window" />
-                </div>
-              </div>
-
-              <div className="panel-surface">
-                <p className="section-kicker">Tip</p>
-                <h2 className="mt-1 section-title">One code, one search</h2>
-                <p className="mt-2 panel-copy">
-                  Customers only need the voucher code they received after payment. There is no separate accounting ID.
-                </p>
-              </div>
-            </section>
-          ) : null}
 
           {result ? (
             <>
@@ -416,9 +382,7 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                       <p className="section-kicker">Voucher</p>
                       <h2 className="mt-1 panel-title text-[clamp(1.6rem,4vw,2.5rem)]">{result.code}</h2>
                       <p className="mt-2 panel-copy max-w-2xl">
-                        {result.pkg
-                          ? `${result.pkg.name} is linked to this code.`
-                          : "This code is linked to a valid voucher record in this portal."}
+                        {result.pkg ? `${result.pkg.name} voucher.` : "Voucher found."}
                       </p>
                     </div>
                     <div className="shrink-0">
@@ -452,11 +416,11 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                     </div>
                     <div>
                       <p className="section-kicker">Accounting</p>
-                      <h2 className="mt-1 section-title">Voucher usage summary</h2>
+                      <h2 className="mt-1 section-title">Usage</h2>
                       <p className="mt-2 panel-copy">
                         {result.radiusVoucher
-                          ? "These numbers come from the current RADIUS accounting state for this voucher."
-                          : "This voucher does not currently expose RADIUS accounting on this tenant."}
+                          ? "Current voucher usage."
+                          : "Usage is not available for this voucher."}
                       </p>
                     </div>
                   </div>
@@ -518,7 +482,7 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                     </div>
                   ) : (
                     <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                      This tenant is configured for <span className="font-semibold text-slate-900">{voucherModeMeta.label}</span>, so this page only shows voucher details stored for that source. Live usage appears only in RADIUS voucher mode.
+                      Usage is only available for RADIUS vouchers.
                     </div>
                   )}
                 </div>
@@ -531,7 +495,7 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                       </div>
                       <div>
                         <p className="section-kicker">Access window</p>
-                        <h2 className="mt-1 section-title">Timing details</h2>
+                        <h2 className="mt-1 section-title">Timing</h2>
                       </div>
                     </div>
                     <div className="mt-5 grid gap-3">
@@ -551,11 +515,11 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
                       </div>
                       <div>
                         <p className="section-kicker">Portal scope</p>
-                        <h2 className="mt-1 section-title">Where this works</h2>
+                        <h2 className="mt-1 section-title">Scope</h2>
                       </div>
                     </div>
                     <p className="mt-4 panel-copy">
-                      This checker only returns results for vouchers issued through <span className="font-semibold text-slate-900">{tenant.name}</span>.
+                      Only vouchers from <span className="font-semibold text-slate-900">{tenant.name}</span>.
                     </p>
                   </section>
                 </div>
