@@ -15,6 +15,7 @@ import {
   getVoucherPoolEntryByCode,
   markTransactionFailed,
   markTransactionProcessing,
+  normalizeVoucherSourceMode,
   resolveTenantMikrotikConfigIfPresent,
   transactionAssignVoucher,
 } from "@/lib/store";
@@ -147,6 +148,7 @@ async function provisionMikrotikVoucherForTransaction(params: {
       reference: params.reference,
       voucherCode,
       paidAt,
+      voucherSourceMode: "mikrotik_rest",
     });
 
     return { status: "assigned" as const, voucherCode };
@@ -204,6 +206,7 @@ async function provisionRadiusVoucherForTransaction(params: {
     reference: params.reference,
     voucherCode,
     paidAt,
+    voucherSourceMode: "radius_voucher",
   });
 
   return { status: "assigned" as const, voucherCode };
@@ -272,6 +275,7 @@ export async function handleSuccessfulPayment(params: {
       email: transaction.email,
       phone: transaction.phone,
       packageId: transaction.package_id,
+      voucherSourceMode: normalizeVoucherSourceMode(tenant?.voucher_source_mode),
     });
   }
 

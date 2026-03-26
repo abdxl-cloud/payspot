@@ -187,6 +187,7 @@ export type TransactionRow = {
   phone: string;
   amount_ngn: number;
   voucher_code: string | null;
+  voucher_source_mode: VoucherSourceMode | null;
   package_id: string;
   subscriber_id: string | null;
   delivery_mode: "voucher" | "account_access";
@@ -302,7 +303,7 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-function normalizeVoucherSourceMode(
+export function normalizeVoucherSourceMode(
   value: string | null | undefined,
 ): VoucherSourceMode {
   if (value === "omada_openapi") return "omada_openapi";
@@ -1181,7 +1182,11 @@ export async function authorizeVoucherRadiusAccess(params: {
   password: string;
   callingStationId?: string | null;
 }) {
-  const transaction = await getTransactionByVoucherCode(params.tenantId, params.username);
+  const transaction = await getTransactionByVoucherCode(
+    params.tenantId,
+    params.username,
+    "radius_voucher",
+  );
   if (!transaction?.voucher_code) return { status: "invalid_credentials" as const };
 
   const normalizedPassword = params.password.trim().toUpperCase();
@@ -2443,6 +2448,7 @@ export async function createTransaction(params: {
   packageId: string;
   subscriberId?: string | null;
   deliveryMode?: "voucher" | "account_access";
+  voucherSourceMode?: VoucherSourceMode | null;
   authorizationUrl: string | null;
   expiresAt: string | null;
 }) {
@@ -2454,8 +2460,8 @@ export async function createTransaction(params: {
     `
       INSERT INTO transactions (
         id, tenant_id, reference, email, phone, amount_ngn, package_id, authorization_url,
-        subscriber_id, delivery_mode, payment_status, created_at, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        subscriber_id, delivery_mode, voucher_source_mode, payment_status, created_at, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -2468,6 +2474,7 @@ export async function createTransaction(params: {
     params.authorizationUrl,
     params.subscriberId ?? null,
     params.deliveryMode ?? "voucher",
+    params.voucherSourceMode ?? null,
     "pending",
     now,
     params.expiresAt,
@@ -2602,17 +2609,24 @@ export async function completeTransaction(params: {
   reference: string;
   voucherCode: string;
   paidAt: string;
+  voucherSourceMode?: VoucherSourceMode | null;
 }) {
   const db = getDb();
   const result = await db
     .prepare(
       `
       UPDATE transactions
-      SET payment_status = 'success', voucher_code = ?, paid_at = ?
+      SET payment_status = 'success', voucher_code = ?, paid_at = ?, voucher_source_mode = COALESCE(?, voucher_source_mode)
       WHERE tenant_id = ? AND reference = ?
     `,
     )
-    .run(params.voucherCode, params.paidAt, params.tenantId, params.reference);
+    .run(
+      params.voucherCode,
+      params.paidAt,
+      params.voucherSourceMode ?? null,
+      params.tenantId,
+      params.reference,
+    );
   return result.changes;
 }
 
@@ -2866,6 +2880,7 @@ export async function transactionAssignVoucher(params: {
   email: string;
   phone: string;
   packageId: string;
+  voucherSourceMode?: VoucherSourceMode | null;
 }) {
   const db = getDb();
   const run = db.transaction(async () => {
@@ -2899,6 +2914,7 @@ export async function transactionAssignVoucher(params: {
       reference: params.reference,
       voucherCode: voucher.voucherCode,
       paidAt: voucher.assignedAt,
+      voucherSourceMode: params.voucherSourceMode ?? "import_csv",
     });
 
     return { status: "assigned", voucherCode: voucher.voucherCode };
@@ -3079,8 +3095,26 @@ export async function getTenantSubscriberOverview(tenantId: string) {
   }));
 }
 
-export async function getTransactionByVoucherCode(tenantId: string, voucherCode: string) {
+export async function getTransactionByVoucherCode(
+  tenantId: string,
+  voucherCode: string,
+  voucherSourceMode?: VoucherSourceMode | null,
+) {
   const db = getDb();
+  if (voucherSourceMode) {
+    return await db
+      .prepare(
+        `SELECT * FROM transactions
+         WHERE tenant_id = ?
+           AND UPPER(voucher_code) = UPPER(?)
+           AND payment_status = 'success'
+           AND voucher_source_mode = ?
+         ORDER BY paid_at DESC
+         LIMIT 1`,
+      )
+      .get(tenantId, voucherCode.trim(), voucherSourceMode) as TransactionRow | undefined;
+  }
+
   return await db
     .prepare(
       `SELECT * FROM transactions

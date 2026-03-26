@@ -5,6 +5,7 @@ import {
   getTenantBySlug,
   getTransactionByVoucherCode,
   getVoucherPoolEntryByCode,
+  normalizeVoucherSourceMode,
   resolveTenantOmadaConfigIfPresent,
 } from "@/lib/store";
 import { lookupOmadaVoucherStatus } from "@/lib/omada";
@@ -34,11 +35,13 @@ export async function GET(request: Request, { params }: Props) {
     return Response.json({ error: "A voucher code is required" }, { status: 400 });
   }
   const code = parsed.data;
+  const voucherSourceMode = normalizeVoucherSourceMode(tenant.voucher_source_mode);
+  const shouldCheckPool = voucherSourceMode === "import_csv";
 
   // Primary source of truth: our own database
   const [transaction, poolEntry] = await Promise.all([
-    getTransactionByVoucherCode(tenant.id, code),
-    getVoucherPoolEntryByCode(tenant.id, code),
+    getTransactionByVoucherCode(tenant.id, code, voucherSourceMode),
+    shouldCheckPool ? getVoucherPoolEntryByCode(tenant.id, code) : Promise.resolve(null),
   ]);
 
   if (!transaction && !poolEntry) {

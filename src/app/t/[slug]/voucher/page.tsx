@@ -1,17 +1,27 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  Activity,
+  ArrowRight,
+  DatabaseZap,
+  Search,
+  ShieldCheck,
+  TimerReset,
+  Wifi,
+} from "lucide-react";
 import { AppTopbar } from "@/components/app-topbar";
-import { OmadaQuickSetup } from "@/components/omada-quick-setup";
 import {
   getPackageById,
   getRadiusVoucherAccessState,
   getTenantBySlug,
   getTransactionByVoucherCode,
   getVoucherPoolEntryByCode,
-  resolveTenantOmadaConfigIfPresent,
+  normalizeVoucherSourceMode,
 } from "@/lib/store";
-import { lookupOmadaVoucherStatus, type OmadaVoucherLookupResult } from "@/lib/omada";
 
 export const dynamic = "force-dynamic";
+
+type VoucherSourceMode = "import_csv" | "mikrotik_rest" | "radius_voucher" | "omada_openapi";
 
 type Props = {
   params: { slug: string } | Promise<{ slug: string }>;
@@ -23,7 +33,7 @@ type Props = {
 function formatDate(iso: string | null | undefined) {
   if (!iso) return null;
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
+  if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleString("en-NG", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -52,14 +62,27 @@ function formatBytes(bytes: number | null | undefined) {
   return `${value.toFixed(digits)} ${units[unitIndex]}`;
 }
 
+function formatReason(reason: string | null | undefined) {
+  if (!reason) return null;
+  if (reason === "data_limit_reached") return "Data limit reached";
+  if (reason === "plan_expired") return "Plan expired";
+  if (reason === "no_active_voucher") return "Voucher is no longer active";
+  return reason.replaceAll("_", " ");
+}
+
+function getUsagePercent(usedBytes: number, dataLimitBytes: number | null) {
+  if (dataLimitBytes == null || dataLimitBytes <= 0) return null;
+  return Math.max(0, Math.min(100, Math.round((usedBytes / dataLimitBytes) * 100)));
+}
+
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
-    UNUSED:   { label: "Unused",   cls: "bg-amber-100 text-amber-800" },
-    ASSIGNED: { label: "Issued",   cls: "bg-sky-100 text-sky-800" },
-    USED:     { label: "Used",     cls: "bg-emerald-100 text-emerald-800" },
-    EXPIRED:  { label: "Expired",  cls: "bg-red-100 text-red-800" },
-    ACTIVE:   { label: "Active",   cls: "bg-emerald-100 text-emerald-800" },
-    UNKNOWN:  { label: "Unknown",  cls: "bg-slate-100 text-slate-600" },
+    UNUSED: { label: "Unused", cls: "bg-amber-100 text-amber-800" },
+    ASSIGNED: { label: "Issued", cls: "bg-sky-100 text-sky-800" },
+    USED: { label: "Used", cls: "bg-emerald-100 text-emerald-800" },
+    EXPIRED: { label: "Expired", cls: "bg-red-100 text-red-800" },
+    ACTIVE: { label: "Active", cls: "bg-emerald-100 text-emerald-800" },
+    UNKNOWN: { label: "Unknown", cls: "bg-slate-100 text-slate-600" },
   };
   const { label, cls } = map[status] ?? { label: status, cls: "bg-slate-100 text-slate-600" };
   return (
@@ -69,18 +92,64 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function getVoucherModeMeta(mode: VoucherSourceMode) {
+  if (mode === "radius_voucher") {
+    return {
+      label: "RADIUS voucher",
+      title: "Check voucher accounting for this tenant's RADIUS-issued vouchers.",
+      copy:
+        "This tenant validates voucher codes against successful PaySpot purchases and shows live RADIUS accounting when available.",
+      sourceLabel: "RADIUS-backed voucher purchases",
+    };
+  }
+  if (mode === "mikrotik_rest") {
+    return {
+      label: "MikroTik direct",
+      title: "Check voucher details for this tenant's MikroTik-issued vouchers.",
+      copy:
+        "This tenant checks voucher codes created after customer payment and shows the purchase-linked voucher details stored under this MikroTik flow.",
+      sourceLabel: "MikroTik direct voucher purchases",
+    };
+  }
+  if (mode === "omada_openapi") {
+    return {
+      label: "Omada API",
+      title: "Check voucher details for this tenant's auto-provisioned vouchers.",
+      copy:
+        "This tenant checks vouchers issued through automated controller provisioning and limits results to vouchers generated under this tenant.",
+      sourceLabel: "API-provisioned voucher purchases",
+    };
+  }
+  return {
+    label: "Imported vouchers",
+    title: "Check voucher details for this tenant's imported voucher pool.",
+    copy:
+      "This tenant checks voucher codes from its imported inventory and purchase assignments only. Results never cross tenant boundaries.",
+    sourceLabel: "Imported inventory and assigned purchases",
+  };
+}
+
 async function lookupVoucher(params: {
   tenantId: string;
   rawCode: string;
-  omadaEnabled: boolean;
+  voucherSourceMode: VoucherSourceMode;
   radiusVoucherMode: boolean;
 }) {
   const code = params.rawCode.trim();
   if (!code) return null;
 
+  const shouldCheckTransactions = true;
+  const shouldCheckPool = params.voucherSourceMode === "import_csv";
+
   const [transaction, poolEntry] = await Promise.all([
-    getTransactionByVoucherCode(params.tenantId, code),
-    getVoucherPoolEntryByCode(params.tenantId, code),
+    shouldCheckTransactions
+      ? getTransactionByVoucherCode(
+          params.tenantId,
+          code,
+          params.voucherSourceMode === "import_csv" ? "import_csv" : params.voucherSourceMode,
+        )
+      : Promise.resolve(null),
+    shouldCheckPool ? getVoucherPoolEntryByCode(params.tenantId, code) : Promise.resolve(null),
   ]);
 
   if (!transaction && !poolEntry) return null;
@@ -91,7 +160,7 @@ async function lookupVoucher(params: {
   let estimatedExpiresAt: string | null = null;
   if (transaction?.paid_at && pkg?.duration_minutes && pkg.duration_minutes > 0) {
     const paidMs = new Date(transaction.paid_at).getTime();
-    if (!isNaN(paidMs)) {
+    if (!Number.isNaN(paidMs)) {
       estimatedExpiresAt = new Date(
         paidMs + pkg.duration_minutes * 60 * 1000,
       ).toISOString();
@@ -102,22 +171,8 @@ async function lookupVoucher(params: {
     poolEntry?.status === "UNUSED"
       ? "UNUSED"
       : poolEntry?.status === "ASSIGNED" || transaction
-      ? "ASSIGNED"
-      : null;
-
-  let omadaResult: OmadaVoucherLookupResult | null = null;
-  let omadaError: string | null = null;
-  if (params.omadaEnabled) {
-    const omadaConfig = await resolveTenantOmadaConfigIfPresent(params.tenantId);
-    try {
-      if (omadaConfig) {
-        omadaResult = await lookupOmadaVoucherStatus(omadaConfig, code);
-      }
-    } catch (err) {
-      omadaError = err instanceof Error ? err.message : "Unexpected error during Omada lookup";
-      console.error("[voucher] Omada lookup failed", { tenantId: params.tenantId, code, error: omadaError });
-    }
-  }
+        ? "ASSIGNED"
+        : null;
 
   const radiusVoucher =
     params.radiusVoucherMode && transaction
@@ -148,8 +203,6 @@ async function lookupVoucher(params: {
     estimatedExpiresAt,
     poolStatus,
     displayStatus,
-    omadaResult,
-    omadaError,
     radiusVoucher: radiusVoucher
       ? {
           state: radiusVoucher.state,
@@ -164,17 +217,61 @@ async function lookupVoucher(params: {
   };
 }
 
+function InfoMetric({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Activity;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="hero-metric">
+      <div className="flex items-center gap-2 text-slate-500">
+        <Icon className="size-4 text-sky-700" />
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em]">{label}</span>
+      </div>
+      <strong className="mt-2">{value}</strong>
+    </div>
+  );
+}
+
+function ResultMetric({
+  label,
+  value,
+  tone = "slate",
+}: {
+  label: string;
+  value: string;
+  tone?: "slate" | "sky" | "amber";
+}) {
+  const toneClass =
+    tone === "sky"
+      ? "border-sky-200 bg-sky-50"
+      : tone === "amber"
+        ? "border-amber-200 bg-amber-50"
+        : "border-slate-200 bg-white";
+
+  return (
+    <div className={`rounded-2xl border p-4 shadow-[var(--shadow-sm)] ${toneClass}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</p>
+      <p className="mt-2 text-lg font-semibold tracking-tight text-slate-950">{value}</p>
+    </div>
+  );
+}
+
 export default async function VoucherCheckPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
 
-  const omadaConfig = await resolveTenantOmadaConfigIfPresent(tenant.id);
-  const showOmadaSetup = tenant.voucher_source_mode === "omada_openapi" && omadaConfig === null;
   const radiusVoucherMode =
     tenant.portal_auth_mode === "external_radius_voucher" ||
     tenant.voucher_source_mode === "radius_voucher";
+  const voucherSourceMode = normalizeVoucherSourceMode(tenant.voucher_source_mode) as VoucherSourceMode;
+  const voucherModeMeta = getVoucherModeMeta(voucherSourceMode);
 
   const rawCode =
     typeof resolvedSearchParams.code === "string" ? resolvedSearchParams.code : "";
@@ -183,241 +280,290 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
     ? await lookupVoucher({
         tenantId: tenant.id,
         rawCode,
-        omadaEnabled: tenant.voucher_source_mode === "omada_openapi",
+        voucherSourceMode,
         radiusVoucherMode,
       })
     : null;
   const notFound_ = rawCode && !result;
+  const usagePercent = result?.radiusVoucher
+    ? getUsagePercent(result.radiusVoucher.usedBytes, result.radiusVoucher.dataLimitBytes)
+    : null;
 
   return (
     <div className="app-shell">
-      <div className="app-container max-w-3xl py-12 sm:py-20">
+      <div className="app-container">
         <AppTopbar
-          breadcrumb="Check voucher"
+          breadcrumb={`Voucher accounting / ${tenant.slug}`}
           environment="Live"
           accountLabel={tenant.name}
+          action={
+            <Link href={`/t/${slug}`} className="hero-chip">
+              Buy a plan <ArrowRight className="size-3.5" />
+            </Link>
+          }
         />
 
-        <div className="status-card">
-          <p className="section-kicker">Voucher lookup</p>
-          <h1 className="mt-2 status-title">Check voucher status</h1>
-          <p className="mt-2 status-copy">
-            Enter your voucher code to see its current status and usage details.
-          </p>
+        <div className="mx-auto grid w-full max-w-5xl gap-4 sm:gap-5">
+          <section className="panel-surface overflow-hidden">
+            <div className="grid gap-5 lg:grid-cols-[1.2fr_0.9fr]">
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  <span className="hero-chip">Voucher accounting</span>
+                  <h1 className="hero-title">{voucherModeMeta.title}</h1>
+                  <p className="hero-copy">
+                    {voucherModeMeta.copy}
+                  </p>
+                </div>
 
-          {/* Omada setup — only visible to the tenant admin when not yet configured */}
-          {showOmadaSetup && (
-            <div className="mt-6">
-              <OmadaQuickSetup tenantSlug={slug} />
-            </div>
-          )}
-
-          {/* Search form — GET method so the code appears in the URL */}
-          <form method="GET" action={`/t/${slug}/voucher`} className="mt-6 flex gap-2">
-            <input
-              type="text"
-              name="code"
-              defaultValue={rawCode}
-              placeholder="Enter voucher code"
-              maxLength={64}
-              autoComplete="off"
-              spellCheck={false}
-              className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-mono text-sm uppercase tracking-widest text-slate-900 placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
-            />
-            <button
-              type="submit"
-              className="rounded-xl bg-sky-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-800 active:scale-95"
-            >
-              Check
-            </button>
-          </form>
-
-          {/* Not found */}
-          {notFound_ && (
-            <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 px-5 py-5">
-              <p className="text-sm font-semibold text-red-700">Voucher not found</p>
-              <p className="mt-1 text-sm text-red-600">
-                The code <span className="font-mono font-bold">{rawCode.toUpperCase()}</span> was
-                not found in this portal. Please double-check the code and try again.
-              </p>
-            </div>
-          )}
-
-          {/* Found */}
-          {result && (
-            <div className="mt-6 space-y-4">
-              {/* Code + DB status */}
-              <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/80 via-white to-sky-50/60 px-5 py-6">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-indigo-400">
-                  Voucher code
-                </p>
-                <p className="mt-2 break-all font-mono text-2xl font-black tracking-[0.18em] text-indigo-950 sm:text-3xl">
-                  {result.code}
-                </p>
-
-                <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                  {result.pkg && (
-                    <div>
-                      <p className="font-medium text-slate-500">Plan</p>
-                      <p className="font-semibold text-slate-800">{result.pkg.name}</p>
-                    </div>
-                  )}
-                  {result.pkg?.duration_minutes != null && (
-                    <div>
-                      <p className="font-medium text-slate-500">Duration</p>
-                      <p className="font-semibold text-slate-800">
-                        {formatDuration(result.pkg.duration_minutes) ?? "—"}
-                      </p>
-                    </div>
-                  )}
-                  {result.purchasedAt && (
-                    <div>
-                      <p className="font-medium text-slate-500">Purchased</p>
-                      <p className="font-semibold text-slate-800">
-                        {formatDate(result.purchasedAt) ?? "—"}
-                      </p>
-                    </div>
-                  )}
-                  {result.estimatedExpiresAt && (
-                    <div>
-                      <p className="font-medium text-slate-500">Est. expiry</p>
-                      <p className="font-semibold text-slate-800">
-                        {formatDate(result.estimatedExpiresAt) ?? "—"}
-                      </p>
-                    </div>
-                  )}
-                  {(result.displayStatus || result.poolStatus) && (
-                    <div>
-                      <p className="font-medium text-slate-500">Status</p>
-                      <StatusBadge status={result.displayStatus ?? result.poolStatus ?? "UNKNOWN"} />
-                    </div>
-                  )}
+                <div className="hero-metric-grid">
+                  <InfoMetric icon={Search} label="Input" value="Voucher code only" />
+                  <InfoMetric icon={DatabaseZap} label="Voucher source" value={voucherModeMeta.label} />
+                  <InfoMetric icon={ShieldCheck} label="Scope" value="Only codes from this tenant" />
                 </div>
               </div>
 
-              {result.radiusVoucher ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">
-                    RADIUS usage
-                  </p>
-                  <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-                    <div>
-                      <p className="font-medium text-amber-800/70">Access state</p>
-                      <StatusBadge status={result.radiusVoucher.state === "active" ? "ACTIVE" : "EXPIRED"} />
-                    </div>
-                    <div>
-                      <p className="font-medium text-amber-800/70">Active sessions</p>
-                      <p className="font-semibold text-amber-950">{result.radiusVoucher.activeSessions}</p>
-                    </div>
-                    <div>
-                      <p className="font-medium text-amber-800/70">Used data</p>
-                      <p className="font-semibold text-amber-950">
-                        {formatBytes(result.radiusVoucher.usedBytes) ?? "-"}
+              <div className="soft-panel border-slate-200/95 bg-white/95 p-5 sm:p-6">
+                <p className="section-kicker">Search</p>
+                <h2 className="mt-1 section-title">Look up a voucher code</h2>
+                <p className="mt-2 panel-copy">
+                  Use the voucher exactly as shown after payment. This tenant currently checks against {voucherModeMeta.sourceLabel.toLowerCase()}.
+                </p>
+
+                <form method="GET" action={`/t/${slug}/voucher`} className="mt-5 grid gap-3">
+                  <label htmlFor="code" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Voucher code
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                    <input
+                      id="code"
+                      type="text"
+                      name="code"
+                      defaultValue={rawCode}
+                      placeholder="Enter voucher code"
+                      maxLength={64}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm uppercase tracking-[0.18em] text-slate-900 placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                    />
+                    <button
+                      type="submit"
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-800 active:scale-[0.99]"
+                    >
+                      <Search className="size-4" />
+                      Check usage
+                    </button>
+                  </div>
+                </form>
+
+                {notFound_ ? (
+                  <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-4">
+                    <p className="text-sm font-semibold text-red-700">Voucher not found</p>
+                    <p className="mt-1 text-sm text-red-600">
+                      The code <span className="font-mono font-bold">{rawCode.toUpperCase()}</span> was not found in this portal.
+                    </p>
+                  </div>
+                ) : rawCode ? (
+                  <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">Current lookup</p>
+                    <p className="mt-2 break-all font-mono text-lg font-black tracking-[0.18em] text-sky-950">
+                      {rawCode.toUpperCase()}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    <p className="text-sm font-semibold text-slate-800">No code yet</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Start with a voucher from your payment receipt or the hotspot access message.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {!rawCode ? (
+            <section className="grid gap-4 lg:grid-cols-3">
+              <div className="panel-surface lg:col-span-2">
+                <p className="section-kicker">What this page checks</p>
+                <h2 className="mt-1 section-title">Voucher state and accounting in one place</h2>
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <ResultMetric label="Status" value="Unused, active, used, or expired" tone="sky" />
+                  <ResultMetric
+                    label="Usage"
+                    value={radiusVoucherMode ? "Used data and remaining balance" : "Purchase-linked voucher details"}
+                    tone="amber"
+                  />
+                  <ResultMetric label="Timing" value="Purchase time and expiry window" />
+                </div>
+              </div>
+
+              <div className="panel-surface">
+                <p className="section-kicker">Tip</p>
+                <h2 className="mt-1 section-title">One code, one search</h2>
+                <p className="mt-2 panel-copy">
+                  Customers only need the voucher code they received after payment. There is no separate accounting ID.
+                </p>
+              </div>
+            </section>
+          ) : null}
+
+          {result ? (
+            <>
+              <section className="panel-surface overflow-hidden">
+                <div className="rounded-[28px] border border-indigo-100 bg-gradient-to-br from-indigo-50/90 via-white to-sky-50/80 p-5 sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="section-kicker">Voucher</p>
+                      <h2 className="mt-1 panel-title text-[clamp(1.6rem,4vw,2.5rem)]">{result.code}</h2>
+                      <p className="mt-2 panel-copy max-w-2xl">
+                        {result.pkg
+                          ? `${result.pkg.name} is linked to this code.`
+                          : "This code is linked to a valid voucher record in this portal."}
                       </p>
                     </div>
-                    {result.radiusVoucher.dataLimitBytes !== null ? (
-                      <div>
-                        <p className="font-medium text-amber-800/70">Data cap</p>
-                        <p className="font-semibold text-amber-950">
-                          {formatBytes(result.radiusVoucher.dataLimitBytes) ?? "-"}
-                        </p>
-                      </div>
+                    <div className="shrink-0">
+                      <StatusBadge status={result.displayStatus ?? result.poolStatus ?? "UNKNOWN"} />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {result.pkg ? <ResultMetric label="Plan" value={result.pkg.name} tone="sky" /> : null}
+                    {result.pkg?.duration_minutes != null ? (
+                      <ResultMetric
+                        label="Duration"
+                        value={formatDuration(result.pkg.duration_minutes) ?? "Unlimited"}
+                      />
                     ) : null}
-                    {result.radiusVoucher.remainingBytes !== null ? (
-                      <div>
-                        <p className="font-medium text-amber-800/70">Remaining data</p>
-                        <p className="font-semibold text-amber-950">
-                          {formatBytes(result.radiusVoucher.remainingBytes) ?? "-"}
-                        </p>
-                      </div>
+                    {result.purchasedAt ? (
+                      <ResultMetric label="Purchased" value={formatDate(result.purchasedAt) ?? "-"} />
                     ) : null}
-                    {result.radiusVoucher.endsAt ? (
-                      <div>
-                        <p className="font-medium text-amber-800/70">Access ends</p>
-                        <p className="font-semibold text-amber-950">
-                          {formatDate(result.radiusVoucher.endsAt) ?? "-"}
-                        </p>
-                      </div>
-                    ) : null}
-                    {result.radiusVoucher.reason ? (
-                      <div className="sm:col-span-2">
-                        <p className="font-medium text-amber-800/70">Reason</p>
-                        <p className="font-semibold text-amber-950">
-                          {result.radiusVoucher.reason === "data_limit_reached"
-                            ? "Data limit reached"
-                            : result.radiusVoucher.reason === "plan_expired"
-                              ? "Plan expired"
-                              : "Voucher is no longer active"}
-                        </p>
-                      </div>
+                    {result.estimatedExpiresAt ? (
+                      <ResultMetric label="Estimated expiry" value={formatDate(result.estimatedExpiresAt) ?? "-"} />
                     ) : null}
                   </div>
                 </div>
-              ) : null}
+              </section>
 
-              {/* Omada live status - only rendered when Omada is configured */}
-              {(result.omadaResult !== null || result.omadaError !== null) && (
-                <div className={`rounded-2xl border px-5 py-5 ${result.omadaError ? "border-red-200 bg-red-50" : "border-slate-200 bg-white"}`}>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    Omada controller — live status
-                  </p>
-
-                  {result.omadaError ? (
-                    <>
-                      <p className="mt-2 text-sm font-semibold text-red-700">Lookup failed</p>
-                      <p className="mt-1 font-mono text-xs text-red-600">{result.omadaError}</p>
-                    </>
-                  ) : result.omadaResult && !result.omadaResult.found && result.omadaResult.unavailable ? (
-                    <p className="mt-2 text-sm text-slate-500">
-                      The Omada controller could not be reached or does not support live
-                      voucher lookup on this deployment.
-                    </p>
-                  ) : result.omadaResult && !result.omadaResult.found ? (
-                    <p className="mt-2 text-sm text-slate-500">
-                      This code was not found in the most recent voucher groups on the
-                      controller. It may have been issued in an earlier batch.
-                    </p>
-                  ) : result.omadaResult && result.omadaResult.found ? (
-                    <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-                      <div>
-                        <p className="font-medium text-slate-500">Controller status</p>
-                        <StatusBadge status={result.omadaResult.status} />
-                      </div>
-                      {result.omadaResult.durationMinutes != null && (
-                        <div>
-                          <p className="font-medium text-slate-500">Duration (controller)</p>
-                          <p className="font-semibold text-slate-800">
-                            {formatDuration(result.omadaResult.durationMinutes) ?? "—"}
-                          </p>
-                        </div>
-                      )}
-                      {result.omadaResult.usedAt && (
-                        <div>
-                          <p className="font-medium text-slate-500">Used at</p>
-                          <p className="font-semibold text-slate-800">
-                            {formatDate(result.omadaResult.usedAt) ?? "—"}
-                          </p>
-                        </div>
-                      )}
-                      {result.omadaResult.expireAt && (
-                        <div>
-                          <p className="font-medium text-slate-500">Expires (controller)</p>
-                          <p className="font-semibold text-slate-800">
-                            {formatDate(result.omadaResult.expireAt) ?? "—"}
-                          </p>
-                        </div>
-                      )}
+              <section className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+                <div className="panel-surface">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-2xl bg-amber-100 p-2 text-amber-800">
+                      <Activity className="size-5" />
                     </div>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                    <div>
+                      <p className="section-kicker">Accounting</p>
+                      <h2 className="mt-1 section-title">Voucher usage summary</h2>
+                      <p className="mt-2 panel-copy">
+                        {result.radiusVoucher
+                          ? "These numbers come from the current RADIUS accounting state for this voucher."
+                          : "This voucher does not currently expose RADIUS accounting on this tenant."}
+                      </p>
+                    </div>
+                  </div>
 
-        <p className="mt-6 text-center text-xs text-slate-400">
-          Only vouchers purchased through this portal can be looked up here.
-        </p>
+                  {result.radiusVoucher ? (
+                    <div className="mt-5 space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <ResultMetric label="Access state" value={result.radiusVoucher.state === "active" ? "Active" : "Ended"} tone="amber" />
+                        <ResultMetric label="Active sessions" value={String(result.radiusVoucher.activeSessions)} tone="amber" />
+                        <ResultMetric label="Used data" value={formatBytes(result.radiusVoucher.usedBytes) ?? "-"} tone="amber" />
+                        <ResultMetric
+                          label="Remaining data"
+                          value={
+                            result.radiusVoucher.remainingBytes !== null
+                              ? (formatBytes(result.radiusVoucher.remainingBytes) ?? "-")
+                              : "Unlimited"
+                          }
+                          tone="amber"
+                        />
+                      </div>
+
+                      {result.radiusVoucher.dataLimitBytes !== null ? (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+                        Data cap progress
+                      </p>
+                              <p className="mt-1 text-sm text-amber-900">
+                                {formatBytes(result.radiusVoucher.usedBytes) ?? "-"} used of{" "}
+                                {formatBytes(result.radiusVoucher.dataLimitBytes) ?? "-"}
+                              </p>
+                            </div>
+                            <p className="text-lg font-semibold text-amber-950">
+                              {usagePercent ?? 0}%
+                            </p>
+                          </div>
+                          <div className="mt-3 h-3 overflow-hidden rounded-full bg-amber-100">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+                              style={{ width: `${usagePercent ?? 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {result.radiusVoucher.endsAt ? (
+                          <ResultMetric label="Access ends" value={formatDate(result.radiusVoucher.endsAt) ?? "-"} />
+                        ) : (
+                          <ResultMetric label="Access ends" value="No time limit" />
+                        )}
+                        {result.radiusVoucher.reason ? (
+                          <ResultMetric label="Reason" value={formatReason(result.radiusVoucher.reason) ?? "-"} />
+                        ) : (
+                          <ResultMetric label="Reason" value="Voucher is active" />
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                      This tenant is configured for <span className="font-semibold text-slate-900">{voucherModeMeta.label}</span>, so this page only shows voucher details stored for that source. Live usage appears only in RADIUS voucher mode.
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-4">
+                  <section className="panel-surface">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-2xl bg-sky-100 p-2 text-sky-800">
+                        <TimerReset className="size-5" />
+                      </div>
+                      <div>
+                        <p className="section-kicker">Access window</p>
+                        <h2 className="mt-1 section-title">Timing details</h2>
+                      </div>
+                    </div>
+                    <div className="mt-5 grid gap-3">
+                      <ResultMetric label="Purchased" value={formatDate(result.purchasedAt) ?? "-"} tone="sky" />
+                      <ResultMetric
+                        label="Estimated expiry"
+                        value={formatDate(result.estimatedExpiresAt) ?? "Not time-based"}
+                        tone="sky"
+                      />
+                    </div>
+                  </section>
+
+                  <section className="panel-surface">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-2xl bg-indigo-100 p-2 text-indigo-800">
+                        <Wifi className="size-5" />
+                      </div>
+                      <div>
+                        <p className="section-kicker">Portal scope</p>
+                        <h2 className="mt-1 section-title">Where this works</h2>
+                      </div>
+                    </div>
+                    <p className="mt-4 panel-copy">
+                      This checker only returns results for vouchers issued through <span className="font-semibold text-slate-900">{tenant.name}</span>.
+                    </p>
+                  </section>
+                </div>
+              </section>
+
+            </>
+          ) : null}
+        </div>
       </div>
     </div>
   );

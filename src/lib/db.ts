@@ -238,6 +238,7 @@ async function initSchema() {
       phone TEXT NOT NULL,
       amount_ngn INTEGER NOT NULL,
       voucher_code TEXT,
+      voucher_source_mode TEXT,
       package_id TEXT NOT NULL REFERENCES voucher_packages(id),
       subscriber_id TEXT,
       delivery_mode TEXT NOT NULL DEFAULT 'voucher',
@@ -331,6 +332,8 @@ async function initSchema() {
       ON transactions(tenant_id, payment_status);
     CREATE INDEX IF NOT EXISTS idx_transactions_tenant_reference
       ON transactions(tenant_id, reference);
+    CREATE INDEX IF NOT EXISTS idx_transactions_tenant_voucher_source_code
+      ON transactions(tenant_id, voucher_source_mode, voucher_code);
     CREATE INDEX IF NOT EXISTS idx_portal_subscribers_tenant_email
       ON portal_subscribers(tenant_id, email);
     CREATE INDEX IF NOT EXISTS idx_portal_subscriber_sessions_subscriber
@@ -400,6 +403,8 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS subscriber_id TEXT;
     ALTER TABLE transactions
       ADD COLUMN IF NOT EXISTS delivery_mode TEXT NOT NULL DEFAULT 'voucher';
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS voucher_source_mode TEXT;
     ALTER TABLE voucher_packages
       ALTER COLUMN duration_minutes DROP NOT NULL;
     ALTER TABLE voucher_packages
@@ -408,6 +413,14 @@ async function initSchema() {
       ALTER COLUMN ends_at DROP NOT NULL;
     ALTER TABLE subscriber_entitlements
       ALTER COLUMN max_devices DROP NOT NULL;
+  `);
+
+  await p.query(`
+    UPDATE transactions
+    SET voucher_source_mode = 'import_csv'
+    WHERE voucher_code IS NOT NULL
+      AND delivery_mode = 'voucher'
+      AND voucher_source_mode IS NULL;
   `);
 }
 

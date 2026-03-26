@@ -340,11 +340,11 @@
   }
 
   .app-topbar-right {
-    @apply flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end;
+    @apply flex min-w-0 w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end;
   }
 
   .app-topbar-meta {
-    @apply flex flex-wrap items-center gap-2;
+    @apply flex min-w-0 flex-wrap items-center gap-2;
   }
 
   .app-topbar-pill {

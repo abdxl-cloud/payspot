@@ -7,9 +7,10 @@ import {
   getAvailableCount,
   getPackageByCode,
   getPortalSubscriberSession,
-  previewEntitlementWindow,
   getTenantBySlug,
   markTransactionFailed,
+  normalizeVoucherSourceMode,
+  previewEntitlementWindow,
   requireTenantPaystackSecretKey,
   updateTransactionAuthUrl,
 } from "@/lib/store";
@@ -164,6 +165,7 @@ export async function POST(request: Request, { params }: Props) {
       packageId: pkg.id,
       subscriberId,
       deliveryMode: accountAccessMode ? "account_access" : "voucher",
+      voucherSourceMode: accountAccessMode ? null : normalizeVoucherSourceMode(tenant.voucher_source_mode),
       authorizationUrl: null,
       expiresAt,
     });

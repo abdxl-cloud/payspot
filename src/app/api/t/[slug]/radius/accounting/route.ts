@@ -156,6 +156,7 @@ export async function POST(request: Request, { params }: Props) {
           FROM transactions
           WHERE tenant_id = ?
             AND payment_status = 'success'
+            AND voucher_source_mode = 'radius_voucher'
             AND UPPER(COALESCE(voucher_code, '')) = UPPER(?)
           ORDER BY paid_at DESC
           LIMIT 1

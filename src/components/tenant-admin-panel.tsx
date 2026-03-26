@@ -1055,10 +1055,10 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
   return (
     <>
-      <div className="grid gap-5 lg:gap-6">
+      <div className="grid gap-5 lg:gap-6 min-w-0">
         <section className="panel-surface bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,251,255,0.96)_100%)]">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
+          <div className="flex min-w-0 flex-col gap-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
+            <div className="min-w-0 max-w-3xl">
               <p className="section-kicker">Overview</p>
               <h1 className="mt-2 font-display text-[clamp(2rem,3vw,3rem)] font-semibold tracking-tight text-slate-950">
                 Operations dashboard
@@ -1081,25 +1081,26 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 </span>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 rounded-[22px] border border-slate-200/90 bg-white/90 p-2 shadow-[var(--shadow-sm)]">
+            <div className="flex w-full flex-wrap items-center gap-2 rounded-[22px] border border-slate-200/90 bg-white/90 p-2 shadow-[var(--shadow-sm)] 2xl:ml-auto 2xl:w-auto">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={refreshAll}
                 disabled={statsLoading || plansLoading || vouchersLoading}
+                className="max-w-full"
               >
                 <RefreshCw className={["size-3.5", statsLoading || plansLoading || vouchersLoading ? "animate-spin" : ""].join(" ")} />
                 Refresh dashboard
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={jumpToVoucherTools}>
+              <Button type="button" variant="outline" size="sm" onClick={jumpToVoucherTools} className="max-w-full">
                 <Plus className="size-3.5" />
                 Quick actions
               </Button>
             </div>
           </div>
 
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
             <StatTile label="Revenue" value={money(stats?.transactions.revenueNgn ?? 0)} />
             <StatTile label="Successful payments" value={String(stats?.transactions.success ?? 0)} />
             <StatTile label="Total vouchers" value={String(voucherTotals.total)} />
