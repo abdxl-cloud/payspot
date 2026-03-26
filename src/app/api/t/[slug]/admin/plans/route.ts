@@ -54,36 +54,99 @@ export async function GET(request: Request, { params }: Props) {
   if (!access.ok) return Response.json({ error: access.error }, { status: access.status });
 
   const db = getDb();
-  const plans = await db
-    .prepare(
-      `
-      SELECT
-        p.id,
-        p.code,
-        p.name,
-        p.duration_minutes as "durationMinutes",
-        p.price_ngn as "priceNgn",
-        p.max_devices as "maxDevices",
-        p.bandwidth_profile as "bandwidthProfile",
-        p.data_limit_mb as "dataLimitMb",
-        p.available_from as "availableFrom",
-        p.available_to as "availableTo",
-        p.active,
-        p.description,
-        p.created_at as "createdAt",
-        p.updated_at as "updatedAt",
-        COALESCE(SUM(CASE WHEN v.status = 'UNUSED' THEN 1 ELSE 0 END), 0) as "unusedCount",
-        COALESCE(SUM(CASE WHEN v.status = 'ASSIGNED' THEN 1 ELSE 0 END), 0) as "assignedCount",
-        COALESCE(COUNT(v.id), 0) as "totalCount"
-      FROM voucher_packages p
-      LEFT JOIN voucher_pool v
-        ON v.tenant_id = p.tenant_id AND v.package_id = p.id
-      WHERE p.tenant_id = ?
-      GROUP BY p.id
-      ORDER BY COALESCE(p.duration_minutes, 2147483647) ASC, p.created_at DESC
-    `,
-    )
-    .all(tenant.id);
+  const plans =
+    tenant.voucher_source_mode === "radius_voucher"
+      ? await db
+          .prepare(
+            `
+            SELECT
+              p.id,
+              p.code,
+              p.name,
+              p.duration_minutes as "durationMinutes",
+              p.price_ngn as "priceNgn",
+              p.max_devices as "maxDevices",
+              p.bandwidth_profile as "bandwidthProfile",
+              p.data_limit_mb as "dataLimitMb",
+              p.available_from as "availableFrom",
+              p.available_to as "availableTo",
+              p.active,
+              p.description,
+              p.created_at as "createdAt",
+              p.updated_at as "updatedAt",
+              COALESCE(vs.unused_count, 0) as "unusedCount",
+              COALESCE(vs.assigned_count, 0) as "assignedCount",
+              COALESCE(vs.total_count, 0) as "totalCount"
+            FROM voucher_packages p
+            LEFT JOIN (
+              SELECT
+                tx.package_id,
+                COUNT(tx.id) as total_count,
+                SUM(
+                  CASE
+                    WHEN COALESCE(rv.session_count, 0) > 0
+                      OR TRIM(COALESCE(tx.email, '')) <> ''
+                      OR TRIM(COALESCE(tx.phone, '')) <> ''
+                    THEN 0
+                    ELSE 1
+                  END
+                ) as unused_count,
+                SUM(
+                  CASE
+                    WHEN COALESCE(rv.session_count, 0) > 0
+                      OR TRIM(COALESCE(tx.email, '')) <> ''
+                      OR TRIM(COALESCE(tx.phone, '')) <> ''
+                    THEN 1
+                    ELSE 0
+                  END
+                ) as assigned_count
+              FROM transactions tx
+              LEFT JOIN (
+                SELECT tenant_id, transaction_reference, COUNT(1) as session_count
+                FROM radius_voucher_sessions
+                GROUP BY tenant_id, transaction_reference
+              ) rv ON rv.tenant_id = tx.tenant_id AND rv.transaction_reference = tx.reference
+              WHERE tx.tenant_id = ?
+                AND tx.payment_status = 'success'
+                AND tx.voucher_source_mode = 'radius_voucher'
+                AND tx.voucher_code IS NOT NULL
+              GROUP BY tx.package_id
+            ) vs ON vs.package_id = p.id
+            WHERE p.tenant_id = ?
+            ORDER BY COALESCE(p.duration_minutes, 2147483647) ASC, p.created_at DESC
+          `,
+          )
+          .all(tenant.id, tenant.id)
+      : await db
+          .prepare(
+            `
+            SELECT
+              p.id,
+              p.code,
+              p.name,
+              p.duration_minutes as "durationMinutes",
+              p.price_ngn as "priceNgn",
+              p.max_devices as "maxDevices",
+              p.bandwidth_profile as "bandwidthProfile",
+              p.data_limit_mb as "dataLimitMb",
+              p.available_from as "availableFrom",
+              p.available_to as "availableTo",
+              p.active,
+              p.description,
+              p.created_at as "createdAt",
+              p.updated_at as "updatedAt",
+              COALESCE(SUM(CASE WHEN v.status = 'UNUSED' THEN 1 ELSE 0 END), 0) as "unusedCount",
+              COALESCE(SUM(CASE WHEN v.status = 'ASSIGNED' THEN 1 ELSE 0 END), 0) as "assignedCount",
+              COALESCE(COUNT(v.id), 0) as "totalCount"
+            FROM voucher_packages p
+            LEFT JOIN voucher_pool v
+              ON v.tenant_id = p.tenant_id AND v.package_id = p.id
+            WHERE p.tenant_id = ?
+            GROUP BY p.id
+            ORDER BY COALESCE(p.duration_minutes, 2147483647) ASC, p.created_at DESC
+          `,
+          )
+          .all(tenant.id);
 
   return Response.json({ plans });
 }

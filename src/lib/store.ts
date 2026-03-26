@@ -2925,11 +2925,75 @@ export async function transactionAssignVoucher(params: {
 
 export async function getStats(tenantId: string) {
   const db = getDb();
+  const tenant = await getTenantById(tenantId);
+  const voucherSourceMode = normalizeVoucherSourceMode(tenant?.voucher_source_mode);
   const packages = await db
     .prepare(
       "SELECT * FROM voucher_packages WHERE tenant_id = ? ORDER BY COALESCE(duration_minutes, 2147483647) ASC",
     )
     .all(tenantId) as PackageRow[];
+
+  if (voucherSourceMode === "radius_voucher") {
+    const rows = await db
+      .prepare(
+        `
+        SELECT
+          tx.package_id as package_id,
+          COUNT(tx.id) as total,
+          SUM(
+            CASE
+              WHEN COALESCE(rv.session_count, 0) > 0
+                OR TRIM(COALESCE(tx.email, '')) <> ''
+                OR TRIM(COALESCE(tx.phone, '')) <> ''
+              THEN 0
+              ELSE 1
+            END
+          ) as unused,
+          SUM(
+            CASE
+              WHEN COALESCE(rv.session_count, 0) > 0
+                OR TRIM(COALESCE(tx.email, '')) <> ''
+                OR TRIM(COALESCE(tx.phone, '')) <> ''
+              THEN 1
+              ELSE 0
+            END
+          ) as assigned
+        FROM transactions tx
+        LEFT JOIN (
+          SELECT tenant_id, transaction_reference, COUNT(1) as session_count
+          FROM radius_voucher_sessions
+          GROUP BY tenant_id, transaction_reference
+        ) rv ON rv.tenant_id = tx.tenant_id AND rv.transaction_reference = tx.reference
+        WHERE tx.tenant_id = ?
+          AND tx.payment_status = 'success'
+          AND tx.voucher_source_mode = 'radius_voucher'
+          AND tx.voucher_code IS NOT NULL
+        GROUP BY tx.package_id
+      `,
+      )
+      .all(tenantId) as Array<{
+      package_id: string;
+      total: number;
+      unused: number;
+      assigned: number;
+    }>;
+
+    const byPackageId = new Map(rows.map((row) => [row.package_id, row]));
+    return packages.map((pkg) => {
+      const totals = byPackageId.get(pkg.id);
+      const total = totals?.total ?? 0;
+      const unused = totals?.unused ?? 0;
+      const assigned = totals?.assigned ?? 0;
+      return {
+        code: pkg.code,
+        name: pkg.name,
+        total,
+        unused,
+        assigned,
+        percentageRemaining: total > 0 ? Math.round((unused / total) * 10000) / 100 : 0,
+      };
+    });
+  }
 
   return Promise.all(
     packages.map(async (pkg) => {

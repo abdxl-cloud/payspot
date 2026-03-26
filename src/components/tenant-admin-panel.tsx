@@ -302,6 +302,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [generateCount, setGenerateCount] = useState("20");
   const [generatePrefix, setGeneratePrefix] = useState("");
   const [generateCodeLength, setGenerateCodeLength] = useState("10");
+  const [generateCharacterSet, setGenerateCharacterSet] = useState("alnum");
   const [generatingVouchers, setGeneratingVouchers] = useState(false);
 
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -491,10 +492,15 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const isOmadaMode = voucherSourceMode === "omada_openapi";
   const isMikrotikMode = voucherSourceMode === "mikrotik_rest";
   const isRadiusVoucherMode = voucherSourceMode === "radius_voucher";
-  const isApiAutomationMode = isOmadaMode || isMikrotikMode || isRadiusVoucherMode;
+  const isApiAutomationMode = isOmadaMode || isMikrotikMode;
   const isExternalAccessMode = architecture?.accessMode === "account_access";
   const hasArchitectureConfigured = !!architecture;
   const hasPlans = plans.length > 0;
+  const canManuallyCreateVouchers = (isCsvMode || isRadiusVoucherMode) && !isExternalAccessMode;
+  const canBatchGenerateVouchers = (isCsvMode || isRadiusVoucherMode) && hasPlans && !isExternalAccessMode;
+  const canImportCsvVouchers = isCsvMode && !isExternalAccessMode;
+  const canDeleteVouchers = (isCsvMode || isRadiusVoucherMode) && !isExternalAccessMode;
+  const canReclaimVouchers = isCsvMode && !isExternalAccessMode;
   const overviewModeLabel = !hasArchitectureConfigured
     ? "Architecture pending"
     : isExternalAccessMode
@@ -964,6 +970,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           generateCount: count,
           prefix: generatePrefix.trim() || undefined,
           codeLength,
+          characterSet: generateCharacterSet,
         }),
       });
       const data = await readJsonResponse<{ error?: string; created?: number }>(response);
@@ -1112,10 +1119,16 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <div className="mt-6">
               <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-slate-950">Pool health</p>
-                  <p className="text-sm text-slate-600">Top plan pools with remaining voucher availability.</p>
+                  <p className="text-sm font-semibold text-slate-950">{isRadiusVoucherMode ? "Voucher health" : "Pool health"}</p>
+                  <p className="text-sm text-slate-600">
+                    {isRadiusVoucherMode
+                      ? "Manual and payment-issued RADIUS vouchers grouped by plan."
+                      : "Top plan pools with remaining voucher availability."}
+                  </p>
                 </div>
-                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Inventory snapshot</p>
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                  {isRadiusVoucherMode ? "Voucher snapshot" : "Inventory snapshot"}
+                </p>
               </div>
               <div className="grid gap-4 xl:grid-cols-3">
               {stats?.voucherPool.slice(0, 6).map((item) => (
@@ -1772,11 +1785,13 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 ? isExternalAccessMode
                   ? "External account-access mode: voucher inventory is bypassed. Use subscriber monitoring and RADIUS accounting."
                   : isApiAutomationMode
-                  ? isOmadaMode
-                    ? "Omada automation mode: vouchers are created automatically after each successful customer payment."
-                    : isMikrotikMode
-                      ? "MikroTik direct mode: vouchers are created automatically after each successful customer payment."
-                      : "RADIUS voucher mode: vouchers are issued automatically after each successful customer payment."
+                    ? isOmadaMode
+                      ? "Omada automation mode: vouchers are created automatically after each successful customer payment."
+                      : "MikroTik direct mode: vouchers are created automatically after each successful customer payment."
+                  : isRadiusVoucherMode
+                    ? hasPlans
+                      ? "RADIUS voucher mode: generate voucher codes manually for a plan or let PaySpot issue them automatically after successful customer payment."
+                      : "RADIUS voucher mode active. Create at least one plan before issuing manual vouchers."
                   : hasPlans
                     ? "CSV mode: create manually, batch generate, or import CSV."
                     : "CSV mode active. Create at least one plan before adding or generating vouchers."
@@ -1785,17 +1800,17 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </div>
           {hasArchitectureConfigured ? (
             <div className="flex flex-wrap items-center gap-2">
-              {isCsvMode && hasPlans && !isExternalAccessMode ? (
+              {canManuallyCreateVouchers && hasPlans ? (
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowCreateVoucherModal(true)}>
                   Add voucher
                 </Button>
               ) : null}
-              {isCsvMode && hasPlans && !isExternalAccessMode ? (
+              {canBatchGenerateVouchers ? (
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowGenerateVoucherModal(true)}>
                   Batch generate
                 </Button>
               ) : null}
-              {isCsvMode && !isExternalAccessMode ? (
+              {canImportCsvVouchers ? (
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowImportVoucherModal(true)}>
                   Import CSV
                 </Button>
@@ -1958,15 +1973,19 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             Showing {vouchers.length} / {voucherTotal} | Selected {selectedVoucherIds.length}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={reclaimSelected} disabled={selectedVoucherIds.length === 0}>
-              <ArchiveRestore className="size-4" />
-              Unarchive
-            </Button>
-            <Button type="button" variant="destructive" size="sm" onClick={deleteSelected} disabled={selectedVoucherIds.length === 0}>
-              <Trash2 className="size-4" />
-              Delete
-            </Button>
-            <span className="mx-1 h-5 w-px shrink-0 bg-slate-200" />
+            {canReclaimVouchers ? (
+              <Button type="button" variant="outline" size="sm" onClick={reclaimSelected} disabled={selectedVoucherIds.length === 0}>
+                <ArchiveRestore className="size-4" />
+                Unarchive
+              </Button>
+            ) : null}
+            {canDeleteVouchers ? (
+              <Button type="button" variant="destructive" size="sm" onClick={deleteSelected} disabled={selectedVoucherIds.length === 0}>
+                <Trash2 className="size-4" />
+                Delete
+              </Button>
+            ) : null}
+            {canDeleteVouchers || canReclaimVouchers ? <span className="mx-1 h-5 w-px shrink-0 bg-slate-200" /> : null}
             <Button
               type="button"
               variant="outline"
@@ -2024,17 +2043,17 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreatePlanModal(true); }}>
               Add plan
             </Button>
-            {hasArchitectureConfigured && isCsvMode && hasPlans && !isExternalAccessMode ? (
+            {hasArchitectureConfigured && canManuallyCreateVouchers && hasPlans ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreateVoucherModal(true); }}>
                 Add voucher
               </Button>
             ) : null}
-            {hasArchitectureConfigured && isCsvMode && hasPlans && !isExternalAccessMode ? (
+            {hasArchitectureConfigured && canBatchGenerateVouchers ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowGenerateVoucherModal(true); }}>
                 Batch generate vouchers
               </Button>
             ) : null}
-            {hasArchitectureConfigured && isCsvMode && !isExternalAccessMode ? (
+            {hasArchitectureConfigured && canImportCsvVouchers ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowImportVoucherModal(true); }}>
                 Import voucher CSV
               </Button>
@@ -2482,8 +2501,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         </ModalShell>
       ) : null}
 
-      {showCreateVoucherModal && isCsvMode ? (
-        <ModalShell title="Add voucher" onClose={() => setShowCreateVoucherModal(false)}>
+      {showCreateVoucherModal && canManuallyCreateVouchers ? (
+        <ModalShell title={isRadiusVoucherMode ? "Create manual RADIUS voucher" : "Add voucher"} onClose={() => setShowCreateVoucherModal(false)}>
           <form className="grid gap-2" onSubmit={createVoucher}>
             <Input
               value={newVoucherCode}
@@ -2497,16 +2516,21 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 </option>
               ))}
             </select>
+            {isRadiusVoucherMode ? (
+              <p className="text-xs text-slate-600">
+                This creates an immediately usable RADIUS voucher without taking payment first.
+              </p>
+            ) : null}
             <div className="flex justify-end">
-              <Button type="submit" disabled={creatingVoucher}>{creatingVoucher ? "Adding..." : "Add voucher"}</Button>
+              <Button type="submit" disabled={creatingVoucher}>{creatingVoucher ? "Saving..." : isRadiusVoucherMode ? "Create voucher" : "Add voucher"}</Button>
             </div>
             {vouchersError ? <p className="text-sm text-red-700">{vouchersError}</p> : null}
           </form>
         </ModalShell>
       ) : null}
 
-      {showGenerateVoucherModal && isCsvMode ? (
-        <ModalShell title="Batch generate vouchers" onClose={() => setShowGenerateVoucherModal(false)}>
+      {showGenerateVoucherModal && canBatchGenerateVouchers ? (
+        <ModalShell title={isRadiusVoucherMode ? "Batch generate RADIUS vouchers" : "Batch generate vouchers"} onClose={() => setShowGenerateVoucherModal(false)}>
           <form className="grid gap-2" onSubmit={generateVouchers}>
             <Input
               value={generateCount}
@@ -2525,6 +2549,11 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               onChange={(event) => setGenerateCodeLength(event.target.value)}
               placeholder="Code length"
             />
+            <select value={generateCharacterSet} onChange={(event) => setGenerateCharacterSet(event.target.value)}>
+              <option value="alnum">Letters + numbers</option>
+              <option value="letters">Letters only</option>
+              <option value="numbers">Numbers only</option>
+            </select>
             <select value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
               {plans.map((plan) => (
                 <option key={plan.id} value={plan.id}>
@@ -2532,6 +2561,11 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 </option>
               ))}
             </select>
+            {isRadiusVoucherMode ? (
+              <p className="text-xs text-slate-600">
+                Generated vouchers will be active immediately and can be used on the RADIUS hotspot without payment.
+              </p>
+            ) : null}
             <div className="flex justify-end">
               <Button type="submit" disabled={generatingVouchers}>{generatingVouchers ? "Generating..." : "Generate"}</Button>
             </div>
