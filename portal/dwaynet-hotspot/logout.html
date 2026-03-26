@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Disconnected</title>
+  <style>
+    :root {
+      --ink: #102235;
+      --muted: #54657c;
+      --line: rgba(17, 45, 76, 0.14);
+      --panel: rgba(252, 253, 255, 0.94);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 14% 16%, rgba(238, 185, 62, 0.32), transparent 32%),
+        radial-gradient(circle at 84% 10%, rgba(66, 136, 223, 0.28), transparent 30%),
+        linear-gradient(135deg, #fff5d9 0%, #f7fafc 46%, #dcebff 100%);
+    }
+    body { display: grid; place-items: center; padding: 20px; }
+    .card {
+      width: min(560px, 100%);
+      border-radius: 28px;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      box-shadow: 0 20px 44px rgba(13, 33, 58, 0.12);
+      padding: 28px;
+    }
+    h1 { margin: 0 0 10px; font-size: 2rem; }
+    p { margin: 0; color: var(--muted); line-height: 1.6; }
+    .stats { margin-top: 18px; display: grid; gap: 10px; }
+    .row {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--line);
+    }
+    .row strong { display: block; margin-bottom: 4px; }
+    .button {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 52px;
+      border-radius: 18px;
+      text-decoration: none;
+      font-weight: 700;
+      color: white;
+      background: linear-gradient(180deg, #1983e2 0%, #0f6acb 100%);
+      margin-top: 18px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Disconnected</h1>
+    <p>Your session has ended. Session totals are shown below.</p>
+    <section class="stats">
+      <div class="row">
+        <strong>Voucher</strong>
+        <span>$(username)</span>
+      </div>
+      <div class="row">
+        <strong>Total uptime</strong>
+        <span>$(uptime)</span>
+      </div>
+      <div class="row">
+        <strong>Upload</strong>
+        <span>$(bytes-in-nice)</span>
+      </div>
+      <div class="row">
+        <strong>Download</strong>
+        <span>$(bytes-out-nice)</span>
+      </div>
+    </section>
+    <a class="button" href="$(link-login)">Log in again</a>
+  </main>
+</body>
+</html>

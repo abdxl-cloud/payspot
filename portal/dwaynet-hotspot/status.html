@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voucher Status</title>
+  <style>
+    :root {
+      --ink: #102235;
+      --muted: #54657c;
+      --line: rgba(17, 45, 76, 0.14);
+      --panel: rgba(252, 253, 255, 0.94);
+      --accent: #0f6acb;
+      --accent-soft: rgba(15, 106, 203, 0.1);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 14% 16%, rgba(238, 185, 62, 0.32), transparent 32%),
+        radial-gradient(circle at 84% 10%, rgba(66, 136, 223, 0.28), transparent 30%),
+        linear-gradient(135deg, #fff5d9 0%, #f7fafc 46%, #dcebff 100%);
+    }
+    body { display: grid; place-items: center; padding: 20px; }
+    .card {
+      width: min(620px, 100%);
+      border-radius: 28px;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      box-shadow: 0 20px 44px rgba(13, 33, 58, 0.12);
+      padding: 28px;
+    }
+    h1 { margin: 0 0 10px; font-size: 2rem; }
+    p { margin: 0; color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .stat {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--line);
+    }
+    .label {
+      margin: 0 0 6px;
+      font-size: 0.8rem;
+      color: #244a74;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 700;
+    }
+    .value {
+      font-size: 1rem;
+      font-weight: 700;
+      word-break: break-word;
+    }
+    .actions {
+      display: grid;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .button, .link {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 52px;
+      border-radius: 18px;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .button {
+      color: white;
+      background: linear-gradient(180deg, #1983e2 0%, #0f6acb 100%);
+    }
+    .link {
+      border: 1px solid var(--line);
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.72);
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Session status</h1>
+    <p>Your current voucher session details from MikroTik HotSpot.</p>
+    <section class="grid">
+      <article class="stat">
+        <p class="label">Voucher</p>
+        <div class="value">$(username)</div>
+      </article>
+      <article class="stat">
+        <p class="label">Time left</p>
+        <div class="value">$(session-time-left)</div>
+      </article>
+      <article class="stat">
+        <p class="label">Used upload</p>
+        <div class="value">$(bytes-in-nice)</div>
+      </article>
+      <article class="stat">
+        <p class="label">Used download</p>
+        <div class="value">$(bytes-out-nice)</div>
+      </article>
+      <article class="stat">
+        <p class="label">Data cap</p>
+        <div class="value">$(limit-bytes-total)</div>
+      </article>
+      <article class="stat">
+        <p class="label">Uptime</p>
+        <div class="value">$(uptime)</div>
+      </article>
+    </section>
+    <div class="actions">
+      <a class="button" href="$(link-logout)?erase-cookie=on">Disconnect</a>
+      <a class="link" href="https://payspot.abdxl.cloud/t/dwaynet/voucher">Check voucher on PaySpot</a>
+    </div>
+  </main>
+</body>
+</html>
