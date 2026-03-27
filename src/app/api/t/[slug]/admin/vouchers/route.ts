@@ -1,7 +1,16 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { getSessionUserFromRequest } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { getTenantBySlug } from "@/lib/store";
+import {
+  CODE_ALPHABET,
+  MAX_CODE_LENGTH,
+  MAX_PREFIX_LENGTH,
+  MIN_CODE_LENGTH,
+  randomCode,
+  resolveCodeAlphabet,
+  type CodeCharacterSet,
+} from "@/lib/voucher-codes";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -25,31 +34,8 @@ function buildInClause(count: number) {
   return Array.from({ length: count }, () => "?").join(", ");
 }
 
-const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-const CODE_NUMBERS = "23456789";
-const CODE_ALPHABET = `${CODE_LETTERS}${CODE_NUMBERS}`;
-const MIN_CODE_LENGTH = 6;
-const MAX_CODE_LENGTH = 24;
 const MAX_GENERATE_COUNT = 500;
-const MAX_PREFIX_LENGTH = 16;
 const MAX_VOUCHER_CODE_LENGTH = 64;
-
-type CodeCharacterSet = "alnum" | "letters" | "numbers";
-
-function resolveCodeAlphabet(characterSet: CodeCharacterSet) {
-  if (characterSet === "letters") return CODE_LETTERS;
-  if (characterSet === "numbers") return CODE_NUMBERS;
-  return CODE_ALPHABET;
-}
-
-function randomCode(length: number, alphabet = CODE_ALPHABET) {
-  const bytes = randomBytes(length);
-  let code = "";
-  for (let i = 0; i < length; i += 1) {
-    code += alphabet[bytes[i] % alphabet.length];
-  }
-  return code;
-}
 
 function normalizeVoucherCode(value: string) {
   return value.trim().toUpperCase();

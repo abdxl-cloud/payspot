@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   createCaptivePortalSearchParams,
   type CaptivePortalContext,
@@ -22,6 +21,7 @@ import {
 import { sendVoucherSms } from "@/lib/termii";
 import { sendVoucherEmail } from "@/lib/mailer";
 import { verifyTransaction } from "@/lib/paystack";
+import { buildLegacyGeneratedVoucherCode, buildRadiusVoucherCode } from "@/lib/voucher-codes";
 
 async function sendVoucherNotifications(params: {
   tenantId: string;
@@ -67,16 +67,13 @@ async function sendVoucherNotifications(params: {
 
 const GENERATED_VOUCHER_CODE_ATTEMPTS = 8;
 
-function buildGeneratedVoucherCode() {
-  return `PS-${randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
-}
-
 async function generateUniqueVoucherCode(params: {
   tenantId: string;
   mikrotikConfig?: TenantMikrotikConfig | null;
+  voucherCodeFactory?: () => string;
 }) {
   for (let attempt = 0; attempt < GENERATED_VOUCHER_CODE_ATTEMPTS; attempt += 1) {
-    const voucherCode = buildGeneratedVoucherCode();
+    const voucherCode = params.voucherCodeFactory ? params.voucherCodeFactory() : buildLegacyGeneratedVoucherCode();
     const [existingTransaction, existingPoolEntry, existingHotspotUser] = await Promise.all([
       getTransactionByVoucherCode(params.tenantId, voucherCode),
       getVoucherPoolEntryByCode(params.tenantId, voucherCode),
@@ -197,8 +194,15 @@ async function provisionRadiusVoucherForTransaction(params: {
     return { status: "skipped" as const };
   }
 
+  const pkg = await getPackageById(params.tenantId, transaction.package_id);
   const voucherCode = await generateUniqueVoucherCode({
     tenantId: params.tenantId,
+    voucherCodeFactory: () =>
+      buildRadiusVoucherCode({
+        prefix: pkg?.radius_voucher_code_prefix ?? null,
+        codeLength: pkg?.radius_voucher_code_length ?? null,
+        characterSet: pkg?.radius_voucher_character_set ?? null,
+      }),
   });
   const paidAt = new Date().toISOString();
   await completeTransaction({

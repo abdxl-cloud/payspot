@@ -177,6 +177,9 @@ export type PackageRow = {
   available_to: string | null;
   active: number;
   description: string | null;
+  radius_voucher_code_prefix: string | null;
+  radius_voucher_code_length: number | null;
+  radius_voucher_character_set: "alnum" | "letters" | "numbers" | null;
 };
 
 export type TransactionRow = {

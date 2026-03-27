@@ -2,6 +2,12 @@ import { randomUUID } from "node:crypto";
 import { getSessionUserFromRequest } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { getTenantBySlug } from "@/lib/store";
+import {
+  MAX_CODE_LENGTH,
+  MAX_PREFIX_LENGTH,
+  MIN_CODE_LENGTH,
+  type CodeCharacterSet,
+} from "@/lib/voucher-codes";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -34,6 +40,87 @@ function buildGeneratedPlanCode(name: string, durationMinutes?: number | null) {
     : "pkg";
   const base = normalizePlanCodeCandidate(`${normalizedName}-${durationTag}`);
   return base || "plan";
+}
+
+type RadiusVoucherPlanCodeConfig = {
+  prefix: string | null;
+  codeLength: number | null;
+  characterSet: CodeCharacterSet | null;
+};
+
+function parseRadiusVoucherPlanCodeConfig(params: {
+  body: {
+    radiusVoucherCodePrefix?: string | null;
+    radiusVoucherCodeLength?: number | null;
+    radiusVoucherCharacterSet?: string | null;
+  };
+  enabled: boolean;
+}) {
+  if (!params.enabled) {
+    return { ok: true as const, value: { prefix: null, codeLength: null, characterSet: null } };
+  }
+
+  const rawCharacterSet = params.body.radiusVoucherCharacterSet;
+  const characterSet =
+    rawCharacterSet === undefined || rawCharacterSet === null || rawCharacterSet === ""
+      ? null
+      : rawCharacterSet === "alnum" || rawCharacterSet === "letters" || rawCharacterSet === "numbers"
+        ? rawCharacterSet
+        : null;
+
+  if (rawCharacterSet !== undefined && rawCharacterSet !== null && rawCharacterSet !== "" && characterSet === null) {
+    return {
+      ok: false as const,
+      error: "radiusVoucherCharacterSet must be one of: alnum, letters, numbers, or empty",
+    };
+  }
+
+  const rawPrefix = params.body.radiusVoucherCodePrefix;
+  const prefix = typeof rawPrefix === "string" ? rawPrefix.trim().toUpperCase() || null : null;
+  if (prefix && prefix.length > MAX_PREFIX_LENGTH) {
+    return {
+      ok: false as const,
+      error: `radiusVoucherCodePrefix must be at most ${MAX_PREFIX_LENGTH} characters`,
+    };
+  }
+  if (prefix && !/^[A-Z0-9_-]+$/.test(prefix)) {
+    return {
+      ok: false as const,
+      error: "radiusVoucherCodePrefix may only contain A-Z, 0-9, underscore, or dash",
+    };
+  }
+
+  const rawCodeLength = params.body.radiusVoucherCodeLength;
+  const codeLength =
+    rawCodeLength === undefined || rawCodeLength === null
+      ? null
+      : Number.parseInt(String(rawCodeLength), 10);
+
+  if (
+    codeLength !== null &&
+    (!Number.isFinite(codeLength) || codeLength < MIN_CODE_LENGTH || codeLength > MAX_CODE_LENGTH)
+  ) {
+    return {
+      ok: false as const,
+      error: `radiusVoucherCodeLength must be between ${MIN_CODE_LENGTH} and ${MAX_CODE_LENGTH}`,
+    };
+  }
+
+  if (characterSet === null) {
+    return {
+      ok: true as const,
+      value: { prefix: null, codeLength: null, characterSet: null },
+    };
+  }
+
+  return {
+    ok: true as const,
+    value: {
+      prefix,
+      codeLength: codeLength ?? 8,
+      characterSet,
+    } satisfies RadiusVoucherPlanCodeConfig,
+  };
 }
 
 async function normalizeTenantAccess(request: Request, tenantId: string) {
@@ -72,6 +159,9 @@ export async function GET(request: Request, { params }: Props) {
               p.available_to as "availableTo",
               p.active,
               p.description,
+              p.radius_voucher_code_prefix as "radiusVoucherCodePrefix",
+              p.radius_voucher_code_length as "radiusVoucherCodeLength",
+              p.radius_voucher_character_set as "radiusVoucherCharacterSet",
               p.created_at as "createdAt",
               p.updated_at as "updatedAt",
               COALESCE(vs.unused_count, 0) as "unusedCount",
@@ -133,6 +223,9 @@ export async function GET(request: Request, { params }: Props) {
               p.available_to as "availableTo",
               p.active,
               p.description,
+              p.radius_voucher_code_prefix as "radiusVoucherCodePrefix",
+              p.radius_voucher_code_length as "radiusVoucherCodeLength",
+              p.radius_voucher_character_set as "radiusVoucherCharacterSet",
               p.created_at as "createdAt",
               p.updated_at as "updatedAt",
               COALESCE(SUM(CASE WHEN v.status = 'UNUSED' THEN 1 ELSE 0 END), 0) as "unusedCount",
@@ -176,6 +269,9 @@ export async function POST(request: Request, { params }: Props) {
     availableTo?: string | null;
     active?: boolean;
     description?: string;
+    radiusVoucherCodePrefix?: string | null;
+    radiusVoucherCodeLength?: number | null;
+    radiusVoucherCharacterSet?: string | null;
   };
 
   const inputCode = body.code?.trim();
@@ -193,6 +289,13 @@ export async function POST(request: Request, { params }: Props) {
   const availableFrom = parseOptionalIsoInstant(body.availableFrom);
   const availableTo = parseOptionalIsoInstant(body.availableTo);
   const description = body.description?.trim() || null;
+  const radiusVoucherCodeConfig = parseRadiusVoucherPlanCodeConfig({
+    body,
+    enabled: tenant.voucher_source_mode === "radius_voucher",
+  });
+  if (!radiusVoucherCodeConfig.ok) {
+    return Response.json({ error: radiusVoucherCodeConfig.error }, { status: 400 });
+  }
 
   if (!name || name.length < 2) {
     return Response.json({ error: "Plan name is required" }, { status: 400 });
@@ -256,8 +359,9 @@ export async function POST(request: Request, { params }: Props) {
         INSERT INTO voucher_packages (
           id, tenant_id, code, name, duration_minutes, price_ngn,
           max_devices, bandwidth_profile, data_limit_mb, available_from, available_to,
-          active, description, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          active, description, radius_voucher_code_prefix, radius_voucher_code_length,
+          radius_voucher_character_set, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       ).run(
         randomUUID(),
@@ -273,6 +377,9 @@ export async function POST(request: Request, { params }: Props) {
         availableTo.value ?? null,
         body.active === false ? 0 : 1,
         description,
+        radiusVoucherCodeConfig.value.prefix,
+        radiusVoucherCodeConfig.value.codeLength,
+        radiusVoucherCodeConfig.value.characterSet,
         now,
         now,
       );
@@ -318,6 +425,9 @@ export async function PATCH(request: Request, { params }: Props) {
     availableTo?: string | null;
     active?: boolean;
     description?: string;
+    radiusVoucherCodePrefix?: string | null;
+    radiusVoucherCodeLength?: number | null;
+    radiusVoucherCharacterSet?: string | null;
   };
 
   const planId = body.planId?.trim();
@@ -328,6 +438,7 @@ export async function PATCH(request: Request, { params }: Props) {
     .prepare(
       `
       SELECT id, duration_minutes, data_limit_mb, available_from, available_to
+           , radius_voucher_code_prefix, radius_voucher_code_length, radius_voucher_character_set
       FROM voucher_packages
       WHERE tenant_id = ? AND id = ?
     `,
@@ -339,9 +450,33 @@ export async function PATCH(request: Request, { params }: Props) {
         data_limit_mb: number | null;
         available_from: string | null;
         available_to: string | null;
+        radius_voucher_code_prefix: string | null;
+        radius_voucher_code_length: number | null;
+        radius_voucher_character_set: CodeCharacterSet | null;
       }
     | undefined;
   if (!existing) return Response.json({ error: "Plan not found" }, { status: 404 });
+
+  const radiusVoucherCodeConfig = parseRadiusVoucherPlanCodeConfig({
+    body: {
+      radiusVoucherCodePrefix:
+        body.radiusVoucherCodePrefix !== undefined
+          ? body.radiusVoucherCodePrefix
+          : existing.radius_voucher_code_prefix,
+      radiusVoucherCodeLength:
+        body.radiusVoucherCodeLength !== undefined
+          ? body.radiusVoucherCodeLength
+          : existing.radius_voucher_code_length,
+      radiusVoucherCharacterSet:
+        body.radiusVoucherCharacterSet !== undefined
+          ? body.radiusVoucherCharacterSet
+          : existing.radius_voucher_character_set,
+    },
+    enabled: tenant.voucher_source_mode === "radius_voucher",
+  });
+  if (!radiusVoucherCodeConfig.ok) {
+    return Response.json({ error: radiusVoucherCodeConfig.error }, { status: 400 });
+  }
 
   const fields: string[] = [];
   const args: Array<string | number | null> = [];
@@ -448,6 +583,14 @@ export async function PATCH(request: Request, { params }: Props) {
   if (typeof body.description === "string") {
     fields.push("description = ?");
     args.push(body.description.trim() || null);
+  }
+  if (tenant.voucher_source_mode === "radius_voucher") {
+    fields.push("radius_voucher_code_prefix = ?");
+    args.push(radiusVoucherCodeConfig.value.prefix);
+    fields.push("radius_voucher_code_length = ?");
+    args.push(radiusVoucherCodeConfig.value.codeLength);
+    fields.push("radius_voucher_character_set = ?");
+    args.push(radiusVoucherCodeConfig.value.characterSet);
   }
 
   if (fields.length === 0) {

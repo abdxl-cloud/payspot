@@ -210,6 +210,9 @@ async function initSchema() {
       available_to TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       description TEXT,
+      radius_voucher_code_prefix TEXT,
+      radius_voucher_code_length INTEGER,
+      radius_voucher_character_set TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       UNIQUE (tenant_id, code)
@@ -399,6 +402,12 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS available_from TEXT;
     ALTER TABLE voucher_packages
       ADD COLUMN IF NOT EXISTS available_to TEXT;
+    ALTER TABLE voucher_packages
+      ADD COLUMN IF NOT EXISTS radius_voucher_code_prefix TEXT;
+    ALTER TABLE voucher_packages
+      ADD COLUMN IF NOT EXISTS radius_voucher_code_length INTEGER;
+    ALTER TABLE voucher_packages
+      ADD COLUMN IF NOT EXISTS radius_voucher_character_set TEXT;
     ALTER TABLE transactions
       ADD COLUMN IF NOT EXISTS subscriber_id TEXT;
     ALTER TABLE transactions

@@ -57,7 +57,12 @@ type PlanRow = {
   totalCount: number;
   unusedCount: number;
   assignedCount: number;
+  radiusVoucherCodePrefix: string | null;
+  radiusVoucherCodeLength: number | null;
+  radiusVoucherCharacterSet: "alnum" | "letters" | "numbers" | null;
 };
+
+type PlanVoucherCharacterSet = "legacy" | "alnum" | "letters" | "numbers";
 
 type VoucherRow = {
   id: string;
@@ -128,6 +133,8 @@ type Props = {
 };
 
 const PAGE_SIZE = 20;
+const PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH = 6;
+const PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH = 24;
 
 function money(value: number) {
   return `NGN ${Math.round(value || 0).toLocaleString()}`;
@@ -228,6 +235,30 @@ function localInputToIso(value: string) {
   return date.toISOString();
 }
 
+function normalizeRadiusVoucherPrefixInput(value: string) {
+  return value.trim().toUpperCase();
+}
+
+function validateRadiusVoucherPrefixInput(value: string) {
+  const normalized = normalizeRadiusVoucherPrefixInput(value);
+  if (!normalized) return { ok: true as const, value: "" };
+  if (normalized.length > 16) {
+    return { ok: false as const, error: "Paid voucher prefix must be 16 characters or fewer." };
+  }
+  if (!/^[A-Z0-9_-]+$/.test(normalized)) {
+    return { ok: false as const, error: "Paid voucher prefix may only contain A-Z, 0-9, underscore, or dash." };
+  }
+  return { ok: true as const, value: normalized };
+}
+
+function parseRadiusVoucherCodeLengthInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed)) return Number.NaN;
+  return parsed;
+}
+
 export function TenantAdminPanel({ tenantSlug }: Props) {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -277,6 +308,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [newPlanDataLimitMb, setNewPlanDataLimitMb] = useState("");
   const [newPlanAvailableFrom, setNewPlanAvailableFrom] = useState("");
   const [newPlanAvailableTo, setNewPlanAvailableTo] = useState("");
+  const [newPlanRadiusVoucherCodePrefix, setNewPlanRadiusVoucherCodePrefix] = useState("PS");
+  const [newPlanRadiusVoucherCodeLength, setNewPlanRadiusVoucherCodeLength] = useState("8");
+  const [newPlanRadiusVoucherCharacterSet, setNewPlanRadiusVoucherCharacterSet] = useState<PlanVoucherCharacterSet>("legacy");
   const [creatingPlan, setCreatingPlan] = useState(false);
 
   const [planDrafts, setPlanDrafts] = useState<
@@ -290,6 +324,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       dataLimitMb: string;
       availableFrom: string;
       availableTo: string;
+      radiusVoucherCodePrefix: string;
+      radiusVoucherCodeLength: string;
+      radiusVoucherCharacterSet: PlanVoucherCharacterSet;
       active: boolean;
     }>
   >({});
@@ -455,6 +492,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       dataLimitMb: string;
       availableFrom: string;
       availableTo: string;
+      radiusVoucherCodePrefix: string;
+      radiusVoucherCodeLength: string;
+      radiusVoucherCharacterSet: PlanVoucherCharacterSet;
       active: boolean;
     }> = {};
     for (const plan of plans) {
@@ -468,6 +508,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         dataLimitMb: plan.dataLimitMb ? String(plan.dataLimitMb) : "",
         availableFrom: isoToLocalInput(plan.availableFrom),
         availableTo: isoToLocalInput(plan.availableTo),
+        radiusVoucherCodePrefix: plan.radiusVoucherCodePrefix ?? "PS",
+        radiusVoucherCodeLength: plan.radiusVoucherCodeLength ? String(plan.radiusVoucherCodeLength) : "8",
+        radiusVoucherCharacterSet: plan.radiusVoucherCharacterSet ?? "legacy",
         active: plan.active === 1,
       };
     }
@@ -740,6 +783,11 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     const availableTo = localInputToIso(newPlanAvailableTo);
     const normalizedDuration = duration ?? null;
     const normalizedDataLimit = dataLimitMb ?? null;
+    const useConfiguredPaidVoucherCode =
+      architecture?.voucherSourceMode === "radius_voucher" &&
+      newPlanRadiusVoucherCharacterSet !== "legacy";
+    const paidVoucherPrefix = validateRadiusVoucherPrefixInput(newPlanRadiusVoucherCodePrefix);
+    const paidVoucherCodeLength = parseRadiusVoucherCodeLengthInput(newPlanRadiusVoucherCodeLength);
     const durationRequired =
       architecture?.accessMode !== "account_access" &&
       architecture?.voucherSourceMode !== "mikrotik_rest" &&
@@ -770,6 +818,22 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setPlansError("Set at least one limit: duration or data.");
       return;
     }
+    if (!paidVoucherPrefix.ok) {
+      setPlansError(paidVoucherPrefix.error);
+      return;
+    }
+    if (
+      useConfiguredPaidVoucherCode &&
+      (paidVoucherCodeLength === undefined ||
+        !Number.isFinite(paidVoucherCodeLength) ||
+        paidVoucherCodeLength < PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH ||
+        paidVoucherCodeLength > PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH)
+    ) {
+      setPlansError(
+        `Paid voucher code length must be between ${PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH} and ${PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH}.`,
+      );
+      return;
+    }
     setCreatingPlan(true);
     setPlansError(null);
     setPlanNotice(null);
@@ -786,6 +850,18 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           dataLimitMb: normalizedDataLimit,
           availableFrom,
           availableTo,
+          radiusVoucherCodePrefix:
+            architecture?.voucherSourceMode === "radius_voucher" && newPlanRadiusVoucherCharacterSet !== "legacy"
+              ? paidVoucherPrefix.value || null
+              : null,
+          radiusVoucherCodeLength:
+            architecture?.voucherSourceMode === "radius_voucher" && newPlanRadiusVoucherCharacterSet !== "legacy"
+              ? paidVoucherCodeLength ?? 8
+              : null,
+          radiusVoucherCharacterSet:
+            architecture?.voucherSourceMode === "radius_voucher" && newPlanRadiusVoucherCharacterSet !== "legacy"
+              ? newPlanRadiusVoucherCharacterSet
+              : null,
         }),
       });
       const data = await readJsonResponse<{ error?: string }>(response);
@@ -799,6 +875,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setNewPlanDataLimitMb("");
       setNewPlanAvailableFrom("");
       setNewPlanAvailableTo("");
+      setNewPlanRadiusVoucherCodePrefix("PS");
+      setNewPlanRadiusVoucherCodeLength("8");
+      setNewPlanRadiusVoucherCharacterSet("legacy");
       setShowCreatePlanModal(false);
       await Promise.all([loadPlans(), loadStats()]);
     } catch (error) {
@@ -821,6 +900,11 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     const availableFrom = localInputToIso(draft.availableFrom);
     const availableTo = localInputToIso(draft.availableTo);
     const normalizedDuration = draft.duration.trim() ? duration ?? null : null;
+    const useConfiguredPaidVoucherCode =
+      architecture?.voucherSourceMode === "radius_voucher" &&
+      draft.radiusVoucherCharacterSet !== "legacy";
+    const paidVoucherPrefix = validateRadiusVoucherPrefixInput(draft.radiusVoucherCodePrefix);
+    const paidVoucherCodeLength = parseRadiusVoucherCodeLengthInput(draft.radiusVoucherCodeLength);
     const durationRequired =
       architecture?.accessMode !== "account_access" &&
       architecture?.voucherSourceMode !== "mikrotik_rest" &&
@@ -852,6 +936,22 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setPlansError("Set at least one limit: duration or data.");
       return;
     }
+    if (!paidVoucherPrefix.ok) {
+      setPlansError(paidVoucherPrefix.error);
+      return;
+    }
+    if (
+      useConfiguredPaidVoucherCode &&
+      (paidVoucherCodeLength === undefined ||
+        !Number.isFinite(paidVoucherCodeLength) ||
+        paidVoucherCodeLength < PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH ||
+        paidVoucherCodeLength > PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH)
+    ) {
+      setPlansError(
+        `Paid voucher code length must be between ${PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH} and ${PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH}.`,
+      );
+      return;
+    }
     setSavingPlanIds((prev) => ({ ...prev, [plan.id]: true }));
     setPlansError(null);
     setPlanNotice(null);
@@ -870,6 +970,18 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           dataLimitMb,
           availableFrom,
           availableTo,
+          radiusVoucherCodePrefix:
+            architecture?.voucherSourceMode === "radius_voucher" && draft.radiusVoucherCharacterSet !== "legacy"
+              ? paidVoucherPrefix.value || null
+              : null,
+          radiusVoucherCodeLength:
+            architecture?.voucherSourceMode === "radius_voucher" && draft.radiusVoucherCharacterSet !== "legacy"
+              ? paidVoucherCodeLength ?? 8
+              : null,
+          radiusVoucherCharacterSet:
+            architecture?.voucherSourceMode === "radius_voucher" && draft.radiusVoucherCharacterSet !== "legacy"
+              ? draft.radiusVoucherCharacterSet
+              : null,
           active: draft.active,
         }),
       });
@@ -1436,6 +1548,53 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                       placeholder="Available to"
                     />
                   </div>
+                  {isRadiusVoucherMode ? (
+                    <div className="grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">Paid voucher code format</p>
+                      <select
+                        value={draft.radiusVoucherCharacterSet}
+                        onChange={(event) =>
+                          setPlanDrafts((prev) => ({
+                            ...prev,
+                            [plan.id]: {
+                              ...prev[plan.id],
+                              radiusVoucherCharacterSet: event.target.value as PlanVoucherCharacterSet,
+                            },
+                          }))
+                        }
+                      >
+                        <option value="legacy">Use current default format</option>
+                        <option value="alnum">Letters + numbers</option>
+                        <option value="letters">Letters only</option>
+                        <option value="numbers">Numbers only</option>
+                      </select>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          value={draft.radiusVoucherCodePrefix}
+                          onChange={(event) =>
+                            setPlanDrafts((prev) => ({
+                              ...prev,
+                              [plan.id]: { ...prev[plan.id], radiusVoucherCodePrefix: event.target.value.toUpperCase() },
+                            }))
+                          }
+                          placeholder="Prefix (optional)"
+                          disabled={draft.radiusVoucherCharacterSet === "legacy"}
+                        />
+                        <Input
+                          value={draft.radiusVoucherCodeLength}
+                          inputMode="numeric"
+                          onChange={(event) =>
+                            setPlanDrafts((prev) => ({
+                              ...prev,
+                              [plan.id]: { ...prev[plan.id], radiusVoucherCodeLength: event.target.value },
+                            }))
+                          }
+                          placeholder="Code length"
+                          disabled={draft.radiusVoucherCharacterSet === "legacy"}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                   <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">Unused: {plan.unusedCount}</span>
@@ -1546,6 +1705,62 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                                 }))
                               }
                             />
+                            {isRadiusVoucherMode ? (
+                              <div className="grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-900">Paid voucher format</p>
+                                <select
+                                  className="h-10 text-sm"
+                                  value={draft.radiusVoucherCharacterSet}
+                                  onChange={(event) =>
+                                    setPlanDrafts((prev) => ({
+                                      ...prev,
+                                      [plan.id]: {
+                                        ...prev[plan.id],
+                                        radiusVoucherCharacterSet: event.target.value as PlanVoucherCharacterSet,
+                                      },
+                                    }))
+                                  }
+                                >
+                                  <option value="legacy">Use current default format</option>
+                                  <option value="alnum">Letters + numbers</option>
+                                  <option value="letters">Letters only</option>
+                                  <option value="numbers">Numbers only</option>
+                                </select>
+                                <div className="grid gap-2 xl:grid-cols-2">
+                                  <Input
+                                    className="h-10 text-sm"
+                                    value={draft.radiusVoucherCodePrefix}
+                                    onChange={(event) =>
+                                      setPlanDrafts((prev) => ({
+                                        ...prev,
+                                        [plan.id]: {
+                                          ...prev[plan.id],
+                                          radiusVoucherCodePrefix: event.target.value.toUpperCase(),
+                                        },
+                                      }))
+                                    }
+                                    placeholder="Prefix (optional)"
+                                    disabled={draft.radiusVoucherCharacterSet === "legacy"}
+                                  />
+                                  <Input
+                                    className="h-10 text-sm"
+                                    value={draft.radiusVoucherCodeLength}
+                                    inputMode="numeric"
+                                    onChange={(event) =>
+                                      setPlanDrafts((prev) => ({
+                                        ...prev,
+                                        [plan.id]: {
+                                          ...prev[plan.id],
+                                          radiusVoucherCodeLength: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="Code length"
+                                    disabled={draft.radiusVoucherCharacterSet === "legacy"}
+                                  />
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         </td>
                         <td className="px-4 py-4">
@@ -2366,7 +2581,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 <div className="mt-3 rounded-xl border border-amber-300 bg-white/80 px-3 py-2 text-xs text-amber-900">
                   <p><code>POST /api/t/&lt;slug&gt;/radius/authorize</code></p>
                   <p><code>POST /api/t/&lt;slug&gt;/radius/accounting</code></p>
-                  <p className="mt-2">Voucher code is generated after payment. Password = same as voucher code.</p>
+                  <p className="mt-2">Voucher code is generated after payment. Password = same as voucher code. Format can be configured per plan.</p>
                 </div>
                 {architecture.radius?.hasAdapterSecret ? (
                   <p className="mt-3 text-xs text-amber-900/80">
@@ -2466,6 +2681,43 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
               onChange={(event) => setNewPlanAvailableTo(event.target.value)}
               placeholder="Available to (optional)"
             />
+            {isRadiusVoucherMode ? (
+              <div className="grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">Paid voucher code format</p>
+                <p className="text-xs text-amber-900/80">
+                  Used only when PaySpot generates a voucher after successful payment for this plan.
+                </p>
+                <select
+                  value={newPlanRadiusVoucherCharacterSet}
+                  onChange={(event) =>
+                    setNewPlanRadiusVoucherCharacterSet(event.target.value as PlanVoucherCharacterSet)
+                  }
+                >
+                  <option value="legacy">Use current default format</option>
+                  <option value="alnum">Letters + numbers</option>
+                  <option value="letters">Letters only</option>
+                  <option value="numbers">Numbers only</option>
+                </select>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    value={newPlanRadiusVoucherCodePrefix}
+                    onChange={(event) => setNewPlanRadiusVoucherCodePrefix(event.target.value.toUpperCase())}
+                    placeholder="Prefix (optional)"
+                    disabled={newPlanRadiusVoucherCharacterSet === "legacy"}
+                  />
+                  <Input
+                    value={newPlanRadiusVoucherCodeLength}
+                    inputMode="numeric"
+                    onChange={(event) => setNewPlanRadiusVoucherCodeLength(event.target.value)}
+                    placeholder="Code length"
+                    disabled={newPlanRadiusVoucherCharacterSet === "legacy"}
+                  />
+                </div>
+                <p className="text-xs text-amber-900/80">
+                  Prefix is optional. Length applies to the random part only.
+                </p>
+              </div>
+            ) : null}
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
               {newPlanDuration.trim() ? (
                 Number.isFinite(parsedNewPlanDuration ?? Number.NaN)
