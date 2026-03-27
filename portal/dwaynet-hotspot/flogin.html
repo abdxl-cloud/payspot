@@ -1,10 +1,522 @@
 <!DOCTYPE html>
+<!--
+  MikroTik HotSpot failed-login template for PaySpot voucher auth.
+  This keeps users on the portal so they can retry, copy PaySpot links,
+  and use trial access if it is available on the hotspot.
+-->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Voucher Login</title>
-  <meta http-equiv="refresh" content="0; url=$(link-login-only)?dst=$(link-orig-esc)&username=$(username-esc)&target=%2F" />
+  <title>PaySpot Hotspot Login</title>
+  <style>
+    :root {
+      --ink: #102235;
+      --muted: #54657c;
+      --line: rgba(17, 45, 76, 0.14);
+      --panel: rgba(252, 253, 255, 0.9);
+      --field: #f4f7fb;
+      --accent: #0f6acb;
+      --accent-dark: #0a4d93;
+      --accent-soft: rgba(15, 106, 203, 0.12);
+      --success: #147a43;
+      --danger: #b42318;
+      --glow-a: rgba(238, 185, 62, 0.42);
+      --glow-b: rgba(66, 136, 223, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 14% 16%, var(--glow-a), transparent 32%),
+        radial-gradient(circle at 84% 10%, var(--glow-b), transparent 30%),
+        linear-gradient(135deg, #fff5d9 0%, #f7fafc 46%, #dcebff 100%);
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+
+    .shell {
+      width: min(560px, 100%);
+      min-height: 100vh;
+      min-height: 100dvh;
+      margin: 0 auto;
+      padding: clamp(16px, 4vw, 28px);
+      padding-left: max(clamp(16px, 4vw, 28px), env(safe-area-inset-left));
+      padding-right: max(clamp(16px, 4vw, 28px), env(safe-area-inset-right));
+      display: grid;
+      place-items: center;
+    }
+
+    .card {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      border-radius: 28px;
+      background: var(--panel);
+      box-shadow:
+        0 20px 44px rgba(13, 33, 58, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.72);
+      backdrop-filter: blur(18px);
+      padding: clamp(20px, 4vw, 30px);
+      animation: rise 0.55s ease both;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 16px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.66);
+      color: #23517f;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #d74e42 0%, #b42318 100%);
+      box-shadow: 0 0 0 5px rgba(180, 35, 24, 0.12);
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(2rem, 6vw, 2.8rem);
+      line-height: 0.98;
+      letter-spacing: -0.03em;
+    }
+
+    .copy {
+      margin: 14px 0 0;
+      max-width: 34rem;
+      color: var(--muted);
+      font-size: 0.98rem;
+      line-height: 1.55;
+    }
+
+    .form-shell {
+      margin-top: 22px;
+      padding: 18px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--line);
+    }
+
+    .label {
+      display: block;
+      margin: 0 0 10px;
+      color: #274a72;
+      font-size: 0.84rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .input {
+      width: 100%;
+      min-height: 56px;
+      border: 1px solid rgba(35, 72, 111, 0.16);
+      border-radius: 18px;
+      background: var(--field);
+      color: var(--ink);
+      font: inherit;
+      font-size: 1rem;
+      padding: 0 18px;
+      outline: none;
+      transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+    }
+
+    .input::placeholder {
+      color: #6a7b91;
+    }
+
+    .input:focus {
+      border-color: rgba(15, 106, 203, 0.48);
+      box-shadow: 0 0 0 5px var(--accent-soft);
+      transform: translateY(-1px);
+    }
+
+    .submit {
+      width: 100%;
+      margin-top: 16px;
+      min-height: 56px;
+      border: 0;
+      border-radius: 18px;
+      cursor: pointer;
+      color: #fff;
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      background: linear-gradient(180deg, #1983e2 0%, #0f6acb 100%);
+      box-shadow: 0 14px 26px rgba(15, 106, 203, 0.26);
+      transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+    }
+
+    .submit:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+    }
+
+    .submit:active {
+      transform: translateY(0);
+    }
+
+    .hint {
+      margin: 14px 0 0;
+      min-height: 1.4em;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .hint.is-error {
+      color: var(--danger);
+    }
+
+    .hint.is-success {
+      color: var(--success);
+    }
+
+    .actions {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .action-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 18px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid var(--line);
+      color: inherit;
+      transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .action-card:hover {
+      transform: translateY(-1px);
+      border-color: rgba(15, 106, 203, 0.26);
+      box-shadow: 0 10px 18px rgba(13, 33, 58, 0.08);
+    }
+
+    .action-button {
+      width: 100%;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.76);
+    }
+
+    .action-meta {
+      min-width: 0;
+    }
+
+    .action-label {
+      margin: 0;
+      color: #244a74;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .action-title {
+      margin: 6px 0 0;
+      color: var(--ink);
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .action-copy {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    .action-url {
+      margin: 10px 0 0;
+      color: #274a72;
+      font-size: 0.82rem;
+      line-height: 1.4;
+      word-break: break-all;
+    }
+
+    .trial-note {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .action-arrow {
+      flex: 0 0 auto;
+      min-width: 58px;
+      height: 42px;
+      padding: 0 10px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: rgba(15, 106, 203, 0.1);
+      color: var(--accent-dark);
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(22px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .card {
+        border-radius: 24px;
+        padding: 18px;
+      }
+
+      .form-shell {
+        padding: 16px;
+      }
+
+      .action-card {
+        align-items: flex-start;
+      }
+    }
+  </style>
 </head>
-<body></body>
+<body>
+  <main class="shell">
+    <section class="card">
+      <p class="eyebrow">Voucher Retry</p>
+      <h1 class="title">Check the code and try again</h1>
+      <p class="copy">
+        If you need a new voucher or want to confirm payment, copy the PaySpot link first and open it after starting trial access.
+      </p>
+
+      <div class="form-shell">
+        <form
+          name="login"
+          action="$(link-login-only)"
+          method="post"
+          id="voucher-form"
+          autocomplete="off"
+          onsubmit="return prepareVoucherLogin(event)"
+        >
+          <input type="hidden" name="dst" value="$(link-orig)" />
+          <input type="hidden" name="popup" value="false" />
+          <input type="hidden" name="password" id="password" />
+
+          <label class="label" for="voucher-code">Voucher code</label>
+          <div class="input-wrap">
+            <input
+              class="input"
+              id="voucher-code"
+              type="text"
+              name="username"
+              inputmode="text"
+              autocapitalize="characters"
+              spellcheck="false"
+              placeholder="Enter voucher code"
+              maxlength="64"
+              value="$(username-esc)"
+              required
+            />
+          </div>
+
+          <button class="submit" type="submit">Try again</button>
+        </form>
+
+        <p class="hint" id="status-hint"></p>
+      </div>
+
+      <div class="actions">
+        $(if trial == 'yes')
+        <a
+          class="action-card"
+          href="$(link-login-only)?dst=$(link-orig-esc)&amp;username=T-$(mac-esc)"
+        >
+          <div class="action-meta">
+            <p class="action-label">Need quick access?</p>
+            <p class="action-title">Try free access</p>
+            <p class="action-copy">Use the router's trial session before buying a voucher.</p>
+          </div>
+          <span class="action-arrow" aria-hidden="true">&#8594;</span>
+        </a>
+        $(endif)
+
+        <button class="action-card action-button" id="buy-link" type="button" data-copy-url="">
+          <div class="action-meta">
+            <p class="action-label">Need a code?</p>
+            <p class="action-title">Copy buy link</p>
+            <p class="action-copy">Copy the PaySpot link, then use trial access to open it.</p>
+            <p class="action-url" id="buy-link-text"></p>
+          </div>
+          <span class="action-arrow" aria-hidden="true">Copy</span>
+        </button>
+
+        <button class="action-card action-button" id="status-link" type="button" data-copy-url="">
+          <div class="action-meta">
+            <p class="action-label">Already paid?</p>
+            <p class="action-title">Copy status link</p>
+            <p class="action-copy">Copy the status page link, then open it with trial access.</p>
+            <p class="action-url" id="status-link-text"></p>
+          </div>
+          <span class="action-arrow" aria-hidden="true">Copy</span>
+        </button>
+      </div>
+
+      $(if trial == 'yes')
+      <p class="trial-note">Free access is available on this hotspot right now. Copy a PaySpot link first, then use trial access to open it.</p>
+      $(endif)
+
+    </section>
+  </main>
+
+  <script>
+    var PAYSPOT_BASE_URL = "https://payspot.abdxl.cloud";
+    var TENANT_SLUG = "dwaynet";
+
+    function normalizeCode(value) {
+      return (value || "").replace(/^\s+|\s+$/g, "").toUpperCase();
+    }
+
+    function setHint(message, mode) {
+      var hint = document.getElementById("status-hint");
+      hint.className = "hint";
+      if (mode === "error") hint.className += " is-error";
+      if (mode === "success") hint.className += " is-success";
+      hint.textContent = message || "";
+    }
+
+    function buildAppUrl(path) {
+      return PAYSPOT_BASE_URL.replace(/\/$/, "") + path;
+    }
+
+    function setPortalLinks() {
+      var buyLink = document.getElementById("buy-link");
+      var statusLink = document.getElementById("status-link");
+      var buyLinkText = document.getElementById("buy-link-text");
+      var statusLinkText = document.getElementById("status-link-text");
+      var buyUrl = buildAppUrl("/t/" + TENANT_SLUG);
+      var voucherUrl = buildAppUrl("/t/" + TENANT_SLUG + "/voucher");
+
+      if (buyLink) buyLink.setAttribute("data-copy-url", buyUrl);
+      if (statusLink) statusLink.setAttribute("data-copy-url", voucherUrl);
+      if (buyLinkText) buyLinkText.textContent = buyUrl;
+      if (statusLinkText) statusLinkText.textContent = voucherUrl;
+    }
+
+    function fallbackCopyText(text) {
+      var area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "readonly");
+      area.style.position = "absolute";
+      area.style.left = "-9999px";
+      document.body.appendChild(area);
+      area.select();
+      area.setSelectionRange(0, area.value.length);
+      var copied = false;
+
+      try {
+        copied = document.execCommand("copy");
+      } catch (error) {
+        copied = false;
+      }
+
+      document.body.removeChild(area);
+      return copied;
+    }
+
+    function copyPortalLink(targetId) {
+      var target = document.getElementById(targetId);
+      var url = target ? target.getAttribute("data-copy-url") : "";
+
+      if (!url) {
+        setHint("The link is not ready yet. Reload the page and try again.", "error");
+        return;
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () {
+          setHint("Link copied. Start free access, then paste the link into your browser.", "success");
+        }, function () {
+          if (fallbackCopyText(url)) {
+            setHint("Link copied. Start free access, then paste the link into your browser.", "success");
+          } else {
+            setHint("Copy failed. Press and hold the link text to copy it manually.", "error");
+          }
+        });
+        return;
+      }
+
+      if (fallbackCopyText(url)) {
+        setHint("Link copied. Start free access, then paste the link into your browser.", "success");
+      } else {
+        setHint("Copy failed. Press and hold the link text to copy it manually.", "error");
+      }
+    }
+
+    function prepareVoucherLogin(event) {
+      var voucherInput = document.getElementById("voucher-code");
+      var voucherCode = normalizeCode(voucherInput ? voucherInput.value : "");
+
+      if (!voucherCode) {
+        if (event && typeof event.preventDefault === "function") {
+          event.preventDefault();
+        }
+        setHint("Enter your voucher code before continuing.", "error");
+        return false;
+      }
+
+      if (voucherInput) {
+        voucherInput.value = voucherCode;
+      }
+      document.getElementById("password").value = voucherCode;
+      setHint("Trying voucher code again...", "success");
+      return true;
+    }
+
+    var mikrotikError = "$(error)";
+    if (mikrotikError && mikrotikError !== "$(error)") {
+      setHint(mikrotikError, "error");
+    } else {
+      setHint("Check the voucher code and try again.", "error");
+    }
+
+    setPortalLinks();
+    document.getElementById("buy-link").onclick = function () { copyPortalLink("buy-link"); };
+    document.getElementById("status-link").onclick = function () { copyPortalLink("status-link"); };
+  </script>
+</body>
 </html>

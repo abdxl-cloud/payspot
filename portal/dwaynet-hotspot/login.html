@@ -225,6 +225,15 @@
       box-shadow: 0 10px 18px rgba(13, 33, 58, 0.08);
     }
 
+    .action-button {
+      width: 100%;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.76);
+    }
+
     .action-meta {
       min-width: 0;
     }
@@ -252,6 +261,14 @@
       line-height: 1.4;
     }
 
+    .action-url {
+      margin: 10px 0 0;
+      color: #274a72;
+      font-size: 0.82rem;
+      line-height: 1.4;
+      word-break: break-all;
+    }
+
     .trial-note {
       margin-top: 12px;
       color: var(--muted);
@@ -261,14 +278,15 @@
 
     .action-arrow {
       flex: 0 0 auto;
-      width: 42px;
+      min-width: 58px;
       height: 42px;
+      padding: 0 10px;
       display: grid;
       place-items: center;
       border-radius: 999px;
       background: rgba(15, 106, 203, 0.1);
       color: var(--accent-dark);
-      font-size: 1.2rem;
+      font-size: 0.76rem;
       font-weight: 700;
     }
 
@@ -358,27 +376,29 @@
         </a>
         $(endif)
 
-        <a class="action-card" id="buy-link" href="#">
+        <button class="action-card action-button" id="buy-link" type="button" data-copy-url="">
           <div class="action-meta">
             <p class="action-label">Need a code?</p>
-            <p class="action-title">Buy a voucher</p>
-            <p class="action-copy">Get a new code.</p>
+            <p class="action-title">Copy buy link</p>
+            <p class="action-copy">Copy the PaySpot link, then use trial access to open it.</p>
+            <p class="action-url" id="buy-link-text"></p>
           </div>
-          <span class="action-arrow" aria-hidden="true">+</span>
-        </a>
+          <span class="action-arrow" aria-hidden="true">Copy</span>
+        </button>
 
-        <a class="action-card" id="status-link" href="#">
+        <button class="action-card action-button" id="status-link" type="button" data-copy-url="">
           <div class="action-meta">
             <p class="action-label">Already paid?</p>
-            <p class="action-title">Check voucher status</p>
-            <p class="action-copy">Check your code.</p>
+            <p class="action-title">Copy status link</p>
+            <p class="action-copy">Copy the status page link, then open it with trial access.</p>
+            <p class="action-url" id="status-link-text"></p>
           </div>
-          <span class="action-arrow" aria-hidden="true">&#8599;</span>
-        </a>
+          <span class="action-arrow" aria-hidden="true">Copy</span>
+        </button>
       </div>
 
       $(if trial == 'yes')
-      <p class="trial-note">Free access is available on this hotspot right now.</p>
+      <p class="trial-note">Free access is available on this hotspot right now. Copy a PaySpot link first, then use trial access to open it.</p>
       $(endif)
 
     </section>
@@ -407,11 +427,65 @@
     function setPortalLinks() {
       var buyLink = document.getElementById("buy-link");
       var statusLink = document.getElementById("status-link");
+      var buyLinkText = document.getElementById("buy-link-text");
+      var statusLinkText = document.getElementById("status-link-text");
       var buyUrl = buildAppUrl("/t/" + TENANT_SLUG);
       var voucherUrl = buildAppUrl("/t/" + TENANT_SLUG + "/voucher");
 
-      if (buyLink) buyLink.href = buyUrl;
-      if (statusLink) statusLink.href = voucherUrl;
+      if (buyLink) buyLink.setAttribute("data-copy-url", buyUrl);
+      if (statusLink) statusLink.setAttribute("data-copy-url", voucherUrl);
+      if (buyLinkText) buyLinkText.textContent = buyUrl;
+      if (statusLinkText) statusLinkText.textContent = voucherUrl;
+    }
+
+    function fallbackCopyText(text) {
+      var area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "readonly");
+      area.style.position = "absolute";
+      area.style.left = "-9999px";
+      document.body.appendChild(area);
+      area.select();
+      area.setSelectionRange(0, area.value.length);
+      var copied = false;
+
+      try {
+        copied = document.execCommand("copy");
+      } catch (error) {
+        copied = false;
+      }
+
+      document.body.removeChild(area);
+      return copied;
+    }
+
+    function copyPortalLink(targetId) {
+      var target = document.getElementById(targetId);
+      var url = target ? target.getAttribute("data-copy-url") : "";
+
+      if (!url) {
+        setHint("The link is not ready yet. Reload the page and try again.", "error");
+        return;
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () {
+          setHint("Link copied. Start free access, then paste the link into your browser.", "success");
+        }, function () {
+          if (fallbackCopyText(url)) {
+            setHint("Link copied. Start free access, then paste the link into your browser.", "success");
+          } else {
+            setHint("Copy failed. Press and hold the link text to copy it manually.", "error");
+          }
+        });
+        return;
+      }
+
+      if (fallbackCopyText(url)) {
+        setHint("Link copied. Start free access, then paste the link into your browser.", "success");
+      } else {
+        setHint("Copy failed. Press and hold the link text to copy it manually.", "error");
+      }
     }
 
     function prepareVoucherLogin(event) {
@@ -442,6 +516,8 @@
     }
 
     setPortalLinks();
+    document.getElementById("buy-link").onclick = function () { copyPortalLink("buy-link"); };
+    document.getElementById("status-link").onclick = function () { copyPortalLink("status-link"); };
   </script>
 </body>
 </html>
