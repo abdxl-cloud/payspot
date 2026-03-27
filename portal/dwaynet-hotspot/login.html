@@ -252,6 +252,13 @@
       line-height: 1.4;
     }
 
+    .trial-note {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
     .action-arrow {
       flex: 0 0 auto;
       width: 42px;
@@ -302,10 +309,16 @@
       </p>
 
       <div class="form-shell">
-        <form name="login" action="$(link-login-only)" method="post" id="voucher-form" autocomplete="off">
+        <form
+          name="login"
+          action="$(link-login-only)"
+          method="post"
+          id="voucher-form"
+          autocomplete="off"
+          onsubmit="return prepareVoucherLogin(event)"
+        >
           <input type="hidden" name="dst" value="$(link-orig)" />
-          <input type="hidden" name="popup" value="true" />
-          <input type="hidden" name="username" id="username" />
+          <input type="hidden" name="popup" value="false" />
           <input type="hidden" name="password" id="password" />
 
           <label class="label" for="voucher-code">Voucher code</label>
@@ -314,6 +327,7 @@
               class="input"
               id="voucher-code"
               type="text"
+              name="username"
               inputmode="text"
               autocapitalize="characters"
               spellcheck="false"
@@ -330,6 +344,20 @@
       </div>
 
       <div class="actions">
+        $(if trial == 'yes')
+        <a
+          class="action-card"
+          href="$(link-login-only)?dst=$(link-orig-esc)&amp;username=T-$(mac-esc)"
+        >
+          <div class="action-meta">
+            <p class="action-label">Need quick access?</p>
+            <p class="action-title">Try free access</p>
+            <p class="action-copy">Use the router's trial session before buying a voucher.</p>
+          </div>
+          <span class="action-arrow" aria-hidden="true">&#8594;</span>
+        </a>
+        $(endif)
+
         <a class="action-card" id="buy-link" href="#">
           <div class="action-meta">
             <p class="action-label">Need a code?</p>
@@ -348,6 +376,10 @@
           <span class="action-arrow" aria-hidden="true">&#8599;</span>
         </a>
       </div>
+
+      $(if trial == 'yes')
+      <p class="trial-note">Free access is available on this hotspot right now.</p>
+      $(endif)
 
     </section>
   </main>
@@ -382,20 +414,25 @@
       if (statusLink) statusLink.href = voucherUrl;
     }
 
-    document.getElementById("voucher-form").addEventListener("submit", function (event) {
+    function prepareVoucherLogin(event) {
       var voucherInput = document.getElementById("voucher-code");
       var voucherCode = normalizeCode(voucherInput ? voucherInput.value : "");
 
       if (!voucherCode) {
-        event.preventDefault();
+        if (event && typeof event.preventDefault === "function") {
+          event.preventDefault();
+        }
         setHint("Enter your voucher code before continuing.", "error");
-        return;
+        return false;
       }
 
-      document.getElementById("username").value = voucherCode;
+      if (voucherInput) {
+        voucherInput.value = voucherCode;
+      }
       document.getElementById("password").value = voucherCode;
       setHint("Connecting with voucher code...", "success");
-    });
+      return true;
+    }
 
     var mikrotikError = "$(error)";
     if (mikrotikError && mikrotikError !== "$(error)") {
