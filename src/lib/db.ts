@@ -249,7 +249,9 @@ async function initSchema() {
       payment_status TEXT NOT NULL,
       created_at TEXT NOT NULL,
       expires_at TEXT,
-      paid_at TEXT
+      paid_at TEXT,
+      notification_sms_sent INTEGER NOT NULL DEFAULT 0,
+      notification_email_sent INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS portal_subscribers (
@@ -414,6 +416,10 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS delivery_mode TEXT NOT NULL DEFAULT 'voucher';
     ALTER TABLE transactions
       ADD COLUMN IF NOT EXISTS voucher_source_mode TEXT;
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS notification_sms_sent INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS notification_email_sent INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE voucher_packages
       ALTER COLUMN duration_minutes DROP NOT NULL;
     ALTER TABLE voucher_packages

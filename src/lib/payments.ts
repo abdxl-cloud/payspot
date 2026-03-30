@@ -17,6 +17,7 @@ import {
   normalizeVoucherSourceMode,
   resolveTenantMikrotikConfigIfPresent,
   transactionAssignVoucher,
+  updateTransactionNotificationDelivery,
 } from "@/lib/store";
 import { sendVoucherSms } from "@/lib/termii";
 import { sendVoucherEmail } from "@/lib/mailer";
@@ -33,8 +34,12 @@ async function sendVoucherNotifications(params: {
   };
   voucherCode: string;
 }) {
+  let smsSent = false;
+  let emailSent = false;
   const pkg = await getPackageById(params.tenantId, params.transaction.package_id);
-  if (!pkg) return;
+  if (!pkg) {
+    return { smsSent, emailSent };
+  }
 
   const message = [
     "Payment confirmed!",
@@ -49,6 +54,7 @@ async function sendVoucherNotifications(params: {
       message,
       channel: "dnd",
     });
+    smsSent = true;
   } catch (error) {
     console.error("SMS delivery failed", error);
   }
@@ -60,9 +66,12 @@ async function sendVoucherNotifications(params: {
       packageName: pkg.name,
       reference: params.transaction.reference,
     });
+    emailSent = true;
   } catch (error) {
     console.error("Voucher email delivery failed", error);
   }
+
+  return { smsSent, emailSent };
 }
 
 const GENERATED_VOUCHER_CODE_ATTEMPTS = 8;
@@ -288,10 +297,16 @@ export async function handleSuccessfulPayment(params: {
     if (!voucherCode) {
       return result;
     }
-    await sendVoucherNotifications({
+    const notificationDelivery = await sendVoucherNotifications({
       tenantId: params.tenantId,
       transaction,
       voucherCode,
+    });
+    await updateTransactionNotificationDelivery({
+      tenantId: params.tenantId,
+      reference: params.reference,
+      smsSent: notificationDelivery.smsSent,
+      emailSent: notificationDelivery.emailSent,
     });
   }
 

@@ -97,6 +97,16 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
 
   if (updated?.payment_status === "success") {
     const isAccountAccess = updated.delivery_mode === "account_access";
+    const smsDelivered = (updated.notification_sms_sent ?? 0) > 0;
+    const emailDelivered = (updated.notification_email_sent ?? 0) > 0;
+    const voucherDeliveryMessage =
+      smsDelivered && emailDelivered
+        ? "This voucher was also delivered to your email and phone by SMS, check your inbox, spam folder, and SMS messages."
+        : emailDelivered
+          ? "This voucher was also delivered to your email, check your inbox and spam folder."
+          : smsDelivered
+            ? "This voucher was also delivered to your phone by SMS."
+            : "Your voucher is shown above and ready to use.";
     return (
       <div className="app-shell">
         <div className="app-container max-w-3xl py-12 sm:py-20">
@@ -186,7 +196,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
                   </p>
                 </div>
                 <p className="mt-4 text-xs text-slate-500">
-                  This voucher was also delivered to your phone by SMS.
+                  {voucherDeliveryMessage}
                 </p>
               </>
             ) : null}

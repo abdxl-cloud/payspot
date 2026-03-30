@@ -199,6 +199,8 @@ export type TransactionRow = {
   created_at: string;
   expires_at: string | null;
   paid_at: string | null;
+  notification_sms_sent?: number | null;
+  notification_email_sent?: number | null;
 };
 
 export type PortalSubscriberRow = {
@@ -2587,6 +2589,32 @@ export async function markTransactionFailed(params: {
     `,
     )
     .run(params.status, params.tenantId, params.reference);
+  return result.changes;
+}
+
+export async function updateTransactionNotificationDelivery(params: {
+  tenantId: string;
+  reference: string;
+  smsSent: boolean;
+  emailSent: boolean;
+}) {
+  const db = getDb();
+  const result = await db
+    .prepare(
+      `
+      UPDATE transactions
+      SET
+        notification_sms_sent = CASE WHEN ? THEN 1 ELSE notification_sms_sent END,
+        notification_email_sent = CASE WHEN ? THEN 1 ELSE notification_email_sent END
+      WHERE tenant_id = ? AND reference = ?
+    `,
+    )
+    .run(
+      params.smsSent ? 1 : 0,
+      params.emailSent ? 1 : 0,
+      params.tenantId,
+      params.reference,
+    );
   return result.changes;
 }
 
