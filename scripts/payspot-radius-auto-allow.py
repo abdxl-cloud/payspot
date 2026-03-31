@@ -2,8 +2,10 @@
 import argparse
 import collections
 import ipaddress
+import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -127,12 +129,15 @@ def append_client_block(
         return
 
     original = clients_conf.read_text(encoding="utf-8")
+    original_stat = clients_conf.stat()
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
         handle.write(original)
         handle.write(block)
         temp_path = Path(handle.name)
 
-    shutil.copy2(temp_path, clients_conf)
+    shutil.copyfile(temp_path, clients_conf)
+    os.chown(clients_conf, original_stat.st_uid, original_stat.st_gid)
+    os.chmod(clients_conf, stat.S_IMODE(original_stat.st_mode))
     try:
         subprocess.run(["freeradius", "-XC"], check=True, capture_output=True, text=True)
         subprocess.run(["systemctl", "restart", "freeradius"], check=True, capture_output=True, text=True)
