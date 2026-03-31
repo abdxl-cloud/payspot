@@ -782,9 +782,10 @@ EOF
 
   cat > "$FR_MODS_AVAILABLE/payspot_accounting" <<'EOF'
 exec payspot_accounting {
-    wait = yes
+    # Accounting does not need reply attributes; avoid blocking RADIUS responses
+    # on backend writes or disconnect attempts.
+    wait = no
     input_pairs = request
-    output_pairs = reply
     shell_escape = yes
     program = "/usr/local/bin/payspot-radius-adapter accounting \"%{Acct-Status-Type}\" \"%{Acct-Session-Id}\" \"%{Acct-Input-Octets}\" \"%{Acct-Output-Octets}\" \"%{Acct-Input-Gigawords}\" \"%{Acct-Output-Gigawords}\" \"%{User-Name}\" \"%{Class}\" \"%{Calling-Station-Id}\" \"%{Called-Station-Id}\" \"%{NAS-IP-Address}\" \"%{%{Packet-Src-IP-Address}:-%{Packet-Src-IPv6-Address}}\""
 }
