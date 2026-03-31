@@ -118,8 +118,7 @@ export async function GET(request: Request, { params }: Props) {
     tenant.voucher_source_mode === "radius_voucher" ? "radius_voucher" : "import_csv";
 
   if (voucherSourceMode === "radius_voucher") {
-    const radiusAssignedExpr =
-      "(COALESCE(rv.session_count, 0) > 0 OR TRIM(COALESCE(tx.email, '')) <> '' OR TRIM(COALESCE(tx.phone, '')) <> '')";
+    const radiusAssignedExpr = "(COALESCE(rv.session_count, 0) > 0)";
     const radiusWhere: string[] = [
       "tx.tenant_id = ?",
       "tx.payment_status = 'success'",
@@ -182,13 +181,13 @@ export async function GET(request: Request, { params }: Props) {
           p.name as "packageName",
           tx.created_at as "createdAt",
           CASE
-            WHEN ${radiusAssignedExpr} THEN COALESCE(rv.first_used_at, tx.paid_at, tx.created_at)
+            WHEN ${radiusAssignedExpr} THEN rv.first_used_at
             ELSE NULL
           END as "assignedAt",
           CASE WHEN TRIM(COALESCE(tx.email, '')) = '' THEN NULL ELSE tx.email END as "assignedToEmail",
           CASE WHEN TRIM(COALESCE(tx.phone, '')) = '' THEN NULL ELSE tx.phone END as "assignedToPhone"
           ${radiusFromSql}
-        ORDER BY COALESCE(rv.first_used_at, tx.paid_at, tx.created_at) DESC, tx.created_at DESC
+        ORDER BY COALESCE(rv.first_used_at, tx.created_at) DESC, tx.created_at DESC
         LIMIT ? OFFSET ?
       `,
       )

@@ -7,6 +7,7 @@ Usage:
   sudo ./scripts/payspot-radius-reset.sh \
     --slug <tenant-slug> \
     --base-url <https://payspot.example.com> \
+    [--adapter-base-url <http://127.0.0.1:3000>] \
     --adapter-secret <tenant-adapter-secret> \
     --nas-ips <ip1,ip2,...> \
     [--radius-secret <shared-secret>] \
@@ -62,6 +63,7 @@ PY
 
 SLUG=""
 BASE_URL=""
+ADAPTER_BASE_URL=""
 ADAPTER_SECRET=""
 RADIUS_SECRET=""
 NAS_IPS=""
@@ -77,6 +79,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --base-url)
       BASE_URL="${2:-}"
+      shift 2
+      ;;
+    --adapter-base-url)
+      ADAPTER_BASE_URL="${2:-}"
       shift 2
       ;;
     --adapter-secret)
@@ -124,6 +130,10 @@ need_cmd systemctl
 [ -n "$NAS_IPS" ] || fail "--nas-ips is required"
 [ -d "$FR_BASE" ] || fail "FreeRADIUS base directory not found: $FR_BASE"
 
+if [ -z "$ADAPTER_BASE_URL" ]; then
+  ADAPTER_BASE_URL="$BASE_URL"
+fi
+
 if [ -z "$RADIUS_SECRET" ]; then
   RADIUS_SECRET="$(generate_secret)"
 fi
@@ -163,7 +173,7 @@ mkdir -p "$CONFIG_DIR"
 chown root:"$RADIUS_GROUP" "$CONFIG_DIR"
 chmod 750 "$CONFIG_DIR"
 
-python3 - "$TENANTS_FILE" "$SLUG" "$BASE_URL" "$ADAPTER_SECRET" "$RADIUS_SECRET" "$CLIENT_PREFIX" "$NAS_IPS" <<'PY'
+python3 - "$TENANTS_FILE" "$SLUG" "$BASE_URL" "$ADAPTER_BASE_URL" "$ADAPTER_SECRET" "$RADIUS_SECRET" "$CLIENT_PREFIX" "$NAS_IPS" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -171,15 +181,17 @@ from pathlib import Path
 path = Path(sys.argv[1])
 slug = sys.argv[2]
 base_url = sys.argv[3]
-adapter_secret = sys.argv[4]
-radius_secret = sys.argv[5]
-client_prefix = sys.argv[6]
-nas_ips = [item.strip() for item in sys.argv[7].split(",") if item.strip()]
+adapter_base_url = sys.argv[4]
+adapter_secret = sys.argv[5]
+radius_secret = sys.argv[6]
+client_prefix = sys.argv[7]
+nas_ips = [item.strip() for item in sys.argv[8].split(",") if item.strip()]
 
 payload = {
     "tenants": {
         slug: {
             "base_url": base_url,
+            "adapter_base_url": adapter_base_url,
             "adapter_secret": adapter_secret,
             "radius_secret": radius_secret,
             "client_prefix": client_prefix,
@@ -252,11 +264,11 @@ def resolve_tenant(nas_ip: str, packet_src_ip: str = ''):
 
     for slug, tenant in tenants.items():
         if nas_ip and nas_ip in tenant.get('nas_ips', []):
-            return slug, tenant['base_url'], tenant['adapter_secret']
+            return slug, tenant.get('adapter_base_url') or tenant['base_url'], tenant['adapter_secret']
 
     for slug, tenant in tenants.items():
         if packet_src_ip and packet_src_ip in tenant.get('nas_ips', []):
-            return slug, tenant['base_url'], tenant['adapter_secret']
+            return slug, tenant.get('adapter_base_url') or tenant['base_url'], tenant['adapter_secret']
 
     if len(tenants) == 1:
         slug, tenant = next(iter(tenants.items()))
@@ -265,7 +277,7 @@ def resolve_tenant(nas_ip: str, packet_src_ip: str = ''):
                 f"NAS/controller IPs ({nas_ip or '-'}, {packet_src_ip or '-'}) not matched; "
                 f"falling back to sole tenant '{slug}'"
             )
-        return slug, tenant['base_url'], tenant['adapter_secret']
+        return slug, tenant.get('adapter_base_url') or tenant['base_url'], tenant['adapter_secret']
 
     log(
         f'NAS/controller IPs ({nas_ip!r}, {packet_src_ip!r}) did not match any tenant and multiple tenants are configured'

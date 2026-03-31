@@ -2973,19 +2973,13 @@ export async function getStats(tenantId: string) {
           COUNT(tx.id) as total,
           SUM(
             CASE
-              WHEN COALESCE(rv.session_count, 0) > 0
-                OR TRIM(COALESCE(tx.email, '')) <> ''
-                OR TRIM(COALESCE(tx.phone, '')) <> ''
-              THEN 0
+              WHEN COALESCE(rv.session_count, 0) > 0 THEN 0
               ELSE 1
             END
           ) as unused,
           SUM(
             CASE
-              WHEN COALESCE(rv.session_count, 0) > 0
-                OR TRIM(COALESCE(tx.email, '')) <> ''
-                OR TRIM(COALESCE(tx.phone, '')) <> ''
-              THEN 1
+              WHEN COALESCE(rv.session_count, 0) > 0 THEN 1
               ELSE 0
             END
           ) as assigned
