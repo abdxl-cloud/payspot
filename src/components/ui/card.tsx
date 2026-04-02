@@ -92,6 +92,54 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+interface StatCardProps {
+  label: string;
+  value: string | number;
+  icon?: React.ReactNode;
+  trend?: {
+    value: number;
+    isPositive: boolean;
+  };
+  className?: string;
+}
+
+function StatCard({ label, value, icon, trend, className }: StatCardProps) {
+  return (
+    <div
+      data-slot="stat-card"
+      className={cn(
+        "flex flex-col gap-2 rounded-2xl border border-border/50 bg-card p-4 shadow-[var(--shadow-sm)]",
+        "sm:gap-3 sm:rounded-3xl sm:p-5",
+        className
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground sm:text-sm">
+          {label}
+        </span>
+        {icon && (
+          <span className="text-muted-foreground/60">{icon}</span>
+        )}
+      </div>
+      <div className="flex items-end gap-2">
+        <span className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          {value}
+        </span>
+        {trend && (
+          <span
+            className={cn(
+              "mb-1 text-xs font-medium sm:text-sm",
+              trend.isPositive ? "text-success" : "text-destructive"
+            )}
+          >
+            {trend.isPositive ? "+" : ""}{trend.value}%
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export {
   Card,
   CardHeader,
@@ -100,4 +148,5 @@ export {
   CardAction,
   CardDescription,
   CardContent,
+  StatCard,
 }
