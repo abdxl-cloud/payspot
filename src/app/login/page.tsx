@@ -25,15 +25,15 @@ export default async function LoginPage() {
             environment="Public"
             accountLabel="Guest"
           />
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
-            <section className="order-2 panel-surface space-y-4 lg:order-1">
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-center lg:gap-12 xl:gap-20">
+            <section className="order-2 panel-surface space-y-4 lg:order-1 lg:space-y-6">
               <p className="section-kicker">Secure operator access</p>
-              <h1 className="panel-title">Access your PaySpot control center</h1>
-              <p className="panel-copy max-w-xl">
+              <h1 className="panel-title lg:text-4xl xl:text-5xl">Access your PaySpot control center</h1>
+              <p className="panel-copy max-w-xl lg:text-lg">
                 Manage tenant operations, voucher inventory, and payment flow from a single secure workspace.
               </p>
             </section>
-            <div className="order-1 mx-auto w-full max-w-xl lg:order-2">
+            <div className="order-1 mx-auto w-full max-w-md lg:order-2 lg:max-w-lg">
               <LoginForm />
             </div>
           </div>
