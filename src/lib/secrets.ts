@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getCryptoEnv } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 
 function parseKey(value: string) {
   const trimmed = value.trim();
@@ -16,17 +16,31 @@ function parseKey(value: string) {
   return Buffer.from(trimmed, "base64");
 }
 
-export function getTenantSecretsKey() {
-  const { TENANT_SECRETS_KEY } = getCryptoEnv();
-  const key = parseKey(TENANT_SECRETS_KEY);
+export function getTenantSecretsKey(): Buffer | null {
+  const env = getEnv();
+  const keyStr = env.TENANT_SECRETS_KEY?.trim();
+  
+  // Return null if key is not configured (demo/dev mode)
+  if (!keyStr || keyStr === "") {
+    return null;
+  }
+  
+  const key = parseKey(keyStr);
   if (key.length !== 32) {
     throw new Error("TENANT_SECRETS_KEY must be 32 bytes (base64/base64url/hex).");
   }
   return key;
 }
 
-export function encryptSecret(plaintext: string) {
+export function encryptSecret(plaintext: string): string {
   const key = getTenantSecretsKey();
+  
+  // If no encryption key is configured, store as plaintext with prefix
+  // This is for demo/development mode only
+  if (!key) {
+    return `plain:${plaintext}`;
+  }
+  
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
   const ciphertext = Buffer.concat([
@@ -38,8 +52,17 @@ export function encryptSecret(plaintext: string) {
   return `v1:${packed}`;
 }
 
-export function decryptSecret(payload: string) {
+export function decryptSecret(payload: string): string {
+  // Handle plaintext storage (demo/dev mode)
+  if (payload.startsWith("plain:")) {
+    return payload.slice("plain:".length);
+  }
+  
   const key = getTenantSecretsKey();
+  if (!key) {
+    throw new Error("Cannot decrypt: TENANT_SECRETS_KEY is not configured");
+  }
+  
   if (!payload.startsWith("v1:")) {
     throw new Error("Unknown secret payload version.");
   }
@@ -59,4 +82,3 @@ export function decryptSecret(payload: string) {
   ]).toString("utf8");
   return plaintext;
 }
-
