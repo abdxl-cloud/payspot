@@ -782,7 +782,7 @@ function ModalShell({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-t-3xl border border-border/50 bg-card p-5 shadow-[var(--shadow-xl)] sm:rounded-3xl"
+        className="w-full max-w-lg rounded-t-3xl border border-border/50 bg-card p-5 shadow-[var(--shadow-xl)] sm:rounded-3xl lg:max-w-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Handle for mobile */}
