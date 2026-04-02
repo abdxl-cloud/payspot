@@ -558,57 +558,59 @@ export async function consumePasswordResetToken(token: string) {
 export async function getSessionUser(sessionToken: string) {
   const db = getDb();
   const tokenHash = hashToken(sessionToken);
-  const row = await db
-    .prepare(
-      `
-      SELECT
-        u.id as id,
-        u.email as email,
-        u.username as username,
-        u.role as role,
-        u.tenant_id as tenant_id,
-        u.must_change_password as must_change_password,
-        s.expires_at as expires_at,
-        s.revoked_at as revoked_at,
-        t.slug as tenant_slug,
-        t.status as tenant_status
-      FROM sessions s
-      JOIN users u ON u.id = s.user_id
-      LEFT JOIN tenants t ON t.id = u.tenant_id
-      WHERE s.token_hash = ?
-    `,
-    )
-    .get(tokenHash) as
-    | {
-        id: string;
-        email: string;
-        username: string;
-        role: UserRole;
-        tenant_id: string | null;
-        must_change_password: number;
-        expires_at: string;
-        revoked_at: string | null;
-        tenant_slug: string | null;
-        tenant_status: string | null;
-      }
-    | undefined;
+  console.log("[v0] getSessionUser called with token hash:", tokenHash.substring(0, 16) + "...");
+  
+  // Get session first (simple query without JOIN)
+  const session = await db
+    .prepare("SELECT user_id, expires_at, revoked_at FROM sessions WHERE token_hash = ?")
+    .get(tokenHash) as { user_id: string; expires_at: string; revoked_at: string | null } | undefined;
 
-  if (!row) return null;
-  if (row.revoked_at) return null;
-  if (new Date(row.expires_at).getTime() < Date.now()) {
+  console.log("[v0] Session lookup result:", session ? { user_id: session.user_id, expires_at: session.expires_at } : null);
+  if (!session) return null;
+  if (session.revoked_at) return null;
+  if (new Date(session.expires_at).getTime() < Date.now()) {
     await deleteSession(sessionToken);
     return null;
   }
 
+  // Get user
+  const user = await db
+    .prepare("SELECT id, email, username, role, tenant_id, must_change_password FROM users WHERE id = ?")
+    .get(session.user_id) as {
+      id: string;
+      email: string;
+      username: string;
+      role: UserRole;
+      tenant_id: string | null;
+      must_change_password: number;
+    } | undefined;
+
+  if (!user) return null;
+
+  // Get tenant if user has one
+  let tenantSlug: string | null = null;
+  let tenantStatus: string | null = null;
+  
+  if (user.tenant_id) {
+    const tenant = await db
+      .prepare("SELECT slug, status FROM tenants WHERE id = ?")
+      .get(user.tenant_id) as { slug: string; status: string } | undefined;
+    
+    if (tenant) {
+      tenantSlug = tenant.slug;
+      tenantStatus = tenant.status;
+    }
+  }
+
   return {
-    id: row.id,
-    email: row.email,
-    username: row.username,
-    role: row.role,
-    tenantId: row.tenant_id,
-    tenantSlug: row.tenant_slug,
-    tenantStatus: row.tenant_status,
-    mustChangePassword: row.must_change_password === 1,
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    role: user.role,
+    tenantId: user.tenant_id,
+    tenantSlug,
+    tenantStatus,
+    mustChangePassword: user.must_change_password === 1,
   } satisfies SessionUser;
 }
 
