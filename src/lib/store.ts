@@ -32,6 +32,7 @@ export type TenantRow = {
   mikrotik_verify_tls: number;
   radius_adapter_secret_enc: string | null;
   radius_adapter_secret_last4: string | null;
+  ui_config_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -46,6 +47,7 @@ export type AccessMode = "voucher_access" | "account_access";
 export type TenantArchitecture = {
   accessMode: AccessMode;
   voucherSourceMode: VoucherSourceMode;
+  dashboardVisibility: TenantDashboardVisibility;
   omada: {
     apiBaseUrl: string;
     omadacId: string;
@@ -68,6 +70,16 @@ export type TenantArchitecture = {
     adapterSecretLast4: string;
   };
 };
+
+export type TenantDashboardSection =
+  | "overview"
+  | "inventorySnapshot"
+  | "subscriberMonitoring"
+  | "architectureSettings"
+  | "planManagement"
+  | "voucherOperations";
+
+export type TenantDashboardVisibility = Record<TenantDashboardSection, boolean>;
 
 export type TenantOmadaOpenApiConfig = {
   apiBaseUrl: string;
@@ -326,6 +338,38 @@ function normalizePortalAuthMode(value: string | null | undefined): PortalAuthMo
 function normalizeAccessMode(value: string | null | undefined): AccessMode {
   if (value === "account_access") return "account_access";
   return "voucher_access";
+}
+
+function defaultTenantDashboardVisibility(): TenantDashboardVisibility {
+  return {
+    overview: true,
+    inventorySnapshot: true,
+    subscriberMonitoring: true,
+    architectureSettings: true,
+    planManagement: true,
+    voucherOperations: true,
+  };
+}
+
+function normalizeTenantDashboardVisibility(
+  value: string | null | undefined,
+): TenantDashboardVisibility {
+  const defaults = defaultTenantDashboardVisibility();
+  if (!value) return defaults;
+
+  try {
+    const parsed = JSON.parse(value) as Partial<Record<TenantDashboardSection, unknown>>;
+    return {
+      overview: parsed.overview !== false,
+      inventorySnapshot: parsed.inventorySnapshot !== false,
+      subscriberMonitoring: parsed.subscriberMonitoring !== false,
+      architectureSettings: parsed.architectureSettings !== false,
+      planManagement: parsed.planManagement !== false,
+      voucherOperations: parsed.voucherOperations !== false,
+    };
+  } catch {
+    return defaults;
+  }
 }
 
 function normalizePhoneForLookup(phone: string) {
@@ -1913,6 +1957,7 @@ export async function getTenantArchitecture(tenantId: string) {
   return {
     accessMode,
     voucherSourceMode,
+    dashboardVisibility: normalizeTenantDashboardVisibility(tenant.ui_config_json),
     omada: {
       apiBaseUrl: tenant.omada_api_base_url ?? "",
       omadacId: tenant.omada_omadac_id ?? "",
@@ -1942,6 +1987,7 @@ export async function setTenantArchitecture(params: {
   accessMode?: AccessMode;
   voucherSourceMode?: VoucherSourceMode;
   portalAuthMode?: PortalAuthMode;
+  dashboardVisibility?: Partial<TenantDashboardVisibility>;
   omada?: {
     apiBaseUrl?: string;
     omadacId?: string;
@@ -2024,6 +2070,10 @@ export async function setTenantArchitecture(params: {
   const mikrotikVerifyTls = params.mikrotik?.verifyTls !== undefined
     ? params.mikrotik.verifyTls
     : tenant.mikrotik_verify_tls !== 0;
+  const dashboardVisibility = {
+    ...normalizeTenantDashboardVisibility(tenant.ui_config_json),
+    ...(params.dashboardVisibility ?? {}),
+  } satisfies TenantDashboardVisibility;
 
   let omadaClientSecretEnc = tenant.omada_client_secret_enc;
   if (params.omada && "clientSecret" in params.omada) {
@@ -2124,6 +2174,7 @@ export async function setTenantArchitecture(params: {
           mikrotik_verify_tls = ?,
           radius_adapter_secret_enc = ?,
           radius_adapter_secret_last4 = ?,
+          ui_config_json = ?,
           updated_at = ?
       WHERE id = ?
     `,
@@ -2146,6 +2197,7 @@ export async function setTenantArchitecture(params: {
       mikrotikVerifyTls ? 1 : 0,
       radiusAdapterSecretEnc,
       radiusAdapterSecretLast4,
+      JSON.stringify(dashboardVisibility),
       now,
       params.tenantId,
     );

@@ -128,6 +128,7 @@ async function initSchema() {
       mikrotik_verify_tls INTEGER NOT NULL DEFAULT 1,
       radius_adapter_secret_enc TEXT,
       radius_adapter_secret_last4 TEXT,
+      ui_config_json TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -394,6 +395,8 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS radius_adapter_secret_enc TEXT;
     ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS radius_adapter_secret_last4 TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS ui_config_json TEXT;
     ALTER TABLE voucher_packages
       ADD COLUMN IF NOT EXISTS max_devices INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE voucher_packages

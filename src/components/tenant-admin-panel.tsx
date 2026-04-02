@@ -80,6 +80,14 @@ type VoucherRow = {
 type ArchitectureConfig = {
   accessMode: "voucher_access" | "account_access";
   voucherSourceMode: "import_csv" | "omada_openapi" | "mikrotik_rest" | "radius_voucher";
+  dashboardVisibility: {
+    overview: boolean;
+    inventorySnapshot: boolean;
+    subscriberMonitoring: boolean;
+    architectureSettings: boolean;
+    planManagement: boolean;
+    voucherOperations: boolean;
+  };
   omada: {
     apiBaseUrl: string;
     omadacId: string;
@@ -102,6 +110,39 @@ type ArchitectureConfig = {
     adapterSecretLast4: string;
   };
 };
+
+const DASHBOARD_VISIBILITY_OPTIONS = [
+  {
+    key: "overview",
+    label: "Overview header",
+    description: "Hero summary, KPI cards, and quick actions.",
+  },
+  {
+    key: "inventorySnapshot",
+    label: "Inventory snapshot",
+    description: "Top-level voucher pool health cards.",
+  },
+  {
+    key: "subscriberMonitoring",
+    label: "Subscriber monitoring",
+    description: "Active subscribers and entitlement cards.",
+  },
+  {
+    key: "architectureSettings",
+    label: "Architecture settings",
+    description: "Advanced infrastructure and adapter config section.",
+  },
+  {
+    key: "planManagement",
+    label: "Plan management",
+    description: "Plan editor cards and desktop plan table.",
+  },
+  {
+    key: "voucherOperations",
+    label: "Voucher operations",
+    description: "Voucher tools, filters, and voucher tables.",
+  },
+] as const;
 
 type SubscriberOverviewRow = {
   subscriberId: string;
@@ -544,6 +585,18 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const canImportCsvVouchers = isCsvMode && !isExternalAccessMode;
   const canDeleteVouchers = (isCsvMode || isRadiusVoucherMode) && !isExternalAccessMode;
   const canReclaimVouchers = isCsvMode && !isExternalAccessMode;
+  const dashboardVisibility = architecture?.dashboardVisibility ?? {
+    overview: true,
+    inventorySnapshot: true,
+    subscriberMonitoring: true,
+    architectureSettings: true,
+    planManagement: true,
+    voucherOperations: true,
+  };
+  const canShowQuickActions =
+    dashboardVisibility.planManagement ||
+    dashboardVisibility.voucherOperations ||
+    dashboardVisibility.architectureSettings;
   const overviewModeLabel = !hasArchitectureConfigured
     ? "Architecture pending"
     : isExternalAccessMode
@@ -570,6 +623,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   }
 
   function jumpToVoucherTools() {
+    if (!canShowQuickActions) return;
     setShowQuickActionsModal(true);
   }
 
@@ -591,6 +645,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
         body: JSON.stringify({
           accessMode: architecture.accessMode,
           voucherSourceMode: architecture.voucherSourceMode,
+          dashboardVisibility: architecture.dashboardVisibility,
           omada: {
             apiBaseUrl: architecture.omada.apiBaseUrl.trim(),
             omadacId: architecture.omada.omadacId.trim(),
@@ -1175,6 +1230,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   return (
     <>
       <div className="grid gap-5 lg:gap-6 min-w-0">
+        {dashboardVisibility.overview ? (
         <section className="panel-surface bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,251,255,0.96)_100%)]">
           <div className="flex min-w-0 flex-col gap-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
             <div className="min-w-0 max-w-3xl">
@@ -1212,7 +1268,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                 <RefreshCw className={["size-3.5", statsLoading || plansLoading || vouchersLoading ? "animate-spin" : ""].join(" ")} />
                 Refresh dashboard
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={jumpToVoucherTools} className="max-w-full">
+              <Button type="button" variant="outline" size="sm" onClick={jumpToVoucherTools} className="max-w-full" disabled={!canShowQuickActions}>
                 <Plus className="size-3.5" />
                 Quick actions
               </Button>
@@ -1227,7 +1283,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             <StatTile label="Assigned vouchers" value={String(voucherTotals.assigned)} />
           </div>
 
-          {(stats?.voucherPool.length ?? 0) > 0 ? (
+          {dashboardVisibility.inventorySnapshot && (stats?.voucherPool.length ?? 0) > 0 ? (
             <div className="mt-6">
               <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -1280,6 +1336,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             </div>
           ) : null}
         </section>
+        ) : null}
 
         {statsError ? (
           <Alert variant="destructive">
@@ -1288,6 +1345,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Alert>
         ) : null}
 
+        {dashboardVisibility.subscriberMonitoring ? (
         <section id="ops-subscribers" className="panel-surface">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
@@ -1348,7 +1406,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
             ))}
           </div>
         </section>
+        ) : null}
 
+        {dashboardVisibility.architectureSettings ? (
         <section id="ops-architecture" className="panel-surface">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
@@ -1426,7 +1486,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Alert>
         ) : null}
         </section>
+        ) : null}
 
+        {dashboardVisibility.planManagement ? (
         <section id="ops-plans" className="panel-surface">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
@@ -1989,7 +2051,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Alert>
         ) : null}
         </section>
+        ) : null}
 
+        {dashboardVisibility.voucherOperations ? (
         <section id="ops-vouchers" className="panel-surface">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
@@ -2250,33 +2314,38 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
           </Alert>
         ) : null}
         </section>
+        ) : null}
       </div>
 
-      {showQuickActionsModal ? (
+      {showQuickActionsModal && canShowQuickActions ? (
         <ModalShell title="Quick actions" onClose={() => setShowQuickActionsModal(false)}>
           <div className="grid gap-2">
+            {dashboardVisibility.planManagement ? (
             <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreatePlanModal(true); }}>
               Add plan
             </Button>
-            {hasArchitectureConfigured && canManuallyCreateVouchers && hasPlans ? (
+            ) : null}
+            {dashboardVisibility.voucherOperations && hasArchitectureConfigured && canManuallyCreateVouchers && hasPlans ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreateVoucherModal(true); }}>
                 Add voucher
               </Button>
             ) : null}
-            {hasArchitectureConfigured && canBatchGenerateVouchers ? (
+            {dashboardVisibility.voucherOperations && hasArchitectureConfigured && canBatchGenerateVouchers ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowGenerateVoucherModal(true); }}>
                 Batch generate vouchers
               </Button>
             ) : null}
-            {hasArchitectureConfigured && canImportCsvVouchers ? (
+            {dashboardVisibility.voucherOperations && hasArchitectureConfigured && canImportCsvVouchers ? (
               <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowImportVoucherModal(true); }}>
                 Import voucher CSV
               </Button>
             ) : null}
+            {dashboardVisibility.architectureSettings ? (
             <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowArchitectureModal(true); }}>
               <Settings className="size-4" />
               Configure architecture
             </Button>
+            ) : null}
           </div>
         </ModalShell>
       ) : null}
@@ -2372,6 +2441,45 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
                     Voucher source is disabled in account-access mode.
                   </p>
                 ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Dashboard visibility</p>
+              <p className="mt-2 text-xs text-slate-600">
+                Hide sections that are not relevant for this tenant so their admin workspace stays focused.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {DASHBOARD_VISIBILITY_OPTIONS.map((option) => (
+                  <label
+                    key={option.key}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                  >
+                    <span className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={architecture.dashboardVisibility[option.key]}
+                        onChange={(event) =>
+                          setArchitecture((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  dashboardVisibility: {
+                                    ...prev.dashboardVisibility,
+                                    [option.key]: event.target.checked,
+                                  },
+                                }
+                              : prev,
+                          )
+                        }
+                      />
+                      <span>
+                        <span className="block font-medium text-slate-900">{option.label}</span>
+                        <span className="mt-1 block text-xs text-slate-500">{option.description}</span>
+                      </span>
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 

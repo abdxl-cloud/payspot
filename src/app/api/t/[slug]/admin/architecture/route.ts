@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getSessionUserFromRequest } from "@/lib/auth";
 import {
   type AccessMode,
+  type TenantDashboardVisibility,
   getTenantArchitecture,
   getTenantBySlug,
   setTenantArchitecture,
@@ -27,6 +28,16 @@ const schema = z.object({
   voucherSourceMode: z.enum(["import_csv", "omada_openapi", "mikrotik_rest", "radius_voucher"]).optional(),
   portalAuthMode: z
     .enum(["omada_builtin", "external_radius_portal", "external_radius_voucher"])
+    .optional(),
+  dashboardVisibility: z
+    .object({
+      overview: z.boolean().optional(),
+      inventorySnapshot: z.boolean().optional(),
+      subscriberMonitoring: z.boolean().optional(),
+      architectureSettings: z.boolean().optional(),
+      planManagement: z.boolean().optional(),
+      voucherOperations: z.boolean().optional(),
+    })
     .optional(),
   omada: z
     .object({
@@ -135,6 +146,7 @@ export async function PATCH(request: Request, { params }: Props) {
       accessMode: parsed.data.accessMode as AccessMode | undefined,
       voucherSourceMode: parsed.data.voucherSourceMode as VoucherSourceMode | undefined,
       portalAuthMode: parsed.data.portalAuthMode as PortalAuthMode | undefined,
+      dashboardVisibility: parsed.data.dashboardVisibility as Partial<TenantDashboardVisibility> | undefined,
       omada: omadaPatch,
       mikrotik: mikrotikPatch,
       radius: radiusPatch,
