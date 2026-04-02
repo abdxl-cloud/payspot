@@ -93,17 +93,53 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 interface StatCardProps {
-  label: string;
+  title?: string;
+  label?: string;
   value: string | number;
-  icon?: React.ReactNode;
-  trend?: {
+  icon?: React.ComponentType<{ className?: string }> | React.ReactNode;
+  trend?: string | {
     value: number;
     isPositive: boolean;
   };
   className?: string;
 }
 
-function StatCard({ label, value, icon, trend, className }: StatCardProps) {
+function StatCard({ title, label, value, icon: Icon, trend, className }: StatCardProps) {
+  const displayLabel = title || label || "";
+  
+  // Handle icon - can be a component or a ReactNode
+  const renderIcon = () => {
+    if (!Icon) return null;
+    // Check if it's a component (function) or already rendered JSX
+    if (typeof Icon === 'function') {
+      const IconComponent = Icon as React.ComponentType<{ className?: string }>;
+      return <IconComponent className="h-4 w-4 sm:h-5 sm:w-5" />;
+    }
+    return Icon;
+  };
+  
+  // Handle trend - can be a string or an object
+  const renderTrend = () => {
+    if (!trend) return null;
+    if (typeof trend === 'string') {
+      return (
+        <span className="text-xs text-muted-foreground sm:text-sm">
+          {trend}
+        </span>
+      );
+    }
+    return (
+      <span
+        className={cn(
+          "mb-1 text-xs font-medium sm:text-sm",
+          trend.isPositive ? "text-success" : "text-destructive"
+        )}
+      >
+        {trend.isPositive ? "+" : ""}{trend.value}%
+      </span>
+    );
+  };
+  
   return (
     <div
       data-slot="stat-card"
@@ -115,26 +151,17 @@ function StatCard({ label, value, icon, trend, className }: StatCardProps) {
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground sm:text-sm">
-          {label}
+          {displayLabel}
         </span>
-        {icon && (
-          <span className="text-muted-foreground/60">{icon}</span>
+        {Icon && (
+          <span className="text-muted-foreground/60">{renderIcon()}</span>
         )}
       </div>
       <div className="flex items-end gap-2">
         <span className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           {value}
         </span>
-        {trend && (
-          <span
-            className={cn(
-              "mb-1 text-xs font-medium sm:text-sm",
-              trend.isPositive ? "text-success" : "text-destructive"
-            )}
-          >
-            {trend.isPositive ? "+" : ""}{trend.value}%
-          </span>
-        )}
+        {renderTrend()}
       </div>
     </div>
   )
