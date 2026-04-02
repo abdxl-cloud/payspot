@@ -7,20 +7,32 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  CreditCard,
+  FileText,
+  Home,
+  LayoutDashboard,
+  Menu,
+  Package,
   Plus,
   RefreshCw,
   Save,
   Settings,
+  Ticket,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, StatCard } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle } from "@/components/ui/bottom-sheet";
 import { readJsonResponse } from "@/lib/http";
+import { useTenantCapabilities, type TenantConfig } from "@/hooks/use-tenant-capabilities";
 
+// Types
 type VoucherStat = {
   code: string;
   name: string;
@@ -132,10 +144,13 @@ type Props = {
   tenantSlug: string;
 };
 
+type NavTab = "overview" | "plans" | "vouchers" | "subscribers" | "settings";
+
 const PAGE_SIZE = 20;
 const PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH = 6;
 const PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH = 24;
 
+// Utility functions
 function money(value: number) {
   return `NGN ${Math.round(value || 0).toLocaleString()}`;
 }
@@ -259,16 +274,31 @@ function parseRadiusVoucherCodeLengthInput(value: string) {
   return parsed;
 }
 
+// Navigation tabs configuration
+const NAV_TABS: Array<{ id: NavTab; label: string; icon: React.ElementType }> = [
+  { id: "overview", label: "Overview", icon: Home },
+  { id: "plans", label: "Plans", icon: Package },
+  { id: "vouchers", label: "Vouchers", icon: Ticket },
+  { id: "subscribers", label: "Subscribers", icon: Users },
+  { id: "settings", label: "Settings", icon: Settings },
+];
+
 export function TenantAdminPanel({ tenantSlug }: Props) {
+  const [activeTab, setActiveTab] = useState<NavTab>("overview");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Stats state
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
+  // Plans state
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [plansError, setPlansError] = useState<string | null>(null);
   const [plansLoading, setPlansLoading] = useState(false);
   const [planNotice, setPlanNotice] = useState<string | null>(null);
 
+  // Architecture state
   const [architecture, setArchitecture] = useState<ArchitectureConfig | null>(null);
   const [architectureError, setArchitectureError] = useState<string | null>(null);
   const [architectureLoading, setArchitectureLoading] = useState(false);
@@ -288,6 +318,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [mikrotikTestError, setMikrotikTestError] = useState<string | null>(null);
   const [mikrotikPassword, setMikrotikPassword] = useState("");
 
+  // Vouchers state
   const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
   const [vouchersError, setVouchersError] = useState<string | null>(null);
   const [vouchersLoading, setVouchersLoading] = useState(false);
@@ -300,6 +331,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [voucherTotalPages, setVoucherTotalPages] = useState(1);
   const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
 
+  // New plan form state
   const [newPlanName, setNewPlanName] = useState("");
   const [newPlanDuration, setNewPlanDuration] = useState("");
   const [newPlanPrice, setNewPlanPrice] = useState("");
@@ -313,6 +345,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [newPlanRadiusVoucherCharacterSet, setNewPlanRadiusVoucherCharacterSet] = useState<PlanVoucherCharacterSet>("legacy");
   const [creatingPlan, setCreatingPlan] = useState(false);
 
+  // Plan drafts for inline editing
   const [planDrafts, setPlanDrafts] = useState<
     Record<string, {
       name: string;
@@ -333,6 +366,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [savingPlanIds, setSavingPlanIds] = useState<Record<string, boolean>>({});
   const [deletingPlanIds, setDeletingPlanIds] = useState<Record<string, boolean>>({});
 
+  // Voucher creation state
   const [newVoucherCode, setNewVoucherCode] = useState("");
   const [newVoucherPackageId, setNewVoucherPackageId] = useState("");
   const [creatingVoucher, setCreatingVoucher] = useState(false);
@@ -342,20 +376,27 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
   const [generateCharacterSet, setGenerateCharacterSet] = useState("alnum");
   const [generatingVouchers, setGeneratingVouchers] = useState(false);
 
+  // CSV import state
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [importPackageCode, setImportPackageCode] = useState("");
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importNotice, setImportNotice] = useState<string | null>(null);
-  const [showArchitectureModal, setShowArchitectureModal] = useState(false);
-  const [showCreatePlanModal, setShowCreatePlanModal] = useState(false);
-  const [showCreateVoucherModal, setShowCreateVoucherModal] = useState(false);
-  const [showGenerateVoucherModal, setShowGenerateVoucherModal] = useState(false);
-  const [showImportVoucherModal, setShowImportVoucherModal] = useState(false);
-  const [showQuickActionsModal, setShowQuickActionsModal] = useState(false);
+
+  // Modal states
+  const [showArchitectureSheet, setShowArchitectureSheet] = useState(false);
+  const [showCreatePlanSheet, setShowCreatePlanSheet] = useState(false);
+  const [showCreateVoucherSheet, setShowCreateVoucherSheet] = useState(false);
+  const [showGenerateVoucherSheet, setShowGenerateVoucherSheet] = useState(false);
+  const [showImportVoucherSheet, setShowImportVoucherSheet] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+
+  // Subscribers state
   const [subscribers, setSubscribers] = useState<SubscriberOverviewRow[]>([]);
   const [subscribersLoading, setSubscribersLoading] = useState(false);
   const [subscribersError, setSubscribersError] = useState<string | null>(null);
+
+  // Computed values
   const parsedNewPlanDuration = useMemo(
     () => parseDurationToMinutes(newPlanDuration),
     [newPlanDuration],
@@ -369,6 +410,21 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     [newPlanDataLimitMb],
   );
 
+  // Use tenant capabilities hook
+  const tenantConfig: TenantConfig | null = architecture ? {
+    accessMode: architecture.accessMode,
+    voucherSourceMode: architecture.voucherSourceMode,
+    hasPlans: plans.length > 0,
+    hasVouchers: vouchers.length > 0,
+    hasSubscribers: subscribers.length > 0,
+    omadaConfigured: !!(architecture.omada.apiBaseUrl && architecture.omada.hasClientSecret),
+    mikrotikConfigured: !!(architecture.mikrotik.baseUrl && architecture.mikrotik.hasPassword),
+    radiusConfigured: architecture.radius.hasAdapterSecret,
+  } : null;
+
+  const capabilities = useTenantCapabilities(tenantConfig);
+
+  // Data loading functions
   const loadStats = useCallback(async () => {
     setStatsError(null);
     setStatsLoading(true);
@@ -466,6 +522,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     }
   }, [tenantSlug, voucherPage, voucherPlan, voucherQuery, voucherStatus]);
 
+  // Effects
   useEffect(() => {
     void loadStats();
     void loadPlans();
@@ -518,6 +575,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     if (!newVoucherPackageId && plans.length > 0) setNewVoucherPackageId(plans[0].id);
   }, [plans, newVoucherPackageId]);
 
+  // Computed values for stats
   const voucherTotals = useMemo(() => {
     return (stats?.voucherPool ?? []).reduce(
       (acc, item) => {
@@ -530,47 +588,9 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
     );
   }, [stats]);
 
-  const voucherSourceMode = architecture?.voucherSourceMode ?? null;
-  const isCsvMode = voucherSourceMode === "import_csv";
-  const isOmadaMode = voucherSourceMode === "omada_openapi";
-  const isMikrotikMode = voucherSourceMode === "mikrotik_rest";
-  const isRadiusVoucherMode = voucherSourceMode === "radius_voucher";
-  const isApiAutomationMode = isOmadaMode || isMikrotikMode;
-  const isExternalAccessMode = architecture?.accessMode === "account_access";
-  const hasArchitectureConfigured = !!architecture;
-  const hasPlans = plans.length > 0;
-  const canManuallyCreateVouchers = (isCsvMode || isRadiusVoucherMode) && !isExternalAccessMode;
-  const canBatchGenerateVouchers = (isCsvMode || isRadiusVoucherMode) && hasPlans && !isExternalAccessMode;
-  const canImportCsvVouchers = isCsvMode && !isExternalAccessMode;
-  const canDeleteVouchers = (isCsvMode || isRadiusVoucherMode) && !isExternalAccessMode;
-  const canReclaimVouchers = isCsvMode && !isExternalAccessMode;
-  const overviewModeLabel = !hasArchitectureConfigured
-    ? "Architecture pending"
-    : isExternalAccessMode
-      ? "Account access"
-      : "Voucher access";
-  const overviewFlowLabel = !hasArchitectureConfigured
-    ? "Choose a voucher source"
-    : isExternalAccessMode
-      ? "External RADIUS flow"
-      : isCsvMode
-        ? "CSV inventory"
-        : isOmadaMode
-          ? "Omada automation"
-          : isMikrotikMode
-            ? "MikroTik automation"
-            : "RADIUS voucher mode";
-  const overviewPlanLabel = hasPlans ? `${plans.length} plan${plans.length === 1 ? "" : "s"} ready` : "No plans yet";
-  const overviewSubscriberLabel = subscribersLoading
-    ? "Refreshing subscribers"
-    : `${subscribers.length} subscriber${subscribers.length === 1 ? "" : "s"} visible`;
-
+  // Action handlers
   async function refreshAll() {
     await Promise.all([loadStats(), loadPlans(), loadVouchers(), loadArchitecture(), loadSubscribers()]);
-  }
-
-  function jumpToVoucherTools() {
-    setShowQuickActionsModal(true);
   }
 
   async function saveArchitecture(event: React.FormEvent) {
@@ -617,7 +637,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setOmadaClientSecret("");
       setOmadaHotspotOperatorPassword("");
       setMikrotikPassword("");
-      setShowArchitectureModal(false);
+      setShowArchitectureSheet(false);
     } catch (error) {
       setArchitectureError(
         error instanceof Error ? error.message : "Unable to save architecture settings.",
@@ -878,7 +898,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       setNewPlanRadiusVoucherCodePrefix("PS");
       setNewPlanRadiusVoucherCodeLength("8");
       setNewPlanRadiusVoucherCharacterSet("legacy");
-      setShowCreatePlanModal(false);
+      setShowCreatePlanSheet(false);
       await Promise.all([loadPlans(), loadStats()]);
     } catch (error) {
       setPlansError(error instanceof Error ? error.message : "Unable to create plan.");
@@ -988,6 +1008,7 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       const data = await readJsonResponse<{ error?: string }>(response);
       if (!response.ok) throw new Error(data?.error || "Unable to save plan.");
       setPlanNotice(`Saved ${draft.name}.`);
+      setEditingPlanId(null);
       await Promise.all([loadPlans(), loadStats(), loadVouchers()]);
     } catch (error) {
       setPlansError(error instanceof Error ? error.message : "Unable to save plan.");
@@ -1042,8 +1063,8 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
       if (!response.ok) throw new Error(data?.error || "Unable to create voucher.");
       setVoucherNotice("Voucher created.");
       setNewVoucherCode("");
-      setShowCreateVoucherModal(false);
-      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
+      setShowCreateVoucherSheet(false);
+      await Promise.all([loadVouchers(), loadStats()]);
     } catch (error) {
       setVouchersError(error instanceof Error ? error.message : "Unable to create voucher.");
     } finally {
@@ -1053,1841 +1074,1334 @@ export function TenantAdminPanel({ tenantSlug }: Props) {
 
   async function generateVouchers(event: React.FormEvent) {
     event.preventDefault();
-    if (!newVoucherPackageId) {
-      setVouchersError("Plan is required.");
-      return;
-    }
-
     const count = Number.parseInt(generateCount, 10);
-    if (!Number.isFinite(count) || count <= 0) {
-      setVouchersError("Provide a valid quantity.");
-      return;
-    }
-
     const codeLength = Number.parseInt(generateCodeLength, 10);
-    if (!Number.isFinite(codeLength) || codeLength <= 0) {
-      setVouchersError("Provide a valid code length.");
+    if (!Number.isFinite(count) || count < 1 || count > 500) {
+      setVouchersError("Count must be 1-500.");
       return;
     }
-
+    if (!Number.isFinite(codeLength) || codeLength < 6 || codeLength > 32) {
+      setVouchersError("Code length must be 6-32.");
+      return;
+    }
+    if (!newVoucherPackageId) {
+      setVouchersError("Select a plan first.");
+      return;
+    }
     setGeneratingVouchers(true);
     setVouchersError(null);
     setVoucherNotice(null);
     try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           packageId: newVoucherPackageId,
-          generateCount: count,
+          count,
           prefix: generatePrefix.trim() || undefined,
           codeLength,
           characterSet: generateCharacterSet,
         }),
       });
       const data = await readJsonResponse<{ error?: string; created?: number }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to auto-generate vouchers.");
-      setVoucherNotice(`Generated ${data?.created ?? 0} voucher(s).`);
-      setShowGenerateVoucherModal(false);
-      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
+      if (!response.ok) throw new Error(data?.error || "Unable to generate vouchers.");
+      setVoucherNotice(`Generated ${data?.created ?? count} vouchers.`);
+      setShowGenerateVoucherSheet(false);
+      await Promise.all([loadVouchers(), loadStats()]);
     } catch (error) {
-      setVouchersError(error instanceof Error ? error.message : "Unable to auto-generate vouchers.");
+      setVouchersError(error instanceof Error ? error.message : "Unable to generate vouchers.");
     } finally {
       setGeneratingVouchers(false);
-    }
-  }
-
-  async function reclaimSelected() {
-    if (selectedVoucherIds.length === 0) return;
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voucherIds: selectedVoucherIds, status: "UNUSED" }),
-      });
-      const data = await readJsonResponse<{ error?: string; updated?: number }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to reclaim vouchers.");
-      setVoucherNotice(`Reclaimed ${data?.updated ?? 0} voucher(s).`);
-      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
-    } catch (error) {
-      setVouchersError(error instanceof Error ? error.message : "Unable to reclaim vouchers.");
-    }
-  }
-
-  async function deleteSelected() {
-    if (selectedVoucherIds.length === 0) return;
-    const ok = window.confirm(`Delete ${selectedVoucherIds.length} selected voucher(s)?`);
-    if (!ok) return;
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voucherIds: selectedVoucherIds }),
-      });
-      const data = await readJsonResponse<{ error?: string; deleted?: number }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to delete vouchers.");
-      setVoucherNotice(`Deleted ${data?.deleted ?? 0} voucher(s).`);
-      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
-    } catch (error) {
-      setVouchersError(error instanceof Error ? error.message : "Unable to delete vouchers.");
     }
   }
 
   async function importCsv(event: React.FormEvent) {
     event.preventDefault();
     if (!csvFile) {
-      setImportError("Choose a CSV file.");
+      setImportError("Select a CSV file first.");
+      return;
+    }
+    if (!importPackageCode.trim()) {
+      setImportError("Package code is required.");
       return;
     }
     setImportLoading(true);
     setImportError(null);
     setImportNotice(null);
     try {
-      const form = new FormData();
-      form.append("file", csvFile);
-      if (importPackageCode.trim()) form.append("packageCode", importPackageCode.trim());
+      const formData = new FormData();
+      formData.append("file", csvFile);
+      formData.append("packageCode", importPackageCode.trim());
+
       const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers/import`, {
         method: "POST",
-        body: form,
+        body: formData,
       });
-      const data = await readJsonResponse<{
-        error?: string;
-        imported?: number;
-        duplicates?: number;
-        skipped?: number;
-        packagesCreated?: number;
-      }>(response);
-      if (!response.ok) throw new Error(data?.error || "Import failed.");
-      setImportNotice(
-        `Imported ${data?.imported ?? 0} | Duplicates ${data?.duplicates ?? 0} | Skipped ${data?.skipped ?? 0} | Plans created ${data?.packagesCreated ?? 0}`,
-      );
+      const data = await readJsonResponse<{ error?: string; imported?: number; skipped?: number }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to import vouchers.");
+      setImportNotice(`Imported ${data?.imported ?? 0} vouchers${data?.skipped ? `, skipped ${data.skipped}` : ""}.`);
       setCsvFile(null);
       setImportPackageCode("");
-      setShowImportVoucherModal(false);
-      await refreshAll();
+      setShowImportVoucherSheet(false);
+      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Import failed.");
+      setImportError(error instanceof Error ? error.message : "Unable to import vouchers.");
     } finally {
       setImportLoading(false);
     }
   }
 
+  async function deleteSelectedVouchers() {
+    if (selectedVoucherIds.length === 0) return;
+    const ok = window.confirm(`Delete ${selectedVoucherIds.length} selected voucher(s)?`);
+    if (!ok) return;
+
+    setVouchersError(null);
+    setVoucherNotice(null);
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedVoucherIds }),
+      });
+      const data = await readJsonResponse<{ error?: string; deleted?: number }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to delete vouchers.");
+      setVoucherNotice(`Deleted ${data?.deleted ?? selectedVoucherIds.length} voucher(s).`);
+      setSelectedVoucherIds([]);
+      await Promise.all([loadVouchers(), loadStats()]);
+    } catch (error) {
+      setVouchersError(error instanceof Error ? error.message : "Unable to delete vouchers.");
+    }
+  }
+
+  async function reclaimSelectedVouchers() {
+    if (selectedVoucherIds.length === 0) return;
+    const ok = window.confirm(`Reclaim ${selectedVoucherIds.length} selected voucher(s) back to unused?`);
+    if (!ok) return;
+
+    setVouchersError(null);
+    setVoucherNotice(null);
+    try {
+      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers/reclaim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedVoucherIds }),
+      });
+      const data = await readJsonResponse<{ error?: string; reclaimed?: number }>(response);
+      if (!response.ok) throw new Error(data?.error || "Unable to reclaim vouchers.");
+      setVoucherNotice(`Reclaimed ${data?.reclaimed ?? selectedVoucherIds.length} voucher(s).`);
+      setSelectedVoucherIds([]);
+      await Promise.all([loadVouchers(), loadStats()]);
+    } catch (error) {
+      setVouchersError(error instanceof Error ? error.message : "Unable to reclaim vouchers.");
+    }
+  }
+
+  // Get visible tabs based on capabilities
+  const visibleTabs = NAV_TABS.filter((tab) => {
+    if (tab.id === "vouchers") return capabilities.showVoucherSection;
+    if (tab.id === "subscribers") return capabilities.showSubscriberSection;
+    return true;
+  });
+
   return (
-    <>
-      <div className="grid gap-5 lg:gap-6 min-w-0">
-        <section className="panel-surface bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,251,255,0.96)_100%)]">
-          <div className="flex min-w-0 flex-col gap-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
-            <div className="min-w-0 max-w-3xl">
-              <p className="section-kicker">Overview</p>
-              <h1 className="mt-2 font-display text-[clamp(2rem,3vw,3rem)] font-semibold tracking-tight text-slate-950">
-                Operations dashboard
-              </h1>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
-                Track voucher inventory, monitor subscribers, and manage plan availability from one desktop workspace.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-                  Mode: <span className="font-semibold text-slate-950">{overviewModeLabel}</span>
-                </span>
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-                  Flow: <span className="font-semibold text-slate-950">{overviewFlowLabel}</span>
-                </span>
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-                  Plans: <span className="font-semibold text-slate-950">{overviewPlanLabel}</span>
-                </span>
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-                  Subscribers: <span className="font-semibold text-slate-950">{overviewSubscriberLabel}</span>
-                </span>
-              </div>
-            </div>
-            <div className="flex w-full flex-wrap items-center gap-2 rounded-[22px] border border-slate-200/90 bg-white/90 p-2 shadow-[var(--shadow-sm)] 2xl:ml-auto 2xl:w-auto">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={refreshAll}
-                disabled={statsLoading || plansLoading || vouchersLoading}
-                className="max-w-full"
+    <div className="min-h-screen bg-background">
+      {/* Mobile Header */}
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card px-4 lg:hidden">
+        <h1 className="text-lg font-semibold text-foreground">Admin Dashboard</h1>
+        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(true)}>
+          <Menu className="h-5 w-5" />
+        </Button>
+      </header>
+
+      {/* Mobile Menu Sheet */}
+      <BottomSheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle>Navigation</BottomSheetTitle>
+          </BottomSheetHeader>
+          <nav className="mt-4 space-y-1">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setMobileMenuOpen(false);
+                }}
+                className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                  activeTab === tab.id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
               >
-                <RefreshCw className={["size-3.5", statsLoading || plansLoading || vouchersLoading ? "animate-spin" : ""].join(" ")} />
-                Refresh dashboard
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={jumpToVoucherTools} className="max-w-full">
-                <Plus className="size-3.5" />
-                Quick actions
-              </Button>
+                <tab.icon className="h-5 w-5" />
+                <span className="font-medium">{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="mt-6 border-t border-border pt-4">
+            <Link
+              href={`/t/${tenantSlug}`}
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-muted-foreground hover:bg-muted"
+            >
+              <Home className="h-5 w-5" />
+              <span className="font-medium">Back to Portal</span>
+            </Link>
+          </div>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      <div className="lg:flex">
+        {/* Desktop Sidebar */}
+        <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
+          <div className="flex flex-1 flex-col border-r border-border bg-card">
+            <div className="flex h-16 items-center gap-3 border-b border-border px-6">
+              <LayoutDashboard className="h-6 w-6 text-primary" />
+              <span className="text-lg font-semibold text-foreground">Admin</span>
             </div>
-          </div>
-
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-            <StatTile label="Revenue" value={money(stats?.transactions.revenueNgn ?? 0)} />
-            <StatTile label="Successful payments" value={String(stats?.transactions.success ?? 0)} />
-            <StatTile label="Total vouchers" value={String(voucherTotals.total)} />
-            <StatTile label="Unused vouchers" value={String(voucherTotals.unused)} />
-            <StatTile label="Assigned vouchers" value={String(voucherTotals.assigned)} />
-          </div>
-
-          {(stats?.voucherPool.length ?? 0) > 0 ? (
-            <div className="mt-6">
-              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-slate-950">{isRadiusVoucherMode ? "Voucher health" : "Pool health"}</p>
-                  <p className="text-sm text-slate-600">
-                    {isRadiusVoucherMode
-                      ? "Manual and payment-issued RADIUS vouchers grouped by plan."
-                      : "Top plan pools with remaining voucher availability."}
-                  </p>
-                </div>
-                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">
-                  {isRadiusVoucherMode ? "Voucher snapshot" : "Inventory snapshot"}
-                </p>
-              </div>
-              <div className="grid gap-4 xl:grid-cols-3">
-              {stats?.voucherPool.slice(0, 6).map((item) => (
-                <div key={item.code} className="rounded-[24px] border border-slate-200/90 bg-white px-5 py-4 shadow-[var(--shadow-sm)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-lg font-semibold leading-tight text-slate-950">{item.name}</p>
-                      <p className="mt-1 text-sm text-slate-500">{item.unused}/{item.total} unused</p>
-                    </div>
-                    <span className={[
-                      "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
-                      item.percentageRemaining > 30
-                        ? "bg-emerald-100 text-emerald-700"
-                        : item.percentageRemaining > 10
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-rose-100 text-rose-700",
-                    ].join(" ")}>
-                      {item.percentageRemaining.toFixed(0)}%
-                    </span>
-                  </div>
-                  <div className="mt-4 h-2 rounded-full bg-slate-100">
-                    <div
-                      className={[
-                        "h-2 rounded-full transition-all duration-500",
-                        item.percentageRemaining > 30
-                          ? "bg-emerald-500"
-                          : item.percentageRemaining > 10
-                            ? "bg-amber-500"
-                            : "bg-rose-500",
-                      ].join(" ")}
-                      style={{ width: `${Math.min(100, Math.max(0, item.percentageRemaining))}%` }}
-                    />
-                  </div>
-                </div>
+            <nav className="flex-1 space-y-1 px-3 py-4">
+              {visibleTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                    activeTab === tab.id
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <tab.icon className="h-5 w-5" />
+                  <span className="font-medium">{tab.label}</span>
+                </button>
               ))}
-              </div>
-            </div>
-          ) : null}
-        </section>
-
-        {statsError ? (
-          <Alert variant="destructive">
-            <AlertTitle>Stats failed</AlertTitle>
-            <AlertDescription>{statsError}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <section id="ops-subscribers" className="panel-surface">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="section-kicker">Live</p>
-              <h2 className="mt-1 section-title">Subscriber monitoring</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Monitor active plans, live sessions, and policy limits for account-based access.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">
-                {subscribers.length} visible
-              </span>
-              <Button type="button" variant="outline" size="sm" onClick={loadSubscribers} disabled={subscribersLoading}>
-                {subscribersLoading ? "Refreshing..." : "Refresh subscribers"}
-              </Button>
+            </nav>
+            <div className="border-t border-border p-3">
+              <Link
+                href={`/t/${tenantSlug}`}
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-muted-foreground hover:bg-muted"
+              >
+                <Home className="h-5 w-5" />
+                <span className="font-medium">Back to Portal</span>
+              </Link>
             </div>
           </div>
-          {subscribersError ? (
-            <Alert variant="destructive" className="mt-4">
-              <AlertTitle>Subscribers failed</AlertTitle>
-              <AlertDescription>{subscribersError}</AlertDescription>
-            </Alert>
-          ) : null}
-          <div className="mt-5 space-y-3">
-            {subscribers.length === 0 && !subscribersLoading ? (
-              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50/85 px-5 py-6">
-                <p className="text-base font-semibold text-slate-900">No subscribers yet</p>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                  Subscriber records will appear here after customers start using account-based access and active sessions are detected.
-                </p>
-              </div>
-            ) : null}
-            {subscribers.map((row) => (
-              <div key={row.subscriberId} className="rounded-[24px] border border-slate-200/90 bg-white px-5 py-4 shadow-[var(--shadow-sm)] transition-[box-shadow] duration-200 hover:shadow-[var(--shadow-md)]">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-semibold text-slate-900">{row.fullName || row.email}</p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {row.email}{row.phone ? ` | ${row.phone}` : ""}
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 lg:pl-64">
+          <div className="px-4 py-6 lg:px-8 lg:py-8">
+            {/* Overview Tab */}
+            {activeTab === "overview" && (
+              <div className="space-y-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h1 className="text-2xl font-bold text-foreground lg:text-3xl">Overview</h1>
+                    <p className="mt-1 text-muted-foreground">
+                      {capabilities.modeLabel} - {capabilities.flowLabel}
                     </p>
                   </div>
-                  <Badge className={row.activeSessions > 0 ? "shrink-0 bg-emerald-600 text-white" : "shrink-0 bg-slate-400 text-white"}>
-                    {row.activeSessions} session{row.activeSessions !== 1 ? "s" : ""}
-                  </Badge>
+                  <Button variant="outline" onClick={refreshAll} disabled={statsLoading}>
+                    <RefreshCw className={`mr-2 h-4 w-4 ${statsLoading ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
                 </div>
-                {row.entitlement ? (
-                  <div className="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                    <span><span className="font-medium text-slate-700">Plan:</span> {row.entitlement.planName || row.entitlement.planCode || "-"}</span>
-                    <span><span className="font-medium text-slate-700">Ends:</span> {dt(row.entitlement.endsAt)}</span>
-                    <span><span className="font-medium text-slate-700">Devices:</span> {row.entitlement.maxDevices ?? "Unlimited"}</span>
-                    <span><span className="font-medium text-slate-700">Profile:</span> {row.entitlement.bandwidthProfile || "-"}</span>
-                  </div>
-                ) : (
-                  <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">No active entitlement.</p>
+
+                {/* Stats Grid */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <StatCard
+                    title="Total Revenue"
+                    value={money(stats?.transactions.revenueNgn ?? 0)}
+                    icon={CreditCard}
+                    trend={stats?.transactions.success ? `${stats.transactions.success} successful` : undefined}
+                  />
+                  <StatCard
+                    title="Transactions"
+                    value={stats?.transactions.total ?? 0}
+                    icon={FileText}
+                    trend={stats?.transactions.pending ? `${stats.transactions.pending} pending` : undefined}
+                  />
+                  {capabilities.showVoucherSection && (
+                    <StatCard
+                      title="Vouchers Available"
+                      value={voucherTotals.unused}
+                      icon={Ticket}
+                      trend={`${voucherTotals.assigned} assigned`}
+                    />
+                  )}
+                  {capabilities.showSubscriberSection && (
+                    <StatCard
+                      title="Subscribers"
+                      value={subscribers.length}
+                      icon={Users}
+                      trend={subscribersLoading ? "Refreshing..." : undefined}
+                    />
+                  )}
+                  <StatCard
+                    title="Active Plans"
+                    value={plans.filter((p) => p.active === 1).length}
+                    icon={Package}
+                    trend={`${plans.length} total plans`}
+                  />
+                </div>
+
+                {/* Quick Actions */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Quick Actions</CardTitle>
+                    <CardDescription>Common tasks for your portal</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-3">
+                      <Button variant="outline" onClick={() => setActiveTab("plans")}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Plan
+                      </Button>
+                      {capabilities.canManuallyCreateVouchers && plans.length > 0 && (
+                        <Button variant="outline" onClick={() => setShowCreateVoucherSheet(true)}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Voucher
+                        </Button>
+                      )}
+                      {capabilities.canBatchGenerateVouchers && (
+                        <Button variant="outline" onClick={() => setShowGenerateVoucherSheet(true)}>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Generate Vouchers
+                        </Button>
+                      )}
+                      <Button variant="outline" onClick={() => setShowArchitectureSheet(true)}>
+                        <Settings className="mr-2 h-4 w-4" />
+                        Settings
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Errors */}
+                {statsError && (
+                  <Alert variant="destructive">
+                    <AlertTitle>Error loading stats</AlertTitle>
+                    <AlertDescription>{statsError}</AlertDescription>
+                  </Alert>
                 )}
               </div>
-            ))}
-          </div>
-        </section>
+            )}
 
-        <section id="ops-architecture" className="panel-surface">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="section-kicker">Config</p>
-              <h2 className="mt-1 section-title">Architecture settings</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Keep advanced config out of the main screen. Open the editor only when needed.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">
-                {hasArchitectureConfigured ? "Configured" : "Not configured"}
-              </span>
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowArchitectureModal(true)}>
-                <Settings className="size-4" />
-                Configure architecture
-              </Button>
-            </div>
-          </div>
-
-          {architecture ? (
-            <div className="mt-5 rounded-[24px] border border-slate-200/90 bg-slate-50/90 px-5 py-4">
-              <div className="flex flex-wrap gap-2 text-sm text-slate-700">
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">
-                  Access mode: <span className="font-semibold text-slate-900">{architecture.accessMode}</span>
-                </span>
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">
-                  Voucher source: <span className="font-semibold text-slate-900">{architecture.accessMode === "account_access" ? "n/a" : architecture.voucherSourceMode}</span>
-                </span>
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                Keep credentials, adapter settings, and external access controls inside the modal so the main admin view stays readable.
-              </p>
-            </div>
-          ) : null}
-
-          {architectureLoading ? (
-            <p className="mt-4 text-sm text-slate-600">Loading architecture settings...</p>
-          ) : null}
-
-        {architectureError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Architecture error</AlertTitle>
-            <AlertDescription>{architectureError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {architectureNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>Architecture updated</AlertTitle>
-            <AlertDescription>{architectureNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        {omadaTestError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Omada test failed</AlertTitle>
-            <AlertDescription>{omadaTestError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {omadaTestNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>Omada test passed</AlertTitle>
-            <AlertDescription>{omadaTestNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        {mikrotikTestError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>MikroTik test failed</AlertTitle>
-            <AlertDescription>{mikrotikTestError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {mikrotikTestNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>MikroTik test passed</AlertTitle>
-            <AlertDescription>{mikrotikTestNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        </section>
-
-        <section id="ops-plans" className="panel-surface">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="section-kicker">Plans</p>
-            <h2 className="mt-1 section-title">Plan management</h2>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              Keep plan values readable on desktop: code, pricing, limits, availability, and inventory stay grouped instead of squeezed into tiny cells.
-            </p>
-          </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => setShowCreatePlanModal(true)}>
-            Add plan
-          </Button>
-        </div>
-
-        <div className="mt-3 space-y-3 lg:hidden">
-          {plans.map((plan) => {
-            const draft = planDrafts[plan.id];
-            if (!draft) return null;
-            return (
-              <article key={plan.id} className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
-                <div className="grid gap-2">
-                  <Input
-                    value={draft.code}
-                    onChange={(event) =>
-                      setPlanDrafts((prev) => ({
-                        ...prev,
-                        [plan.id]: { ...prev[plan.id], code: event.target.value },
-                      }))
-                    }
-                  />
-                  <Input
-                    value={draft.name}
-                    onChange={(event) =>
-                      setPlanDrafts((prev) => ({
-                        ...prev,
-                        [plan.id]: { ...prev[plan.id], name: event.target.value },
-                      }))
-                    }
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      value={draft.duration}
-                      inputMode="text"
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], duration: event.target.value },
-                        }))
-                      }
-                      placeholder="1h / 2d / 1w"
-                    />
-                    <Input
-                      value={draft.price}
-                      inputMode="text"
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], price: event.target.value },
-                        }))
-                      }
-                      placeholder="25k / NGN 12000"
-                    />
+            {/* Plans Tab */}
+            {activeTab === "plans" && (
+              <div className="space-y-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h1 className="text-2xl font-bold text-foreground lg:text-3xl">Plans</h1>
+                    <p className="mt-1 text-muted-foreground">
+                      Manage your WiFi access plans and pricing
+                    </p>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input
-                      value={draft.maxDevices}
-                      inputMode="numeric"
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], maxDevices: event.target.value },
-                        }))
-                      }
-                      placeholder="Max devices (blank = unlimited)"
-                    />
-                    <Input
-                      value={draft.dataLimitMb}
-                      inputMode="text"
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], dataLimitMb: event.target.value },
-                        }))
-                      }
-                      placeholder="500MB / 1.5GB / 2TB"
-                    />
-                    <Input
-                      value={draft.bandwidthProfile}
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], bandwidthProfile: event.target.value },
-                        }))
-                      }
-                      placeholder="Bandwidth profile"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      type="datetime-local"
-                      value={draft.availableFrom}
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], availableFrom: event.target.value },
-                        }))
-                      }
-                      placeholder="Available from"
-                    />
-                    <Input
-                      type="datetime-local"
-                      value={draft.availableTo}
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], availableTo: event.target.value },
-                        }))
-                      }
-                      placeholder="Available to"
-                    />
-                  </div>
-                  {isRadiusVoucherMode ? (
-                    <div className="grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">Paid voucher code format</p>
-                      <select
-                        value={draft.radiusVoucherCharacterSet}
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: {
-                              ...prev[plan.id],
-                              radiusVoucherCharacterSet: event.target.value as PlanVoucherCharacterSet,
-                            },
-                          }))
-                        }
-                      >
-                        <option value="legacy">Use current default format</option>
-                        <option value="alnum">Letters + numbers</option>
-                        <option value="letters">Letters only</option>
-                        <option value="numbers">Numbers only</option>
-                      </select>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          value={draft.radiusVoucherCodePrefix}
-                          onChange={(event) =>
-                            setPlanDrafts((prev) => ({
-                              ...prev,
-                              [plan.id]: { ...prev[plan.id], radiusVoucherCodePrefix: event.target.value.toUpperCase() },
-                            }))
-                          }
-                          placeholder="Prefix (optional)"
-                          disabled={draft.radiusVoucherCharacterSet === "legacy"}
-                        />
-                        <Input
-                          value={draft.radiusVoucherCodeLength}
-                          inputMode="numeric"
-                          onChange={(event) =>
-                            setPlanDrafts((prev) => ({
-                              ...prev,
-                              [plan.id]: { ...prev[plan.id], radiusVoucherCodeLength: event.target.value },
-                            }))
-                          }
-                          placeholder="Code length"
-                          disabled={draft.radiusVoucherCharacterSet === "legacy"}
-                        />
-                      </div>
-                    </div>
-                  ) : null}
+                  <Button onClick={() => setShowCreatePlanSheet(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Plan
+                  </Button>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">Unused: {plan.unusedCount}</span>
-                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">Assigned: {plan.assignedCount}</span>
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={draft.active}
-                    aria-label={`Set ${plan.name} active`}
-                    title={draft.active ? "Active" : "Inactive"}
-                    onClick={() =>
-                      setPlanDrafts((prev) => ({
-                        ...prev,
-                        [plan.id]: { ...prev[plan.id], active: !prev[plan.id].active },
-                      }))
-                    }
-                    className={[
-                      "relative inline-flex h-6 w-10 items-center rounded-full border transition",
-                      draft.active
-                        ? "border-emerald-600 bg-emerald-600/90"
-                        : "border-slate-300 bg-slate-200",
-                    ].join(" ")}
-                  >
-                    <span
-                      className={[
-                        "inline-block size-4 rounded-full bg-white shadow-sm transition",
-                        draft.active ? "translate-x-5" : "translate-x-1",
-                      ].join(" ")}
-                    />
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      onClick={() => savePlan(plan)}
-                      disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
-                      aria-label="Save plan"
-                      title="Save plan"
-                      className="size-8"
-                    >
-                      <Save className="size-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="destructive"
-                      onClick={() => deletePlan(plan)}
-                      disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
-                      aria-label="Delete plan"
-                      title="Delete plan"
-                      className="size-8"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-          {plans.length === 0 && !plansLoading ? (
-            <p className="rounded-2xl border border-slate-200/85 bg-white p-4 text-sm text-slate-600">No plans available.</p>
-          ) : null}
-        </div>
 
-        <div className="mt-5 hidden lg:block">
-          <div className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1260px] table-fixed text-sm [&_input]:shadow-none">
-                <colgroup>
-                  <col className="w-[12%]" />
-                  <col className="w-[24%]" />
-                  <col className="w-[20%]" />
-                  <col className="w-[20%]" />
-                  <col className="w-[10%]" />
-                  <col className="w-[7%]" />
-                  <col className="w-[7%]" />
-                </colgroup>
-                <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Code</th>
-                    <th className="px-4 py-3">Plan details</th>
-                    <th className="px-4 py-3">Limits</th>
-                    <th className="px-4 py-3">Availability</th>
-                    <th className="px-4 py-3">Inventory</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+                {/* Plans List */}
+                <div className="space-y-4">
                   {plans.map((plan) => {
                     const draft = planDrafts[plan.id];
-                    if (!draft) return null;
+                    const isEditing = editingPlanId === plan.id;
+
                     return (
-                      <tr key={plan.id} className="align-top border-b border-slate-100 last:border-0">
-                        <td className="px-4 py-4">
-                          <div className="space-y-2">
-                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Code</p>
-                            <Input
-                              className="h-10 text-sm"
-                              value={draft.code}
-                              onChange={(event) =>
-                                setPlanDrafts((prev) => ({
-                                  ...prev,
-                                  [plan.id]: { ...prev[plan.id], code: event.target.value },
-                                }))
-                              }
-                            />
-                            {isRadiusVoucherMode ? (
-                              <div className="grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-900">Paid voucher format</p>
-                                <select
-                                  className="h-10 text-sm"
-                                  value={draft.radiusVoucherCharacterSet}
-                                  onChange={(event) =>
-                                    setPlanDrafts((prev) => ({
-                                      ...prev,
-                                      [plan.id]: {
-                                        ...prev[plan.id],
-                                        radiusVoucherCharacterSet: event.target.value as PlanVoucherCharacterSet,
-                                      },
-                                    }))
-                                  }
-                                >
-                                  <option value="legacy">Use current default format</option>
-                                  <option value="alnum">Letters + numbers</option>
-                                  <option value="letters">Letters only</option>
-                                  <option value="numbers">Numbers only</option>
-                                </select>
-                                <div className="grid gap-2 xl:grid-cols-2">
-                                  <Input
-                                    className="h-10 text-sm"
-                                    value={draft.radiusVoucherCodePrefix}
-                                    onChange={(event) =>
-                                      setPlanDrafts((prev) => ({
-                                        ...prev,
-                                        [plan.id]: {
-                                          ...prev[plan.id],
-                                          radiusVoucherCodePrefix: event.target.value.toUpperCase(),
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Prefix (optional)"
-                                    disabled={draft.radiusVoucherCharacterSet === "legacy"}
-                                  />
-                                  <Input
-                                    className="h-10 text-sm"
-                                    value={draft.radiusVoucherCodeLength}
-                                    inputMode="numeric"
-                                    onChange={(event) =>
-                                      setPlanDrafts((prev) => ({
-                                        ...prev,
-                                        [plan.id]: {
-                                          ...prev[plan.id],
-                                          radiusVoucherCodeLength: event.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Code length"
-                                    disabled={draft.radiusVoucherCharacterSet === "legacy"}
-                                  />
+                      <Card key={plan.id}>
+                        <CardContent className="p-4 sm:p-6">
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-lg font-semibold text-foreground">{plan.name}</h3>
+                                <Badge variant={plan.active === 1 ? "success" : "secondary"}>
+                                  {plan.active === 1 ? "Active" : "Inactive"}
+                                </Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                <span>Code: {plan.code}</span>
+                                {plan.durationMinutes && (
+                                  <span>Duration: {formatDurationPreview(plan.durationMinutes)}</span>
+                                )}
+                                <span>Price: {money(plan.priceNgn)}</span>
+                              </div>
+                              {capabilities.showVoucherSection && (
+                                <div className="flex gap-4 text-sm">
+                                  <span className="text-success-foreground">
+                                    {plan.unusedCount} available
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {plan.assignedCount} assigned
+                                  </span>
                                 </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="space-y-3">
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Name</p>
-                              <Input
-                                className="h-10 text-sm"
-                                value={draft.name}
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], name: event.target.value },
-                                  }))
-                                }
-                              />
+                              )}
                             </div>
-                            <div className="grid gap-3 xl:grid-cols-2">
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setEditingPlanId(isEditing ? null : plan.id)}
+                              >
+                                {isEditing ? "Cancel" : "Edit"}
+                              </Button>
+                              {isEditing && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => savePlan(plan)}
+                                  disabled={savingPlanIds[plan.id]}
+                                >
+                                  <Save className="mr-1 h-4 w-4" />
+                                  Save
+                                </Button>
+                              )}
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deletePlan(plan)}
+                                disabled={deletingPlanIds[plan.id]}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Edit Form */}
+                          {isEditing && draft && (
+                            <div className="mt-6 grid gap-4 border-t border-border pt-6 sm:grid-cols-2 lg:grid-cols-3">
                               <div className="space-y-2">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Duration</p>
+                                <Label>Name</Label>
                                 <Input
-                                  className="h-10 text-sm"
+                                  value={draft.name}
+                                  onChange={(e) =>
+                                    setPlanDrafts((prev) => ({
+                                      ...prev,
+                                      [plan.id]: { ...prev[plan.id], name: e.target.value },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Code</Label>
+                                <Input
+                                  value={draft.code}
+                                  onChange={(e) =>
+                                    setPlanDrafts((prev) => ({
+                                      ...prev,
+                                      [plan.id]: { ...prev[plan.id], code: e.target.value },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Duration</Label>
+                                <Input
                                   value={draft.duration}
-                                  inputMode="text"
-                                  onChange={(event) =>
+                                  placeholder="1h / 2d / 1w"
+                                  onChange={(e) =>
                                     setPlanDrafts((prev) => ({
                                       ...prev,
-                                      [plan.id]: { ...prev[plan.id], duration: event.target.value },
+                                      [plan.id]: { ...prev[plan.id], duration: e.target.value },
                                     }))
                                   }
-                                  placeholder="1h / 2d / 1w"
                                 />
                               </div>
                               <div className="space-y-2">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Price</p>
+                                <Label>Price (NGN)</Label>
                                 <Input
-                                  className="h-10 text-sm"
                                   value={draft.price}
-                                  inputMode="text"
-                                  onChange={(event) =>
+                                  placeholder="500 / 1k / 2.5k"
+                                  onChange={(e) =>
                                     setPlanDrafts((prev) => ({
                                       ...prev,
-                                      [plan.id]: { ...prev[plan.id], price: event.target.value },
+                                      [plan.id]: { ...prev[plan.id], price: e.target.value },
                                     }))
                                   }
-                                  placeholder="25k / NGN 12000"
                                 />
                               </div>
+                              <div className="space-y-2">
+                                <Label>Max Devices</Label>
+                                <Input
+                                  value={draft.maxDevices}
+                                  placeholder="Leave blank for unlimited"
+                                  onChange={(e) =>
+                                    setPlanDrafts((prev) => ({
+                                      ...prev,
+                                      [plan.id]: { ...prev[plan.id], maxDevices: e.target.value },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Data Limit</Label>
+                                <Input
+                                  value={draft.dataLimitMb}
+                                  placeholder="500MB / 1GB"
+                                  onChange={(e) =>
+                                    setPlanDrafts((prev) => ({
+                                      ...prev,
+                                      [plan.id]: { ...prev[plan.id], dataLimitMb: e.target.value },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="flex items-center gap-3 sm:col-span-2 lg:col-span-3">
+                                <Label>Active</Label>
+                                <button
+                                  type="button"
+                                  role="switch"
+                                  aria-checked={draft.active}
+                                  onClick={() =>
+                                    setPlanDrafts((prev) => ({
+                                      ...prev,
+                                      [plan.id]: { ...prev[plan.id], active: !prev[plan.id].active },
+                                    }))
+                                  }
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                    draft.active ? "bg-primary" : "bg-muted"
+                                  }`}
+                                >
+                                  <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                      draft.active ? "translate-x-6" : "translate-x-1"
+                                    }`}
+                                  />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="grid gap-3">
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Max devices</p>
-                              <Input
-                                className="h-10 text-sm"
-                                value={draft.maxDevices}
-                                inputMode="numeric"
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], maxDevices: event.target.value },
-                                  }))
-                                }
-                                placeholder="Blank = unlimited"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Data limit</p>
-                              <Input
-                                className="h-10 text-sm"
-                                value={draft.dataLimitMb}
-                                inputMode="text"
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], dataLimitMb: event.target.value },
-                                  }))
-                                }
-                                placeholder="500MB / 1.5GB / 2TB"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Bandwidth profile</p>
-                              <Input
-                                className="h-10 text-sm"
-                                value={draft.bandwidthProfile}
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], bandwidthProfile: event.target.value },
-                                  }))
-                                }
-                                placeholder="Bandwidth profile"
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="space-y-3">
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Available from</p>
-                              <Input
-                                className="h-10 text-sm"
-                                type="datetime-local"
-                                value={draft.availableFrom}
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], availableFrom: event.target.value },
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Available to</p>
-                              <Input
-                                className="h-10 text-sm"
-                                type="datetime-local"
-                                value={draft.availableTo}
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], availableTo: event.target.value },
-                                  }))
-                                }
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="space-y-2 text-sm text-slate-700">
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                              <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Unused</p>
-                              <p className="mt-1 text-lg font-semibold text-slate-950">{plan.unusedCount}</p>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                              <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Assigned</p>
-                              <p className="mt-1 text-lg font-semibold text-slate-950">{plan.assignedCount}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="space-y-3">
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={draft.active}
-                              aria-label={`Set ${plan.name} active`}
-                              title={draft.active ? "Active" : "Inactive"}
-                              onClick={() =>
-                                setPlanDrafts((prev) => ({
-                                  ...prev,
-                                  [plan.id]: { ...prev[plan.id], active: !prev[plan.id].active },
-                                }))
-                              }
-                              className={[
-                                "relative inline-flex h-6 w-10 items-center rounded-full border transition",
-                                draft.active
-                                  ? "border-emerald-600 bg-emerald-600/90"
-                                  : "border-slate-300 bg-slate-200",
-                              ].join(" ")}
-                            >
-                              <span
-                                className={[
-                                  "inline-block size-4 rounded-full bg-white shadow-sm transition",
-                                  draft.active ? "translate-x-5" : "translate-x-1",
-                                ].join(" ")}
-                              />
-                            </button>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                              <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Total</p>
-                              <p className="mt-1 text-lg font-semibold text-slate-950">{plan.totalCount}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => savePlan(plan)}
-                              disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
-                              className="justify-center"
-                            >
-                              <Save className="size-3.5" />
-                              Save
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => deletePlan(plan)}
-                              disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
-                              className="justify-center"
-                            >
-                              <Trash2 className="size-3.5" />
-                              Delete
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
+                          )}
+                        </CardContent>
+                      </Card>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-            {plans.length === 0 && !plansLoading ? (
-              <p className="p-4 text-sm text-slate-600">No plans available.</p>
-            ) : null}
-          </div>
-        </div>
 
-        {plansError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Plan action failed</AlertTitle>
-            <AlertDescription>{plansError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {planNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>Plan update</AlertTitle>
-            <AlertDescription>{planNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        </section>
-
-        <section id="ops-vouchers" className="panel-surface">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="section-kicker">Inventory</p>
-            <h2 className="mt-1 section-title">Voucher operations</h2>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              {hasArchitectureConfigured
-                ? isExternalAccessMode
-                  ? "External account-access mode: voucher inventory is bypassed. Use subscriber monitoring and RADIUS accounting."
-                  : isApiAutomationMode
-                    ? isOmadaMode
-                      ? "Omada automation mode: vouchers are created automatically after each successful customer payment."
-                      : "MikroTik direct mode: vouchers are created automatically after each successful customer payment."
-                  : isRadiusVoucherMode
-                    ? hasPlans
-                      ? "RADIUS voucher mode: generate voucher codes manually for a plan or let PaySpot issue them automatically after successful customer payment."
-                      : "RADIUS voucher mode active. Create at least one plan before issuing manual vouchers."
-                  : hasPlans
-                    ? "CSV mode: create manually, batch generate, or import CSV."
-                    : "CSV mode active. Create at least one plan before adding or generating vouchers."
-                : "Configure architecture first to unlock voucher action flows."}
-            </p>
-          </div>
-          {hasArchitectureConfigured ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {canManuallyCreateVouchers && hasPlans ? (
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowCreateVoucherModal(true)}>
-                  Add voucher
-                </Button>
-              ) : null}
-              {canBatchGenerateVouchers ? (
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowGenerateVoucherModal(true)}>
-                  Batch generate
-                </Button>
-              ) : null}
-              {canImportCsvVouchers ? (
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowImportVoucherModal(true)}>
-                  Import CSV
-                </Button>
-              ) : null}
-            </div>
-          ) : (
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowArchitectureModal(true)}>
-              <Settings className="size-4" />
-              Configure architecture
-            </Button>
-          )}
-        </div>
-
-        <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_220px_220px_auto]">
-          <Input
-            placeholder="Search voucher, plan, email, phone"
-            value={voucherQuery}
-            onChange={(event) => setVoucherQuery(event.target.value)}
-          />
-          <select className="h-11" value={voucherStatus} onChange={(event) => setVoucherStatus(event.target.value)}>
-            <option value="all">All statuses</option>
-            <option value="UNUSED">Unused</option>
-            <option value="ASSIGNED">Assigned</option>
-          </select>
-          <select className="h-11" value={voucherPlan} onChange={(event) => setVoucherPlan(event.target.value)}>
-            <option value="all">All plans</option>
-            {plans.map((plan) => (
-              <option key={plan.id} value={plan.id}>
-                {plan.name}
-              </option>
-            ))}
-          </select>
-          <Button type="button" variant="outline" size="sm" onClick={loadVouchers} disabled={vouchersLoading} className="xl:self-end">
-            {vouchersLoading ? "Loading..." : "Refresh"}
-          </Button>
-        </div>
-
-        <div className="mt-3 space-y-3 lg:hidden">
-          {vouchers.map((row) => (
-            <article key={row.id} className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
-              <div className="flex items-start gap-3">
-                <input
-                  aria-label={`Select voucher ${row.voucherCode}`}
-                  type="checkbox"
-                  className="mt-1 shrink-0"
-                  checked={selectedVoucherIds.includes(row.id)}
-                  onChange={(event) =>
-                    setSelectedVoucherIds((prev) =>
-                      event.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
-                    )
-                  }
-                />
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-900 break-all">{row.voucherCode}</p>
-                  <p className="text-xs text-slate-500">{row.packageName}</p>
+                  {plans.length === 0 && !plansLoading && (
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <Package className="h-12 w-12 text-muted-foreground" />
+                        <h3 className="mt-4 text-lg font-semibold text-foreground">No plans yet</h3>
+                        <p className="mt-1 text-muted-foreground">Create your first plan to get started</p>
+                        <Button className="mt-4" onClick={() => setShowCreatePlanSheet(true)}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Create Plan
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
-              </div>
-              <div className="mt-2">
-                {row.status === "UNUSED" ? (
-                  <Badge className="bg-emerald-700 text-white">UNUSED</Badge>
-                ) : (
-                  <Badge className="bg-amber-600 text-white">ASSIGNED</Badge>
+
+                {/* Alerts */}
+                {plansError && (
+                  <Alert variant="destructive">
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{plansError}</AlertDescription>
+                  </Alert>
+                )}
+                {planNotice && (
+                  <Alert variant="success">
+                    <AlertTitle>Success</AlertTitle>
+                    <AlertDescription>{planNotice}</AlertDescription>
+                  </Alert>
                 )}
               </div>
-              <div className="mt-3 grid gap-1 text-xs text-slate-600">
-                <p>Email: {row.assignedToEmail || "-"}</p>
-                <p>Phone: {row.assignedToPhone || "-"}</p>
-                <p>Created: {dt(row.createdAt)}</p>
-                <p>Assigned: {dt(row.assignedAt)}</p>
-              </div>
-            </article>
-          ))}
-          {vouchers.length === 0 && !vouchersLoading ? (
-            <p className="rounded-2xl border border-slate-200/85 bg-white p-4 text-sm text-slate-600">No vouchers found.</p>
-          ) : null}
-        </div>
+            )}
 
-        <div className="mt-5 hidden lg:block">
-          <div className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1080px] table-fixed text-sm">
-                <colgroup>
-                  <col className="w-[5%]" />
-                  <col className="w-[17%]" />
-                  <col className="w-[16%]" />
-                  <col className="w-[30%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[10%]" />
-                  <col className="w-[10%]" />
-                </colgroup>
-                <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3"></th>
-                    <th className="px-4 py-3">Voucher</th>
-                    <th className="px-4 py-3">Plan</th>
-                    <th className="px-4 py-3">Assigned to</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Created</th>
-                    <th className="px-4 py-3">Assigned</th>
-                  </tr>
-                </thead>
-                <tbody>
+            {/* Vouchers Tab */}
+            {activeTab === "vouchers" && capabilities.showVoucherSection && (
+              <div className="space-y-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h1 className="text-2xl font-bold text-foreground lg:text-3xl">Vouchers</h1>
+                    <p className="mt-1 text-muted-foreground">
+                      {capabilities.flowLabel}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {capabilities.canManuallyCreateVouchers && plans.length > 0 && (
+                      <Button variant="outline" onClick={() => setShowCreateVoucherSheet(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add
+                      </Button>
+                    )}
+                    {capabilities.canBatchGenerateVouchers && (
+                      <Button variant="outline" onClick={() => setShowGenerateVoucherSheet(true)}>
+                        Generate
+                      </Button>
+                    )}
+                    {capabilities.canImportCsv && (
+                      <Button variant="outline" onClick={() => setShowImportVoucherSheet(true)}>
+                        Import CSV
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Filters */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      <Input
+                        placeholder="Search voucher, email, phone..."
+                        value={voucherQuery}
+                        onChange={(e) => setVoucherQuery(e.target.value)}
+                      />
+                      <select
+                        className="h-12 rounded-xl border border-input bg-background px-4 text-foreground"
+                        value={voucherStatus}
+                        onChange={(e) => setVoucherStatus(e.target.value)}
+                      >
+                        <option value="all">All statuses</option>
+                        <option value="UNUSED">Unused</option>
+                        <option value="ASSIGNED">Assigned</option>
+                      </select>
+                      <select
+                        className="h-12 rounded-xl border border-input bg-background px-4 text-foreground"
+                        value={voucherPlan}
+                        onChange={(e) => setVoucherPlan(e.target.value)}
+                      >
+                        <option value="all">All plans</option>
+                        {plans.map((plan) => (
+                          <option key={plan.id} value={plan.id}>
+                            {plan.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button variant="outline" onClick={loadVouchers} disabled={vouchersLoading}>
+                        {vouchersLoading ? "Loading..." : "Refresh"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Voucher Actions */}
+                {selectedVoucherIds.length > 0 && (
+                  <div className="flex items-center gap-4 rounded-xl bg-muted p-4">
+                    <span className="text-sm text-muted-foreground">
+                      {selectedVoucherIds.length} selected
+                    </span>
+                    {capabilities.canDeleteVouchers && (
+                      <Button variant="destructive" size="sm" onClick={deleteSelectedVouchers}>
+                        <Trash2 className="mr-1 h-4 w-4" />
+                        Delete
+                      </Button>
+                    )}
+                    {capabilities.canReclaimVouchers && (
+                      <Button variant="outline" size="sm" onClick={reclaimSelectedVouchers}>
+                        <ArchiveRestore className="mr-1 h-4 w-4" />
+                        Reclaim
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Voucher Cards (Mobile) */}
+                <div className="space-y-3 lg:hidden">
                   {vouchers.map((row) => (
-                    <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                      <td className="px-4 py-4 align-top">
-                        <input
-                          aria-label={`Select voucher ${row.voucherCode}`}
-                          type="checkbox"
-                          checked={selectedVoucherIds.includes(row.id)}
-                          onChange={(event) =>
-                            setSelectedVoucherIds((prev) =>
-                              event.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
-                            )
-                          }
-                        />
-                      </td>
-                      <td className="px-4 py-4 align-top">
-                        <div className="space-y-1">
-                          <p className="font-semibold break-all text-slate-950">{row.voucherCode}</p>
-                          <p className="text-xs uppercase tracking-[0.08em] text-slate-500">{row.packageCode}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 align-top">
-                        <p className="font-medium text-slate-900">{row.packageName}</p>
-                      </td>
-                      <td className="px-4 py-4 align-top">
-                        <div className="space-y-2">
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                            <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Email</p>
-                            <p className="mt-1 break-all text-sm text-slate-900">{row.assignedToEmail || "-"}</p>
-                          </div>
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                            <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Phone</p>
-                            <p className="mt-1 text-sm text-slate-900">{row.assignedToPhone || "-"}</p>
+                    <Card key={row.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={selectedVoucherIds.includes(row.id)}
+                            onChange={(e) =>
+                              setSelectedVoucherIds((prev) =>
+                                e.target.checked
+                                  ? [...prev, row.id]
+                                  : prev.filter((id) => id !== row.id)
+                              )
+                            }
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <p className="font-mono font-semibold text-foreground">{row.voucherCode}</p>
+                              <Badge variant={row.status === "UNUSED" ? "success" : "warning"}>
+                                {row.status}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-sm text-muted-foreground">{row.packageName}</p>
+                            {row.assignedToEmail && (
+                              <p className="mt-2 text-sm text-muted-foreground">
+                                Assigned to: {row.assignedToEmail}
+                              </p>
+                            )}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-4 align-top">
-                        {row.status === "UNUSED" ? (
-                          <Badge className="bg-emerald-700 text-white">UNUSED</Badge>
-                        ) : (
-                          <Badge className="bg-amber-600 text-white">ASSIGNED</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 align-top text-sm text-slate-600">{dt(row.createdAt)}</td>
-                      <td className="px-4 py-4 align-top text-sm text-slate-600">{dt(row.assignedAt)}</td>
-                    </tr>
+                      </CardContent>
+                    </Card>
                   ))}
-                </tbody>
-              </table>
-            </div>
-            {vouchers.length === 0 && !vouchersLoading ? (
-              <p className="p-4 text-sm text-slate-600">No vouchers found.</p>
-            ) : null}
-          </div>
-        </div>
+                </div>
 
-        <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <p className="text-sm text-slate-600">
-            Showing {vouchers.length} / {voucherTotal} | Selected {selectedVoucherIds.length}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {canReclaimVouchers ? (
-              <Button type="button" variant="outline" size="sm" onClick={reclaimSelected} disabled={selectedVoucherIds.length === 0}>
-                <ArchiveRestore className="size-4" />
-                Unarchive
-              </Button>
-            ) : null}
-            {canDeleteVouchers ? (
-              <Button type="button" variant="destructive" size="sm" onClick={deleteSelected} disabled={selectedVoucherIds.length === 0}>
-                <Trash2 className="size-4" />
-                Delete
-              </Button>
-            ) : null}
-            {canDeleteVouchers || canReclaimVouchers ? <span className="mx-1 h-5 w-px shrink-0 bg-slate-200" /> : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setVoucherPage((prev) => Math.max(1, prev - 1))}
-              disabled={voucherPage <= 1}
-            >
-              <ChevronLeft className="size-4" />
-              Prev
-            </Button>
-            <span className="text-sm text-slate-600">{voucherPage} / {voucherTotalPages}</span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setVoucherPage((prev) => Math.min(voucherTotalPages, prev + 1))}
-              disabled={voucherPage >= voucherTotalPages}
-            >
-              Next
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        </div>
+                {/* Voucher Table (Desktop) */}
+                <div className="hidden lg:block">
+                  <Card>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="border-b border-border bg-muted/50">
+                          <tr>
+                            <th className="px-4 py-3 text-left">
+                              <input
+                                type="checkbox"
+                                checked={selectedVoucherIds.length === vouchers.length && vouchers.length > 0}
+                                onChange={(e) =>
+                                  setSelectedVoucherIds(
+                                    e.target.checked ? vouchers.map((v) => v.id) : []
+                                  )
+                                }
+                              />
+                            </th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                              Voucher
+                            </th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                              Plan
+                            </th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                              Status
+                            </th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                              Assigned To
+                            </th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                              Created
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vouchers.map((row) => (
+                            <tr key={row.id} className="border-b border-border last:border-0">
+                              <td className="px-4 py-4">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedVoucherIds.includes(row.id)}
+                                  onChange={(e) =>
+                                    setSelectedVoucherIds((prev) =>
+                                      e.target.checked
+                                        ? [...prev, row.id]
+                                        : prev.filter((id) => id !== row.id)
+                                    )
+                                  }
+                                />
+                              </td>
+                              <td className="px-4 py-4">
+                                <span className="font-mono font-medium text-foreground">
+                                  {row.voucherCode}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 text-muted-foreground">{row.packageName}</td>
+                              <td className="px-4 py-4">
+                                <Badge variant={row.status === "UNUSED" ? "success" : "warning"}>
+                                  {row.status}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-4 text-muted-foreground">
+                                {row.assignedToEmail || "-"}
+                              </td>
+                              <td className="px-4 py-4 text-muted-foreground">{dt(row.createdAt)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                </div>
 
-        {vouchersError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Voucher action failed</AlertTitle>
-            <AlertDescription>{vouchersError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {voucherNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>Voucher update</AlertTitle>
-            <AlertDescription>{voucherNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        {importError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Import failed</AlertTitle>
-            <AlertDescription>{importError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {importNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>Import complete</AlertTitle>
-            <AlertDescription>{importNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        </section>
+                {/* Pagination */}
+                {voucherTotalPages > 1 && (
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(voucherPage - 1) * PAGE_SIZE + 1} to{" "}
+                      {Math.min(voucherPage * PAGE_SIZE, voucherTotal)} of {voucherTotal}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setVoucherPage((p) => Math.max(1, p - 1))}
+                        disabled={voucherPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setVoucherPage((p) => Math.min(voucherTotalPages, p + 1))}
+                        disabled={voucherPage === voucherTotalPages}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {vouchers.length === 0 && !vouchersLoading && (
+                  <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                      <Ticket className="h-12 w-12 text-muted-foreground" />
+                      <h3 className="mt-4 text-lg font-semibold text-foreground">No vouchers found</h3>
+                      <p className="mt-1 text-muted-foreground">
+                        {capabilities.canManuallyCreateVouchers
+                          ? "Create or generate vouchers to get started"
+                          : "Vouchers will be created automatically after payments"}
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Alerts */}
+                {vouchersError && (
+                  <Alert variant="destructive">
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{vouchersError}</AlertDescription>
+                  </Alert>
+                )}
+                {voucherNotice && (
+                  <Alert variant="success">
+                    <AlertTitle>Success</AlertTitle>
+                    <AlertDescription>{voucherNotice}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+
+            {/* Subscribers Tab */}
+            {activeTab === "subscribers" && capabilities.showSubscriberSection && (
+              <div className="space-y-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h1 className="text-2xl font-bold text-foreground lg:text-3xl">Subscribers</h1>
+                    <p className="mt-1 text-muted-foreground">
+                      Manage portal subscribers and their entitlements
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={loadSubscribers} disabled={subscribersLoading}>
+                    <RefreshCw className={`mr-2 h-4 w-4 ${subscribersLoading ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                </div>
+
+                {/* Subscriber Cards */}
+                <div className="space-y-4">
+                  {subscribers.map((sub) => (
+                    <Card key={sub.subscriberId}>
+                      <CardContent className="p-4 sm:p-6">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-foreground">
+                                {sub.fullName || sub.email}
+                              </h3>
+                              <Badge variant={sub.status === "active" ? "success" : "secondary"}>
+                                {sub.status}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{sub.email}</p>
+                            {sub.phone && (
+                              <p className="text-sm text-muted-foreground">{sub.phone}</p>
+                            )}
+                          </div>
+                          <div className="text-sm">
+                            <p className="text-muted-foreground">
+                              Active sessions: {sub.activeSessions}
+                            </p>
+                            {sub.entitlement && (
+                              <p className="text-muted-foreground">
+                                Plan: {sub.entitlement.planName}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+
+                  {subscribers.length === 0 && !subscribersLoading && (
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <Users className="h-12 w-12 text-muted-foreground" />
+                        <h3 className="mt-4 text-lg font-semibold text-foreground">
+                          No subscribers yet
+                        </h3>
+                        <p className="mt-1 text-muted-foreground">
+                          Subscribers will appear here when they create accounts
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+
+                {subscribersError && (
+                  <Alert variant="destructive">
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{subscribersError}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+
+            {/* Settings Tab */}
+            {activeTab === "settings" && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-2xl font-bold text-foreground lg:text-3xl">Settings</h1>
+                  <p className="mt-1 text-muted-foreground">
+                    Configure your portal architecture and integrations
+                  </p>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Architecture</CardTitle>
+                    <CardDescription>
+                      Configure how your WiFi portal operates
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between rounded-xl bg-muted p-4">
+                        <div>
+                          <p className="font-medium text-foreground">Access Mode</p>
+                          <p className="text-sm text-muted-foreground">
+                            {capabilities.modeLabel}
+                          </p>
+                        </div>
+                        <Badge>{architecture?.accessMode || "Not configured"}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between rounded-xl bg-muted p-4">
+                        <div>
+                          <p className="font-medium text-foreground">Voucher Source</p>
+                          <p className="text-sm text-muted-foreground">
+                            {capabilities.flowLabel}
+                          </p>
+                        </div>
+                        <Badge>{architecture?.voucherSourceMode || "Not configured"}</Badge>
+                      </div>
+                      <Button onClick={() => setShowArchitectureSheet(true)}>
+                        <Settings className="mr-2 h-4 w-4" />
+                        Configure Architecture
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {architectureNotice && (
+                  <Alert variant="success">
+                    <AlertTitle>Success</AlertTitle>
+                    <AlertDescription>{architectureNotice}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+          </div>
+        </main>
       </div>
 
-      {showQuickActionsModal ? (
-        <ModalShell title="Quick actions" onClose={() => setShowQuickActionsModal(false)}>
-          <div className="grid gap-2">
-            <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreatePlanModal(true); }}>
-              Add plan
-            </Button>
-            {hasArchitectureConfigured && canManuallyCreateVouchers && hasPlans ? (
-              <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreateVoucherModal(true); }}>
-                Add voucher
-              </Button>
-            ) : null}
-            {hasArchitectureConfigured && canBatchGenerateVouchers ? (
-              <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowGenerateVoucherModal(true); }}>
-                Batch generate vouchers
-              </Button>
-            ) : null}
-            {hasArchitectureConfigured && canImportCsvVouchers ? (
-              <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowImportVoucherModal(true); }}>
-                Import voucher CSV
-              </Button>
-            ) : null}
-            <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowArchitectureModal(true); }}>
-              <Settings className="size-4" />
-              Configure architecture
-            </Button>
-          </div>
-        </ModalShell>
-      ) : null}
+      {/* Bottom Navigation (Mobile) */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card lg:hidden">
+        <div className="flex">
+          {visibleTabs.slice(0, 5).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex flex-1 flex-col items-center gap-1 py-3 text-xs transition-colors ${
+                activeTab === tab.id
+                  ? "text-primary"
+                  : "text-muted-foreground"
+              }`}
+            >
+              <tab.icon className="h-5 w-5" />
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
 
-      {showArchitectureModal && architecture ? (
-        <ModalShell title="Configure architecture" onClose={() => setShowArchitectureModal(false)}>
-          <form className="grid gap-3" onSubmit={saveArchitecture}>
-            <div className="flex items-center justify-end">
-              {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "omada_openapi" ? (
-                <Link
-                  href="/help/omada-openapi"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  <CircleHelp className="size-3.5" />
-                  Omada setup help
-                </Link>
-              ) : architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "mikrotik_rest" ? (
-                <Link
-                  href="/help/mikrotik-rest"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  <CircleHelp className="size-3.5" />
-                  MikroTik setup help
-                </Link>
-              ) : architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "radius_voucher" ? (
-                <Link
-                  href="/help/radius-voucher"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
-                >
-                  <CircleHelp className="size-3.5" />
-                  RADIUS voucher help
-                </Link>
-              ) : architecture.accessMode === "account_access" ? (
-                <Link
-                  href="/help/external-radius"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
-                >
-                  <CircleHelp className="size-3.5" />
-                  External RADIUS help
-                </Link>
-                ) : null}
+      {/* Create Plan Sheet */}
+      <BottomSheet open={showCreatePlanSheet} onOpenChange={setShowCreatePlanSheet}>
+        <BottomSheetContent className="max-h-[90vh] overflow-y-auto">
+          <BottomSheetHeader>
+            <BottomSheetTitle>Create Plan</BottomSheetTitle>
+          </BottomSheetHeader>
+          <form onSubmit={createPlan} className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Plan Name</Label>
+              <Input
+                value={newPlanName}
+                onChange={(e) => setNewPlanName(e.target.value)}
+                placeholder="e.g. 1 Hour Access"
+                required
+              />
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="accessMode">Access mode</Label>
-                <select
-                  id="accessMode"
-                  value={architecture.accessMode}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? (() => {
-                            const nextMode = event.target.value as ArchitectureConfig["accessMode"];
-                            return {
-                              ...prev,
-                              accessMode: nextMode,
-                              voucherSourceMode:
-                                nextMode === "account_access" ? "import_csv" : prev.voucherSourceMode,
-                            };
-                          })()
-                        : prev,
-                    )
-                  }
-                >
-                  <option value="voucher_access">Voucher access</option>
-                  <option value="account_access">Account access (External RADIUS)</option>
-                </select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="voucherSourceMode">Voucher source</Label>
-                <select
-                  id="voucherSourceMode"
-                  value={architecture.voucherSourceMode}
-                  disabled={architecture.accessMode === "account_access"}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            voucherSourceMode: event.target.value as ArchitectureConfig["voucherSourceMode"],
-                          }
-                        : prev,
-                    )
-                  }
-                >
-                  <option value="import_csv">Import CSV (default)</option>
-                  <option value="omada_openapi">Omada OpenAPI sync</option>
-                  <option value="mikrotik_rest">MikroTik direct (REST)</option>
-                  <option value="radius_voucher">External RADIUS voucher mode</option>
-                </select>
-                {architecture.accessMode === "account_access" ? (
-                  <p className="text-xs text-slate-500">
-                    Voucher source is disabled in account-access mode.
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Duration</Label>
+                <Input
+                  value={newPlanDuration}
+                  onChange={(e) => setNewPlanDuration(e.target.value)}
+                  placeholder="1h / 2d / 1w"
+                />
+                {parsedNewPlanDuration && Number.isFinite(parsedNewPlanDuration) && (
+                  <p className="text-xs text-muted-foreground">
+                    {formatDurationPreview(parsedNewPlanDuration)}
                   </p>
-                ) : null}
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Price (NGN)</Label>
+                <Input
+                  value={newPlanPrice}
+                  onChange={(e) => setNewPlanPrice(e.target.value)}
+                  placeholder="500 / 1k"
+                  required
+                />
+                {parsedNewPlanPrice && Number.isFinite(parsedNewPlanPrice) && (
+                  <p className="text-xs text-muted-foreground">{money(parsedNewPlanPrice)}</p>
+                )}
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Max Devices</Label>
+                <Input
+                  value={newPlanMaxDevices}
+                  onChange={(e) => setNewPlanMaxDevices(e.target.value)}
+                  placeholder="Unlimited"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Data Limit</Label>
+                <Input
+                  value={newPlanDataLimitMb}
+                  onChange={(e) => setNewPlanDataLimitMb(e.target.value)}
+                  placeholder="500MB / 1GB"
+                />
+                {parsedNewPlanDataLimit && Number.isFinite(parsedNewPlanDataLimit) && (
+                  <p className="text-xs text-muted-foreground">
+                    {formatDataLimitPreviewMb(parsedNewPlanDataLimit)}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Bandwidth Profile</Label>
+              <Input
+                value={newPlanBandwidthProfile}
+                onChange={(e) => setNewPlanBandwidthProfile(e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={creatingPlan}>
+              {creatingPlan ? "Creating..." : "Create Plan"}
+            </Button>
+          </form>
+        </BottomSheetContent>
+      </BottomSheet>
 
-            {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "omada_openapi" ? (
-              <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Omada OpenAPI credentials</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <Input
-                    value={architecture.omada.apiBaseUrl}
-                    onChange={(event) =>
+      {/* Create Voucher Sheet */}
+      <BottomSheet open={showCreateVoucherSheet} onOpenChange={setShowCreateVoucherSheet}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle>Add Voucher</BottomSheetTitle>
+          </BottomSheetHeader>
+          <form onSubmit={createVoucher} className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Voucher Code</Label>
+              <Input
+                value={newVoucherCode}
+                onChange={(e) => setNewVoucherCode(e.target.value)}
+                placeholder="Enter voucher code"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Plan</Label>
+              <select
+                className="h-12 w-full rounded-xl border border-input bg-background px-4"
+                value={newVoucherPackageId}
+                onChange={(e) => setNewVoucherPackageId(e.target.value)}
+                required
+              >
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button type="submit" className="w-full" disabled={creatingVoucher}>
+              {creatingVoucher ? "Creating..." : "Add Voucher"}
+            </Button>
+          </form>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      {/* Generate Vouchers Sheet */}
+      <BottomSheet open={showGenerateVoucherSheet} onOpenChange={setShowGenerateVoucherSheet}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle>Generate Vouchers</BottomSheetTitle>
+          </BottomSheetHeader>
+          <form onSubmit={generateVouchers} className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Plan</Label>
+              <select
+                className="h-12 w-full rounded-xl border border-input bg-background px-4"
+                value={newVoucherPackageId}
+                onChange={(e) => setNewVoucherPackageId(e.target.value)}
+                required
+              >
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Count</Label>
+                <Input
+                  type="number"
+                  value={generateCount}
+                  onChange={(e) => setGenerateCount(e.target.value)}
+                  min={1}
+                  max={500}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Code Length</Label>
+                <Input
+                  type="number"
+                  value={generateCodeLength}
+                  onChange={(e) => setGenerateCodeLength(e.target.value)}
+                  min={6}
+                  max={32}
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Prefix (Optional)</Label>
+              <Input
+                value={generatePrefix}
+                onChange={(e) => setGeneratePrefix(e.target.value)}
+                placeholder="e.g. WIFI-"
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={generatingVouchers}>
+              {generatingVouchers ? "Generating..." : "Generate Vouchers"}
+            </Button>
+          </form>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      {/* Import CSV Sheet */}
+      <BottomSheet open={showImportVoucherSheet} onOpenChange={setShowImportVoucherSheet}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle>Import Vouchers from CSV</BottomSheetTitle>
+          </BottomSheetHeader>
+          <form onSubmit={importCsv} className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <Label>CSV File</Label>
+              <Input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                <Link href="/help/csv-import" className="underline" target="_blank">
+                  View CSV format requirements
+                </Link>
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Package Code</Label>
+              <Input
+                value={importPackageCode}
+                onChange={(e) => setImportPackageCode(e.target.value)}
+                placeholder="e.g. 1HR"
+                required
+              />
+            </div>
+            {importError && (
+              <Alert variant="destructive">
+                <AlertDescription>{importError}</AlertDescription>
+              </Alert>
+            )}
+            {importNotice && (
+              <Alert variant="success">
+                <AlertDescription>{importNotice}</AlertDescription>
+              </Alert>
+            )}
+            <Button type="submit" className="w-full" disabled={importLoading}>
+              {importLoading ? "Importing..." : "Import Vouchers"}
+            </Button>
+          </form>
+        </BottomSheetContent>
+      </BottomSheet>
+
+      {/* Architecture Settings Sheet */}
+      <BottomSheet open={showArchitectureSheet} onOpenChange={setShowArchitectureSheet}>
+        <BottomSheetContent className="max-h-[90vh] overflow-y-auto">
+          <BottomSheetHeader>
+            <BottomSheetTitle>Architecture Settings</BottomSheetTitle>
+          </BottomSheetHeader>
+          {architecture && (
+            <form onSubmit={saveArchitecture} className="mt-4 space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Access Mode</Label>
+                  <select
+                    className="h-12 w-full rounded-xl border border-input bg-background px-4"
+                    value={architecture.accessMode}
+                    onChange={(e) =>
                       setArchitecture((prev) =>
-                        prev
-                          ? { ...prev, omada: { ...prev.omada, apiBaseUrl: event.target.value } }
-                          : prev,
+                        prev ? { ...prev, accessMode: e.target.value as ArchitectureConfig["accessMode"] } : prev
                       )
                     }
-                    placeholder="https://use1-omada-northbound.tplinkcloud.com"
-                  />
-                  <Input
-                    value={architecture.omada.omadacId}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev ? { ...prev, omada: { ...prev.omada, omadacId: event.target.value } } : prev,
-                      )
-                    }
-                    placeholder="Omada ID"
-                  />
-                  <Input
-                    value={architecture.omada.siteId}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev ? { ...prev, omada: { ...prev.omada, siteId: event.target.value } } : prev,
-                      )
-                    }
-                    placeholder="Site ID"
-                  />
-                  <Input
-                    value={architecture.omada.clientId}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev ? { ...prev, omada: { ...prev.omada, clientId: event.target.value } } : prev,
-                      )
-                    }
-                    placeholder="Client ID"
-                  />
-                  <Input
-                    type="password"
-                    value={omadaClientSecret}
-                    onChange={(event) => setOmadaClientSecret(event.target.value)}
-                    placeholder={
-                      architecture.omada.hasClientSecret
-                        ? "Client secret (leave blank to keep)"
-                        : "Client secret"
-                    }
-                  />
-                  <Input
-                    value={architecture.omada.hotspotOperatorUsername}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              omada: { ...prev.omada, hotspotOperatorUsername: event.target.value },
-                            }
-                          : prev,
-                      )
-                    }
-                    placeholder="Hotspot operator username"
-                  />
-                  <Input
-                    type="password"
-                    value={omadaHotspotOperatorPassword}
-                    onChange={(event) => setOmadaHotspotOperatorPassword(event.target.value)}
-                    placeholder={
-                      architecture.omada.hasHotspotOperatorPassword
-                        ? "Hotspot operator password (leave blank to keep)"
-                        : "Hotspot operator password"
-                    }
-                  />
+                  >
+                    <option value="voucher_access">Voucher Access</option>
+                    <option value="account_access">Account Access (RADIUS)</option>
+                  </select>
                 </div>
-                <div className="mt-3 grid gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs text-slate-600">
-                      Need Site ID? Fetch available sites from Omada using the current credentials.
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={discoverOmadaSites}
-                      disabled={omadaSitesLoading || architectureSaving || omadaTestLoading}
-                    >
-                      {omadaSitesLoading ? "Fetching sites..." : "Fetch sites"}
+
+                <div className="space-y-2">
+                  <Label>Voucher Source Mode</Label>
+                  <select
+                    className="h-12 w-full rounded-xl border border-input bg-background px-4"
+                    value={architecture.voucherSourceMode}
+                    onChange={(e) =>
+                      setArchitecture((prev) =>
+                        prev
+                          ? { ...prev, voucherSourceMode: e.target.value as ArchitectureConfig["voucherSourceMode"] }
+                          : prev
+                      )
+                    }
+                  >
+                    <option value="import_csv">CSV Import</option>
+                    <option value="omada_openapi">Omada API</option>
+                    <option value="mikrotik_rest">MikroTik REST</option>
+                    <option value="radius_voucher">RADIUS Voucher</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Omada Settings */}
+              {architecture.voucherSourceMode === "omada_openapi" && (
+                <div className="space-y-4 rounded-xl border border-border p-4">
+                  <h4 className="font-medium text-foreground">Omada Controller</h4>
+                  <div className="space-y-2">
+                    <Label>API Base URL</Label>
+                    <Input
+                      value={architecture.omada.apiBaseUrl}
+                      onChange={(e) =>
+                        setArchitecture((prev) =>
+                          prev ? { ...prev, omada: { ...prev.omada, apiBaseUrl: e.target.value } } : prev
+                        )
+                      }
+                      placeholder="https://omada.example.com"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Client ID</Label>
+                      <Input
+                        value={architecture.omada.clientId}
+                        onChange={(e) =>
+                          setArchitecture((prev) =>
+                            prev ? { ...prev, omada: { ...prev.omada, clientId: e.target.value } } : prev
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Client Secret</Label>
+                      <Input
+                        type="password"
+                        value={omadaClientSecret}
+                        onChange={(e) => setOmadaClientSecret(e.target.value)}
+                        placeholder={architecture.omada.hasClientSecret ? "••••••••" : "Enter secret"}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" onClick={testOmadaConnection} disabled={omadaTestLoading}>
+                      {omadaTestLoading ? "Testing..." : "Test Connection"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={discoverOmadaSites} disabled={omadaSitesLoading}>
+                      {omadaSitesLoading ? "Discovering..." : "Discover Sites"}
                     </Button>
                   </div>
-                  {omadaSiteOptions.length > 0 ? (
-                    <select
-                      value={architecture.omada.siteId}
-                      onChange={(event) =>
-                        setArchitecture((prev) =>
-                          prev ? { ...prev, omada: { ...prev.omada, siteId: event.target.value } } : prev,
-                        )
-                      }
-                    >
-                      <option value="">Select discovered site</option>
-                      {omadaSiteOptions.map((site) => (
-                        <option key={site.siteId} value={site.siteId}>
-                          {site.name ? `${site.name} (${site.siteId})` : site.siteId}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
-                  {omadaSitesError ? <p className="text-sm text-red-700">{omadaSitesError}</p> : null}
-                  {omadaSitesNotice ? <p className="text-sm text-slate-600">{omadaSitesNotice}</p> : null}
+                  {omadaTestNotice && <p className="text-sm text-success-foreground">{omadaTestNotice}</p>}
+                  {omadaTestError && <p className="text-sm text-destructive">{omadaTestError}</p>}
                 </div>
-              </div>
-            ) : null}
+              )}
 
-            {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "mikrotik_rest" ? (
-              <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">MikroTik REST credentials</p>
-                <p className="mt-2 text-xs text-slate-600">
-                  Enter the router or controller URL once. PaySpot will create the hotspot user automatically after successful payment using the plan&apos;s duration and data limit.
-                </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <Input
-                    value={architecture.mikrotik.baseUrl}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? { ...prev, mikrotik: { ...prev.mikrotik, baseUrl: event.target.value } }
-                          : prev,
-                      )
-                    }
-                    placeholder="https://router.example.com"
-                  />
-                  <Input
-                    value={architecture.mikrotik.username}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? { ...prev, mikrotik: { ...prev.mikrotik, username: event.target.value } }
-                          : prev,
-                      )
-                    }
-                    placeholder="REST username"
-                  />
-                  <Input
-                    type="password"
-                    value={mikrotikPassword}
-                    onChange={(event) => setMikrotikPassword(event.target.value)}
-                    placeholder={
-                      architecture.mikrotik.hasPassword
-                        ? "REST password (leave blank to keep)"
-                        : "REST password"
-                    }
-                  />
-                  <Input
-                    value={architecture.mikrotik.hotspotServer}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? { ...prev, mikrotik: { ...prev.mikrotik, hotspotServer: event.target.value } }
-                          : prev,
-                      )
-                    }
-                    placeholder="Hotspot server (optional)"
-                  />
-                  <Input
-                    value={architecture.mikrotik.defaultProfile}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? { ...prev, mikrotik: { ...prev.mikrotik, defaultProfile: event.target.value } }
-                          : prev,
-                      )
-                    }
-                    placeholder="Default profile (optional)"
-                  />
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={architecture.mikrotik.verifyTls}
-                      onChange={(event) =>
+              {/* MikroTik Settings */}
+              {architecture.voucherSourceMode === "mikrotik_rest" && (
+                <div className="space-y-4 rounded-xl border border-border p-4">
+                  <h4 className="font-medium text-foreground">MikroTik Router</h4>
+                  <div className="space-y-2">
+                    <Label>Base URL</Label>
+                    <Input
+                      value={architecture.mikrotik.baseUrl}
+                      onChange={(e) =>
                         setArchitecture((prev) =>
-                          prev
-                            ? { ...prev, mikrotik: { ...prev.mikrotik, verifyTls: event.target.checked } }
-                            : prev,
+                          prev ? { ...prev, mikrotik: { ...prev.mikrotik, baseUrl: e.target.value } } : prev
                         )
                       }
+                      placeholder="https://192.168.1.1"
                     />
-                    Verify TLS certificate
-                  </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Username</Label>
+                      <Input
+                        value={architecture.mikrotik.username}
+                        onChange={(e) =>
+                          setArchitecture((prev) =>
+                            prev ? { ...prev, mikrotik: { ...prev.mikrotik, username: e.target.value } } : prev
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Password</Label>
+                      <Input
+                        type="password"
+                        value={mikrotikPassword}
+                        onChange={(e) => setMikrotikPassword(e.target.value)}
+                        placeholder={architecture.mikrotik.hasPassword ? "••••••••" : "Enter password"}
+                      />
+                    </div>
+                  </div>
+                  <Button type="button" variant="outline" onClick={testMikrotikConnection} disabled={mikrotikTestLoading}>
+                    {mikrotikTestLoading ? "Testing..." : "Test Connection"}
+                  </Button>
+                  {mikrotikTestNotice && <p className="text-sm text-success-foreground">{mikrotikTestNotice}</p>}
+                  {mikrotikTestError && <p className="text-sm text-destructive">{mikrotikTestError}</p>}
                 </div>
-                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                  Voucher code is generated after payment. Password = same as voucher code. Duration and data limit come from each PaySpot plan.
-                </div>
-              </div>
-            ) : null}
+              )}
 
-            {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "radius_voucher" ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">RADIUS voucher adapter</p>
-                <p className="mt-2 text-xs text-amber-900/80">
-                  PaySpot issues the voucher immediately after payment. Your external RADIUS service should call the PaySpot
-                  adapter endpoints to authorize the voucher and report accounting updates.
-                </p>
-                <div className="mt-3 rounded-xl border border-amber-300 bg-white/80 px-3 py-2 text-xs text-amber-900">
-                  <p><code>POST /api/t/&lt;slug&gt;/radius/authorize</code></p>
-                  <p><code>POST /api/t/&lt;slug&gt;/radius/accounting</code></p>
-                  <p className="mt-2">Voucher code is generated after payment. Password = same as voucher code. Format can be configured per plan.</p>
-                </div>
-                {architecture.radius?.hasAdapterSecret ? (
-                  <p className="mt-3 text-xs text-amber-900/80">
-                    Current adapter secret fingerprint: <code>****{architecture.radius.adapterSecretLast4}</code>
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+              {architectureError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{architectureError}</AlertDescription>
+                </Alert>
+              )}
 
-            {architecture.accessMode === "account_access" || (
-              architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "radius_voucher"
-            ) ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">External RADIUS adapter</p>
-                <p className="mt-2 text-xs text-amber-900/80">
-                  Shared secret for `/api/t/&lt;slug&gt;/radius/*` is generated and managed automatically.
-                </p>
-                {architecture.radius?.hasAdapterSecret ? (
-                  <p className="mt-1 text-xs text-amber-900/80">
-                    Current secret fingerprint: <code>****{architecture.radius.adapterSecretLast4}</code>
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap justify-end gap-2">
-              {architecture.voucherSourceMode === "omada_openapi" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={testOmadaConnection}
-                  disabled={omadaTestLoading || architectureSaving}
-                >
-                  {omadaTestLoading ? "Testing..." : "Test Omada connection"}
-                </Button>
-              ) : null}
-              {architecture.voucherSourceMode === "mikrotik_rest" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={testMikrotikConnection}
-                  disabled={mikrotikTestLoading || architectureSaving}
-                >
-                  {mikrotikTestLoading ? "Testing..." : "Test MikroTik connection"}
-                </Button>
-              ) : null}
-              <Button type="submit" disabled={architectureSaving || omadaTestLoading || mikrotikTestLoading}>
-                {architectureSaving ? "Saving..." : "Save architecture"}
+              <Button type="submit" className="w-full" disabled={architectureSaving}>
+                {architectureSaving ? "Saving..." : "Save Settings"}
               </Button>
-            </div>
-          </form>
-        </ModalShell>
-      ) : null}
+            </form>
+          )}
+        </BottomSheetContent>
+      </BottomSheet>
 
-      {showCreatePlanModal ? (
-        <ModalShell title="Add plan" onClose={() => setShowCreatePlanModal(false)}>
-          <form className="grid gap-2" onSubmit={createPlan}>
-            <Input value={newPlanName} onChange={(event) => setNewPlanName(event.target.value)} placeholder="Name" />
-            <Input
-              value={newPlanDuration}
-              inputMode="text"
-              onChange={(event) => setNewPlanDuration(event.target.value)}
-              placeholder="Duration optional (e.g. 90m, 1h, 2d, 1w)"
-            />
-            <Input
-              value={newPlanPrice}
-              inputMode="text"
-              onChange={(event) => setNewPlanPrice(event.target.value)}
-              placeholder="Price (e.g. 25000, 25k, NGN 25,000)"
-            />
-            <Input
-              value={newPlanMaxDevices}
-              inputMode="numeric"
-              onChange={(event) => setNewPlanMaxDevices(event.target.value)}
-              placeholder="Max devices (optional, blank = unlimited)"
-            />
-            <Input
-              value={newPlanBandwidthProfile}
-              onChange={(event) => setNewPlanBandwidthProfile(event.target.value)}
-              placeholder="Bandwidth profile (optional)"
-            />
-            <Input
-              value={newPlanDataLimitMb}
-              inputMode="text"
-              onChange={(event) => setNewPlanDataLimitMb(event.target.value)}
-              placeholder="Data limit (e.g. 500MB, 1.5GB, 2TB)"
-            />
-            <Input
-              type="datetime-local"
-              value={newPlanAvailableFrom}
-              onChange={(event) => setNewPlanAvailableFrom(event.target.value)}
-              placeholder="Available from (optional)"
-            />
-            <Input
-              type="datetime-local"
-              value={newPlanAvailableTo}
-              onChange={(event) => setNewPlanAvailableTo(event.target.value)}
-              placeholder="Available to (optional)"
-            />
-            {isRadiusVoucherMode ? (
-              <div className="grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">Paid voucher code format</p>
-                <p className="text-xs text-amber-900/80">
-                  Used only when PaySpot generates a voucher after successful payment for this plan.
-                </p>
-                <select
-                  value={newPlanRadiusVoucherCharacterSet}
-                  onChange={(event) =>
-                    setNewPlanRadiusVoucherCharacterSet(event.target.value as PlanVoucherCharacterSet)
-                  }
-                >
-                  <option value="legacy">Use current default format</option>
-                  <option value="alnum">Letters + numbers</option>
-                  <option value="letters">Letters only</option>
-                  <option value="numbers">Numbers only</option>
-                </select>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Input
-                    value={newPlanRadiusVoucherCodePrefix}
-                    onChange={(event) => setNewPlanRadiusVoucherCodePrefix(event.target.value.toUpperCase())}
-                    placeholder="Prefix (optional)"
-                    disabled={newPlanRadiusVoucherCharacterSet === "legacy"}
-                  />
-                  <Input
-                    value={newPlanRadiusVoucherCodeLength}
-                    inputMode="numeric"
-                    onChange={(event) => setNewPlanRadiusVoucherCodeLength(event.target.value)}
-                    placeholder="Code length"
-                    disabled={newPlanRadiusVoucherCharacterSet === "legacy"}
-                  />
-                </div>
-                <p className="text-xs text-amber-900/80">
-                  Prefix is optional. Length applies to the random part only.
-                </p>
-              </div>
-            ) : null}
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              {newPlanDuration.trim() ? (
-                Number.isFinite(parsedNewPlanDuration ?? Number.NaN)
-                  ? `Duration: ${formatDurationPreview(parsedNewPlanDuration!)}`
-                  : "Duration: invalid format"
-              ) : architecture?.accessMode === "account_access"
-                ? "Duration: optional (leave blank for unlimited time)"
-                : architecture?.voucherSourceMode === "mikrotik_rest" || architecture?.voucherSourceMode === "radius_voucher"
-                  ? "Duration: optional in MikroTik or RADIUS voucher mode (data-only plans supported)"
-                  : "Duration: required for voucher plans"}
-              {" | "}
-              {newPlanPrice.trim() ? (
-                Number.isFinite(parsedNewPlanPrice ?? Number.NaN)
-                  ? `Price: NGN ${parsedNewPlanPrice!.toLocaleString()}`
-                  : "Price: invalid format"
-              ) : "Price: enter 25000, 25k, or NGN 25,000"}
-              {" | "}
-              {newPlanDataLimitMb.trim() ? (
-                Number.isFinite(parsedNewPlanDataLimit ?? Number.NaN)
-                  ? `Data: ${formatDataLimitPreviewMb(parsedNewPlanDataLimit!)}`
-                  : "Data: invalid format"
-              ) : "Data: optional (leave blank for unlimited data)"}
-              {" | "}
-              {newPlanAvailableFrom.trim() || newPlanAvailableTo.trim()
-                ? "Availability window set"
-                : "Availability: always on"}
-            </div>
-            <div className="flex justify-end">
-              <Button type="submit" disabled={creatingPlan}>{creatingPlan ? "Creating..." : "Add plan"}</Button>
-            </div>
-            {plansError ? <p className="text-sm text-red-700">{plansError}</p> : null}
-          </form>
-        </ModalShell>
-      ) : null}
-
-      {showCreateVoucherModal && canManuallyCreateVouchers ? (
-        <ModalShell title={isRadiusVoucherMode ? "Create manual RADIUS voucher" : "Add voucher"} onClose={() => setShowCreateVoucherModal(false)}>
-          <form className="grid gap-2" onSubmit={createVoucher}>
-            <Input
-              value={newVoucherCode}
-              onChange={(event) => setNewVoucherCode(event.target.value)}
-              placeholder="Voucher code"
-            />
-            <select value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </select>
-            {isRadiusVoucherMode ? (
-              <p className="text-xs text-slate-600">
-                This creates an immediately usable RADIUS voucher without taking payment first.
-              </p>
-            ) : null}
-            <div className="flex justify-end">
-              <Button type="submit" disabled={creatingVoucher}>{creatingVoucher ? "Saving..." : isRadiusVoucherMode ? "Create voucher" : "Add voucher"}</Button>
-            </div>
-            {vouchersError ? <p className="text-sm text-red-700">{vouchersError}</p> : null}
-          </form>
-        </ModalShell>
-      ) : null}
-
-      {showGenerateVoucherModal && canBatchGenerateVouchers ? (
-        <ModalShell title={isRadiusVoucherMode ? "Batch generate RADIUS vouchers" : "Batch generate vouchers"} onClose={() => setShowGenerateVoucherModal(false)}>
-          <form className="grid gap-2" onSubmit={generateVouchers}>
-            <Input
-              value={generateCount}
-              inputMode="numeric"
-              onChange={(event) => setGenerateCount(event.target.value)}
-              placeholder="Quantity"
-            />
-            <Input
-              value={generatePrefix}
-              onChange={(event) => setGeneratePrefix(event.target.value)}
-              placeholder="Optional prefix"
-            />
-            <Input
-              value={generateCodeLength}
-              inputMode="numeric"
-              onChange={(event) => setGenerateCodeLength(event.target.value)}
-              placeholder="Code length"
-            />
-            <select value={generateCharacterSet} onChange={(event) => setGenerateCharacterSet(event.target.value)}>
-              <option value="alnum">Letters + numbers</option>
-              <option value="letters">Letters only</option>
-              <option value="numbers">Numbers only</option>
-            </select>
-            <select value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </select>
-            {isRadiusVoucherMode ? (
-              <p className="text-xs text-slate-600">
-                Generated vouchers will be active immediately and can be used on the RADIUS hotspot without payment.
-              </p>
-            ) : null}
-            <div className="flex justify-end">
-              <Button type="submit" disabled={generatingVouchers}>{generatingVouchers ? "Generating..." : "Generate"}</Button>
-            </div>
-            {vouchersError ? <p className="text-sm text-red-700">{vouchersError}</p> : null}
-          </form>
-        </ModalShell>
-      ) : null}
-
-      {showImportVoucherModal && isCsvMode ? (
-        <ModalShell title="Import voucher CSV" onClose={() => setShowImportVoucherModal(false)}>
-          <form className="grid gap-2" onSubmit={importCsv}>
-            <Input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
-            />
-            <Input
-              value={importPackageCode}
-              onChange={(event) => setImportPackageCode(event.target.value)}
-              placeholder="Optional forced plan code"
-            />
-            <div className="flex justify-end">
-              <Button type="submit" disabled={importLoading}>{importLoading ? "Importing..." : "Import"}</Button>
-            </div>
-            {importError ? <p className="text-sm text-red-700">{importError}</p> : null}
-          </form>
-        </ModalShell>
-      ) : null}
-
-    </>
-  );
-}
-
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="dashboard-kpi">
-      <p className="dashboard-kpi-label">{label}</p>
-      <p className="dashboard-kpi-value">{value}</p>
-    </div>
-  );
-}
-
-function ModalShell({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" onClick={onClose}>
-      <div
-        className="w-full max-w-xl rounded-xl border border-slate-200/90 bg-white p-5 shadow-[var(--shadow-lg)]"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex size-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-100"
-            aria-label="Close"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-        {children}
-      </div>
+      {/* Spacer for bottom nav on mobile */}
+      <div className="h-20 lg:hidden" />
     </div>
   );
 }

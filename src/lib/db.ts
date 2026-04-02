@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { AsyncLocalStorage } from "node:async_hooks";
-import { Pool, types, type PoolClient } from "pg";
+import Database from "better-sqlite3";
 import { hashPassword } from "@/lib/password";
+import path from "node:path";
+import fs from "node:fs";
 
-const DEFAULT_DB_URL = "postgresql://postgres:postgres@localhost:5433/payspot";
+// SQLite database file path - stored in project root for persistence
+const DB_DIR = process.env.DB_DIR || path.join(process.cwd(), "data");
+const DB_PATH = path.join(DB_DIR, "payspot.db");
 
 type QueryArg = string | number | boolean | null;
 
@@ -23,85 +26,43 @@ type DbLike = {
   exec: (sql: string) => Promise<void>;
 };
 
-let pool: Pool | null = null;
+let sqliteDb: Database.Database | null = null;
 let initialized = false;
 let initPromise: Promise<void> | null = null;
-const txStorage = new AsyncLocalStorage<PoolClient>();
-const sqlCache = new Map<string, string>();
-let savepointCounter = 0;
 
-// Parse BIGINT results (e.g. COUNT/SUM) as numbers for compatibility with existing code.
-types.setTypeParser(20, (value) => Number(value));
-
-function resolveDbUrl() {
-  return process.env.DATABASE_URL || DEFAULT_DB_URL;
-}
-
-function getPool() {
-  if (!pool) {
-    pool = new Pool({
-      connectionString: resolveDbUrl(),
-      max: Number(process.env.DB_POOL_MAX ?? 10),
-      idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS ?? 30000),
-    });
-  }
-  return pool;
-}
-
-function mapSqlPlaceholders(sql: string) {
-  const cached = sqlCache.get(sql);
-  if (cached) return cached;
-
-  let out = "";
-  let paramIndex = 1;
-  let inSingleQuote = false;
-
-  for (let i = 0; i < sql.length; i += 1) {
-    const ch = sql[i];
-
-    if (ch === "'") {
-      out += ch;
-      if (inSingleQuote && sql[i + 1] === "'") {
-        out += "'";
-        i += 1;
-        continue;
-      }
-      inSingleQuote = !inSingleQuote;
-      continue;
+function getSqliteDb(): Database.Database {
+  if (!sqliteDb) {
+    // Ensure data directory exists
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
     }
-
-    if (!inSingleQuote && ch === "?") {
-      out += `$${paramIndex}`;
-      paramIndex += 1;
-      continue;
-    }
-
-    out += ch;
+    sqliteDb = new Database(DB_PATH);
+    // Enable WAL mode for better performance
+    sqliteDb.pragma("journal_mode = WAL");
+    // Enable foreign keys
+    sqliteDb.pragma("foreign_keys = ON");
   }
-
-  sqlCache.set(sql, out);
-  return out;
+  return sqliteDb;
 }
 
-async function queryRows(sql: string, args: QueryArg[] = []) {
-  const mappedSql = mapSqlPlaceholders(sql);
-  const txClient = txStorage.getStore();
-  const client = txClient ?? getPool();
-  const result = await client.query(mappedSql, args);
-  return result.rows as Array<Record<string, unknown>>;
+function queryRows(sql: string, args: QueryArg[] = []) {
+  const db = getSqliteDb();
+  const stmt = db.prepare(sql);
+  const rows = stmt.all(...args);
+  return rows as Array<Record<string, unknown>>;
 }
 
-async function runSql(sql: string, args: QueryArg[] = []): Promise<RunResult> {
-  const mappedSql = mapSqlPlaceholders(sql);
-  const txClient = txStorage.getStore();
-  const client = txClient ?? getPool();
-  const result = await client.query(mappedSql, args);
-  return { changes: result.rowCount ?? 0 };
+function runSql(sql: string, args: QueryArg[] = []): RunResult {
+  const db = getSqliteDb();
+  const stmt = db.prepare(sql);
+  const result = stmt.run(...args);
+  return { changes: result.changes };
 }
 
-async function initSchema() {
-  const p = getPool();
-  await p.query(`
+function initSchema() {
+  const db = getSqliteDb();
+  
+  db.exec(`
     CREATE TABLE IF NOT EXISTS tenants (
       id TEXT PRIMARY KEY,
       slug TEXT NOT NULL UNIQUE,
@@ -302,8 +263,8 @@ async function initSchema() {
       called_station_id TEXT,
       nas_ip_address TEXT,
       status TEXT NOT NULL DEFAULT 'active',
-      input_octets BIGINT NOT NULL DEFAULT 0,
-      output_octets BIGINT NOT NULL DEFAULT 0,
+      input_octets INTEGER NOT NULL DEFAULT 0,
+      output_octets INTEGER NOT NULL DEFAULT 0,
       started_at TEXT NOT NULL,
       last_update_at TEXT NOT NULL,
       stopped_at TEXT,
@@ -319,8 +280,8 @@ async function initSchema() {
       called_station_id TEXT,
       nas_ip_address TEXT,
       status TEXT NOT NULL DEFAULT 'active',
-      input_octets BIGINT NOT NULL DEFAULT 0,
-      output_octets BIGINT NOT NULL DEFAULT 0,
+      input_octets INTEGER NOT NULL DEFAULT 0,
+      output_octets INTEGER NOT NULL DEFAULT 0,
       started_at TEXT NOT NULL,
       last_update_at TEXT NOT NULL,
       stopped_at TEXT,
@@ -358,91 +319,13 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_radius_voucher_sessions_tenant_reference_status
       ON radius_voucher_sessions(tenant_id, transaction_reference, status);
   `);
-
-  await p.query(`
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv';
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS portal_auth_mode TEXT NOT NULL DEFAULT 'omada_builtin';
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS omada_api_base_url TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS omada_omadac_id TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS omada_site_id TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS omada_client_id TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS omada_client_secret_enc TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS omada_hotspot_operator_username TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS omada_hotspot_operator_password_enc TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS mikrotik_base_url TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS mikrotik_username TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS mikrotik_password_enc TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS mikrotik_hotspot_server TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS mikrotik_default_profile TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS mikrotik_verify_tls INTEGER NOT NULL DEFAULT 1;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS radius_adapter_secret_enc TEXT;
-    ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS radius_adapter_secret_last4 TEXT;
-    ALTER TABLE voucher_packages
-      ADD COLUMN IF NOT EXISTS max_devices INTEGER NOT NULL DEFAULT 1;
-    ALTER TABLE voucher_packages
-      ADD COLUMN IF NOT EXISTS bandwidth_profile TEXT;
-    ALTER TABLE voucher_packages
-      ADD COLUMN IF NOT EXISTS data_limit_mb INTEGER;
-    ALTER TABLE voucher_packages
-      ADD COLUMN IF NOT EXISTS available_from TEXT;
-    ALTER TABLE voucher_packages
-      ADD COLUMN IF NOT EXISTS available_to TEXT;
-    ALTER TABLE voucher_packages
-      ADD COLUMN IF NOT EXISTS radius_voucher_code_prefix TEXT;
-    ALTER TABLE voucher_packages
-      ADD COLUMN IF NOT EXISTS radius_voucher_code_length INTEGER;
-    ALTER TABLE voucher_packages
-      ADD COLUMN IF NOT EXISTS radius_voucher_character_set TEXT;
-    ALTER TABLE transactions
-      ADD COLUMN IF NOT EXISTS subscriber_id TEXT;
-    ALTER TABLE transactions
-      ADD COLUMN IF NOT EXISTS delivery_mode TEXT NOT NULL DEFAULT 'voucher';
-    ALTER TABLE transactions
-      ADD COLUMN IF NOT EXISTS voucher_source_mode TEXT;
-    ALTER TABLE transactions
-      ADD COLUMN IF NOT EXISTS notification_sms_sent INTEGER NOT NULL DEFAULT 0;
-    ALTER TABLE transactions
-      ADD COLUMN IF NOT EXISTS notification_email_sent INTEGER NOT NULL DEFAULT 0;
-    ALTER TABLE voucher_packages
-      ALTER COLUMN duration_minutes DROP NOT NULL;
-    ALTER TABLE voucher_packages
-      ALTER COLUMN max_devices DROP NOT NULL;
-    ALTER TABLE subscriber_entitlements
-      ALTER COLUMN ends_at DROP NOT NULL;
-    ALTER TABLE subscriber_entitlements
-      ALTER COLUMN max_devices DROP NOT NULL;
-  `);
-
-  await p.query(`
-    UPDATE transactions
-    SET voucher_source_mode = 'import_csv'
-    WHERE voucher_code IS NOT NULL
-      AND delivery_mode = 'voucher'
-      AND voucher_source_mode IS NULL;
-  `);
 }
 
-async function seedInitialData() {
+function seedInitialData() {
   const now = new Date().toISOString();
+  const db = getSqliteDb();
 
-  const ensureUser = async (params: {
+  const ensureUser = (params: {
     email: string;
     username: string;
     role: "admin" | "tenant";
@@ -451,102 +334,157 @@ async function seedInitialData() {
     mustChangePassword?: boolean;
   }) => {
     const normalizedUsername = params.username.trim().toLowerCase();
-    const existing = (await queryRows(
-      "SELECT id, email FROM users WHERE username = ?",
-      [normalizedUsername],
-    )) as Array<{ id: string; email: string | null }>;
+    const existing = db
+      .prepare("SELECT id, email FROM users WHERE username = ?")
+      .get(normalizedUsername) as { id: string; email: string | null } | undefined;
 
-    const row = existing[0];
-    if (row?.id) {
+    if (existing?.id) {
       const nextEmail = params.email.trim().toLowerCase();
-      const currentEmail = row.email?.trim().toLowerCase() ?? "";
+      const currentEmail = existing.email?.trim().toLowerCase() ?? "";
       const needsUpdate =
         !currentEmail || currentEmail === `${normalizedUsername}@local.test`;
       if (needsUpdate && nextEmail && nextEmail !== currentEmail) {
-        await runSql("UPDATE users SET email = ?, updated_at = ? WHERE id = ?", [
+        db.prepare("UPDATE users SET email = ?, updated_at = ? WHERE id = ?").run(
           nextEmail,
           now,
-          row.id,
-        ]);
+          existing.id
+        );
       }
-      return row.id;
+      return existing.id;
     }
 
     const id = randomUUID();
     const passwordHash = hashPassword(params.password);
-    await runSql(
-      `
-        INSERT INTO users (
-          id, email, username, role, tenant_id, password_hash, must_change_password, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        id,
-        params.email.trim().toLowerCase(),
-        normalizedUsername,
-        params.role,
-        params.tenantId ?? null,
-        passwordHash,
-        params.mustChangePassword ? 1 : 0,
-        now,
-        now,
-      ],
+    db.prepare(`
+      INSERT INTO users (
+        id, email, username, role, tenant_id, password_hash, must_change_password, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      params.email.trim().toLowerCase(),
+      normalizedUsername,
+      params.role,
+      params.tenantId ?? null,
+      passwordHash,
+      params.mustChangePassword ? 1 : 0,
+      now,
+      now
     );
 
     return id;
   };
 
-  await ensureUser({
-    email: "seeduser@example.com",
-    username: "seeduser",
+  // Create platform admin - demo account
+  ensureUser({
+    email: "admin@payspot.demo",
+    username: "admin",
     role: "admin",
-    password: "Passw0rdA1",
+    password: "Demo123!",
     mustChangePassword: false,
   });
 
+  // Seed demo tenants with different configurations
   const seedTenants: Array<{
     slug: string;
     name: string;
     email: string;
     username: string;
     password: string;
+    status: string;
+    voucherSourceMode: string;
+    portalAuthMode: string;
   }> = [
     {
-      slug: "wallstreet",
-      name: "WALLSTREET",
-      email: "wallstreet@example.com",
-      username: "wallstreet",
-      password: "Pathfinder07!",
+      slug: "demo-cafe",
+      name: "Demo Cafe WiFi",
+      email: "cafe@payspot.demo",
+      username: "democafe",
+      password: "Demo123!",
+      status: "active",
+      voucherSourceMode: "import_csv",
+      portalAuthMode: "omada_builtin",
     },
     {
-      slug: "wallstreet-mystic",
-      name: "WALLSTREET MYSTIC",
-      email: "wallstreet-mystic@example.com",
-      username: "wallstreet-mystic",
-      password: "Pathfinder07!",
+      slug: "demo-hotel",
+      name: "Demo Hotel WiFi",
+      email: "hotel@payspot.demo",
+      username: "demohotel",
+      password: "Demo123!",
+      status: "active",
+      voucherSourceMode: "mikrotik_rest",
+      portalAuthMode: "external_radius_portal",
+    },
+    {
+      slug: "demo-cowork",
+      name: "Demo CoWork Space",
+      email: "cowork@payspot.demo",
+      username: "democowork",
+      password: "Demo123!",
+      status: "active",
+      voucherSourceMode: "omada_openapi",
+      portalAuthMode: "external_portal_api",
     },
   ];
 
   for (const t of seedTenants) {
-    const tenantRows = (await queryRows(
-      "SELECT id FROM tenants WHERE slug = ?",
-      [t.slug],
-    )) as Array<{ id: string }>;
-    let tenantId = tenantRows[0]?.id ?? null;
+    const existing = db
+      .prepare("SELECT id FROM tenants WHERE slug = ?")
+      .get(t.slug) as { id: string } | undefined;
+    
+    let tenantId = existing?.id ?? null;
 
     if (!tenantId) {
       tenantId = randomUUID();
-      await runSql(
-        `
-          INSERT INTO tenants (
-            id, slug, name, admin_email, status, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        `,
-        [tenantId, t.slug, t.name, t.email, "pending_setup", now, now],
+      db.prepare(`
+        INSERT INTO tenants (
+          id, slug, name, admin_email, status, voucher_source_mode, portal_auth_mode, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        tenantId,
+        t.slug,
+        t.name,
+        t.email,
+        t.status,
+        t.voucherSourceMode,
+        t.portalAuthMode,
+        now,
+        now
       );
+
+      // Create demo voucher packages for active tenants
+      if (t.status === "active") {
+        const packages = [
+          { code: "1HR", name: "1 Hour", duration: 60, price: 100, description: "Quick browse - 1 hour access" },
+          { code: "3HR", name: "3 Hours", duration: 180, price: 250, description: "Extended session - 3 hours" },
+          { code: "DAY", name: "Full Day", duration: 1440, price: 500, description: "All day access - 24 hours" },
+          { code: "WEEK", name: "Weekly Pass", duration: 10080, price: 2000, description: "7 days unlimited access" },
+        ];
+
+        for (const pkg of packages) {
+          const pkgId = randomUUID();
+          db.prepare(`
+            INSERT INTO voucher_packages (
+              id, tenant_id, code, name, duration_minutes, price_ngn, active, description, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+          `).run(pkgId, tenantId, pkg.code, pkg.name, pkg.duration, pkg.price, pkg.description, now, now);
+
+          // Create some demo vouchers for CSV mode tenants
+          if (t.voucherSourceMode === "import_csv") {
+            for (let i = 1; i <= 5; i++) {
+              const voucherId = randomUUID();
+              const voucherCode = `${pkg.code}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+              db.prepare(`
+                INSERT INTO voucher_pool (
+                  id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
+                ) VALUES (?, ?, ?, ?, 'available', ?, ?)
+              `).run(voucherId, tenantId, voucherCode, pkg.duration, pkgId, now);
+            }
+          }
+        }
+      }
     }
 
-    await ensureUser({
+    ensureUser({
       email: t.email,
       username: t.username,
       role: "tenant",
@@ -557,28 +495,28 @@ async function seedInitialData() {
   }
 }
 
-async function ensureInitialized() {
+function ensureInitialized() {
   if (initialized) return;
   if (!initPromise) {
-    initPromise = (async () => {
-      await initSchema();
-      await seedInitialData();
+    initPromise = Promise.resolve().then(() => {
+      initSchema();
+      seedInitialData();
       initialized = true;
-    })();
+    });
   }
-  await initPromise;
+  return initPromise;
 }
 
 function createStatement(sql: string): Statement {
   return {
     async get<T = Record<string, unknown>>(...args: QueryArg[]) {
       await ensureInitialized();
-      const rows = await queryRows(sql, args);
+      const rows = queryRows(sql, args);
       return rows[0] as T | undefined;
     },
     async all<T = Record<string, unknown>>(...args: QueryArg[]) {
       await ensureInitialized();
-      return (await queryRows(sql, args)) as T[];
+      return queryRows(sql, args) as T[];
     },
     async run(...args: QueryArg[]) {
       await ensureInitialized();
@@ -590,35 +528,29 @@ function createStatement(sql: string): Statement {
 function transaction<T>(fn: () => Promise<T> | T) {
   return async () => {
     await ensureInitialized();
-
-    const existingClient = txStorage.getStore();
-    if (existingClient) {
-      savepointCounter += 1;
-      const savepointName = `sp_${savepointCounter}`;
-      await existingClient.query(`SAVEPOINT ${savepointName}`);
-      try {
-        const result = await fn();
-        await existingClient.query(`RELEASE SAVEPOINT ${savepointName}`);
-        return result;
-      } catch (error) {
-        await existingClient.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
-        throw error;
+    const db = getSqliteDb();
+    
+    return db.transaction(() => {
+      // Since better-sqlite3 transactions are sync, we need to handle async fn
+      const result = fn();
+      if (result instanceof Promise) {
+        throw new Error("SQLite transactions must be synchronous. Use sync operations inside transaction.");
       }
-    }
-
-    const client = await getPool().connect();
-    try {
-      await client.query("BEGIN");
-      const result = await txStorage.run(client, async () => fn());
-      await client.query("COMMIT");
       return result;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    })();
   };
+}
+
+// Synchronous transaction for SQLite (preferred)
+function transactionSync<T>(fn: () => T): T {
+  const db = getSqliteDb();
+  // Ensure initialized synchronously
+  if (!initialized) {
+    initSchema();
+    seedInitialData();
+    initialized = true;
+  }
+  return db.transaction(fn)();
 }
 
 const db: DbLike = {
@@ -628,10 +560,18 @@ const db: DbLike = {
   transaction,
   async exec(sql: string) {
     await ensureInitialized();
-    await getPool().query(sql);
+    getSqliteDb().exec(sql);
   },
 };
 
 export function getDb() {
   return db;
+}
+
+// Export sync transaction for SQLite-specific usage
+export { transactionSync };
+
+// Export raw SQLite db for advanced usage
+export function getRawDb() {
+  return getSqliteDb();
 }
