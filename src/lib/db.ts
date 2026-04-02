@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import Database from "better-sqlite3";
 import { hashPassword } from "@/lib/password";
 import path from "node:path";
 import fs from "node:fs";
@@ -26,304 +25,410 @@ type DbLike = {
   exec: (sql: string) => Promise<void>;
 };
 
-let sqliteDb: Database.Database | null = null;
+// We use a simple Map for in-memory storage since sql.js requires WASM
+// This is simpler and works better in serverless environments
+type InMemoryRecord = Record<string, unknown>;
+
+interface InMemoryDb {
+  tenants: Map<string, InMemoryRecord>;
+  tenant_requests: Map<string, InMemoryRecord>;
+  users: Map<string, InMemoryRecord>;
+  sessions: Map<string, InMemoryRecord>;
+  password_reset_tokens: Map<string, InMemoryRecord>;
+  tenant_setup_tokens: Map<string, InMemoryRecord>;
+  voucher_packages: Map<string, InMemoryRecord>;
+  voucher_pool: Map<string, InMemoryRecord>;
+  transactions: Map<string, InMemoryRecord>;
+  portal_subscribers: Map<string, InMemoryRecord>;
+  portal_subscriber_sessions: Map<string, InMemoryRecord>;
+  subscriber_entitlements: Map<string, InMemoryRecord>;
+  radius_accounting_sessions: Map<string, InMemoryRecord>;
+  radius_voucher_sessions: Map<string, InMemoryRecord>;
+}
+
+let memDb: InMemoryDb | null = null;
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 
-function getSqliteDb(): Database.Database {
-  if (!sqliteDb) {
-    // Ensure data directory exists
-    if (!fs.existsSync(DB_DIR)) {
-      fs.mkdirSync(DB_DIR, { recursive: true });
+function getMemDb(): InMemoryDb {
+  if (!memDb) {
+    // Try to load from file
+    let loadedData: InMemoryDb | null = null;
+    try {
+      if (fs.existsSync(DB_PATH)) {
+        const raw = fs.readFileSync(DB_PATH, "utf-8");
+        const parsed = JSON.parse(raw);
+        loadedData = {
+          tenants: new Map(Object.entries(parsed.tenants || {})),
+          tenant_requests: new Map(Object.entries(parsed.tenant_requests || {})),
+          users: new Map(Object.entries(parsed.users || {})),
+          sessions: new Map(Object.entries(parsed.sessions || {})),
+          password_reset_tokens: new Map(Object.entries(parsed.password_reset_tokens || {})),
+          tenant_setup_tokens: new Map(Object.entries(parsed.tenant_setup_tokens || {})),
+          voucher_packages: new Map(Object.entries(parsed.voucher_packages || {})),
+          voucher_pool: new Map(Object.entries(parsed.voucher_pool || {})),
+          transactions: new Map(Object.entries(parsed.transactions || {})),
+          portal_subscribers: new Map(Object.entries(parsed.portal_subscribers || {})),
+          portal_subscriber_sessions: new Map(Object.entries(parsed.portal_subscriber_sessions || {})),
+          subscriber_entitlements: new Map(Object.entries(parsed.subscriber_entitlements || {})),
+          radius_accounting_sessions: new Map(Object.entries(parsed.radius_accounting_sessions || {})),
+          radius_voucher_sessions: new Map(Object.entries(parsed.radius_voucher_sessions || {})),
+        };
+      }
+    } catch {
+      // Ignore errors, will create fresh db
     }
-    sqliteDb = new Database(DB_PATH);
-    // Enable WAL mode for better performance
-    sqliteDb.pragma("journal_mode = WAL");
-    // Enable foreign keys
-    sqliteDb.pragma("foreign_keys = ON");
+
+    if (loadedData) {
+      memDb = loadedData;
+    } else {
+      memDb = {
+        tenants: new Map(),
+        tenant_requests: new Map(),
+        users: new Map(),
+        sessions: new Map(),
+        password_reset_tokens: new Map(),
+        tenant_setup_tokens: new Map(),
+        voucher_packages: new Map(),
+        voucher_pool: new Map(),
+        transactions: new Map(),
+        portal_subscribers: new Map(),
+        portal_subscriber_sessions: new Map(),
+        subscriber_entitlements: new Map(),
+        radius_accounting_sessions: new Map(),
+        radius_voucher_sessions: new Map(),
+      };
+    }
   }
-  return sqliteDb;
+  return memDb;
 }
 
-function queryRows(sql: string, args: QueryArg[] = []) {
-  const db = getSqliteDb();
-  const stmt = db.prepare(sql);
-  const rows = stmt.all(...args);
-  return rows as Array<Record<string, unknown>>;
+function persistDb() {
+  const db = getMemDb();
+  const data = {
+    tenants: Object.fromEntries(db.tenants),
+    tenant_requests: Object.fromEntries(db.tenant_requests),
+    users: Object.fromEntries(db.users),
+    sessions: Object.fromEntries(db.sessions),
+    password_reset_tokens: Object.fromEntries(db.password_reset_tokens),
+    tenant_setup_tokens: Object.fromEntries(db.tenant_setup_tokens),
+    voucher_packages: Object.fromEntries(db.voucher_packages),
+    voucher_pool: Object.fromEntries(db.voucher_pool),
+    transactions: Object.fromEntries(db.transactions),
+    portal_subscribers: Object.fromEntries(db.portal_subscribers),
+    portal_subscriber_sessions: Object.fromEntries(db.portal_subscriber_sessions),
+    subscriber_entitlements: Object.fromEntries(db.subscriber_entitlements),
+    radius_accounting_sessions: Object.fromEntries(db.radius_accounting_sessions),
+    radius_voucher_sessions: Object.fromEntries(db.radius_voucher_sessions),
+  };
+
+  // Ensure data directory exists
+  if (!fs.existsSync(DB_DIR)) {
+    fs.mkdirSync(DB_DIR, { recursive: true });
+  }
+
+  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-function runSql(sql: string, args: QueryArg[] = []): RunResult {
-  const db = getSqliteDb();
-  const stmt = db.prepare(sql);
-  const result = stmt.run(...args);
-  return { changes: result.changes };
-}
-
-function initSchema() {
-  const db = getSqliteDb();
+// Simple SQL parser for basic queries - handles SELECT, INSERT, UPDATE, DELETE
+function parseAndExecute(sql: string, args: QueryArg[] = []): { rows: InMemoryRecord[]; changes: number } {
+  const db = getMemDb();
+  const trimmedSql = sql.trim();
   
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS tenants (
-      id TEXT PRIMARY KEY,
-      slug TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      admin_email TEXT NOT NULL,
-      status TEXT NOT NULL,
-      paystack_secret_enc TEXT,
-      paystack_secret_last4 TEXT,
-      admin_api_key_hash TEXT,
-      voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv',
-      portal_auth_mode TEXT NOT NULL DEFAULT 'omada_builtin',
-      omada_api_base_url TEXT,
-      omada_omadac_id TEXT,
-      omada_site_id TEXT,
-      omada_client_id TEXT,
-      omada_client_secret_enc TEXT,
-      omada_hotspot_operator_username TEXT,
-      omada_hotspot_operator_password_enc TEXT,
-      mikrotik_base_url TEXT,
-      mikrotik_username TEXT,
-      mikrotik_password_enc TEXT,
-      mikrotik_hotspot_server TEXT,
-      mikrotik_default_profile TEXT,
-      mikrotik_verify_tls INTEGER NOT NULL DEFAULT 1,
-      radius_adapter_secret_enc TEXT,
-      radius_adapter_secret_last4 TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
+  // Replace ? with actual values for parsing
+  let processedSql = trimmedSql;
+  let argIndex = 0;
+  processedSql = processedSql.replace(/\?/g, () => {
+    const val = args[argIndex++];
+    if (val === null) return "NULL";
+    if (typeof val === "string") return `'${val.replace(/'/g, "''")}'`;
+    if (typeof val === "boolean") return val ? "1" : "0";
+    return String(val);
+  });
 
-    CREATE TABLE IF NOT EXISTS tenant_requests (
-      id TEXT PRIMARY KEY,
-      requested_slug TEXT NOT NULL,
-      requested_name TEXT NOT NULL,
-      requested_email TEXT NOT NULL,
-      status TEXT NOT NULL,
-      review_token_hash TEXT NOT NULL UNIQUE,
-      created_at TEXT NOT NULL,
-      reviewed_at TEXT,
-      tenant_id TEXT REFERENCES tenants(id)
-    );
+  // SELECT query
+  if (/^SELECT/i.test(trimmedSql)) {
+    return handleSelect(processedSql, db);
+  }
 
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE,
-      username TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL,
-      tenant_id TEXT REFERENCES tenants(id),
-      password_hash TEXT NOT NULL,
-      must_change_password INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
+  // INSERT query
+  if (/^INSERT/i.test(trimmedSql)) {
+    return handleInsert(processedSql, db, args);
+  }
 
-    CREATE INDEX IF NOT EXISTS idx_users_tenant
-      ON users(tenant_id);
+  // UPDATE query
+  if (/^UPDATE/i.test(trimmedSql)) {
+    return handleUpdate(processedSql, db, args);
+  }
 
-    CREATE TABLE IF NOT EXISTS sessions (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL REFERENCES users(id),
-      token_hash TEXT NOT NULL UNIQUE,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      revoked_at TEXT
-    );
+  // DELETE query
+  if (/^DELETE/i.test(trimmedSql)) {
+    return handleDelete(processedSql, db);
+  }
 
-    CREATE INDEX IF NOT EXISTS idx_sessions_user
-      ON sessions(user_id);
-    CREATE INDEX IF NOT EXISTS idx_sessions_expires
-      ON sessions(expires_at);
+  return { rows: [], changes: 0 };
+}
 
-    CREATE TABLE IF NOT EXISTS password_reset_tokens (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL REFERENCES users(id),
-      token_hash TEXT NOT NULL UNIQUE,
-      expires_at TEXT NOT NULL,
-      used_at TEXT,
-      created_at TEXT NOT NULL
-    );
+function handleSelect(sql: string, db: InMemoryDb): { rows: InMemoryRecord[]; changes: number } {
+  // Extract table name
+  const fromMatch = sql.match(/FROM\s+(\w+)/i);
+  if (!fromMatch) return { rows: [], changes: 0 };
+  
+  const tableName = fromMatch[1] as keyof InMemoryDb;
+  const table = db[tableName];
+  if (!table) return { rows: [], changes: 0 };
 
-    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user
-      ON password_reset_tokens(user_id);
-    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires
-      ON password_reset_tokens(expires_at);
+  let results = Array.from(table.values());
 
-    CREATE TABLE IF NOT EXISTS tenant_setup_tokens (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL REFERENCES tenants(id),
-      token_hash TEXT NOT NULL UNIQUE,
-      expires_at TEXT NOT NULL,
-      used_at TEXT,
-      created_at TEXT NOT NULL
-    );
+  // Handle WHERE clause
+  const whereMatch = sql.match(/WHERE\s+(.+?)(?:\s+ORDER|\s+LIMIT|\s*$)/i);
+  if (whereMatch) {
+    const whereClause = whereMatch[1];
+    results = results.filter(row => evaluateWhere(whereClause, row));
+  }
 
-    CREATE TABLE IF NOT EXISTS voucher_packages (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL REFERENCES tenants(id),
-      code TEXT NOT NULL,
-      name TEXT NOT NULL,
-      duration_minutes INTEGER,
-      price_ngn INTEGER NOT NULL,
-      max_devices INTEGER,
-      bandwidth_profile TEXT,
-      data_limit_mb INTEGER,
-      available_from TEXT,
-      available_to TEXT,
-      active INTEGER NOT NULL DEFAULT 1,
-      description TEXT,
-      radius_voucher_code_prefix TEXT,
-      radius_voucher_code_length INTEGER,
-      radius_voucher_character_set TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE (tenant_id, code)
-    );
+  // Handle ORDER BY
+  const orderMatch = sql.match(/ORDER\s+BY\s+(\w+)(?:\s+(ASC|DESC))?/i);
+  if (orderMatch) {
+    const orderCol = orderMatch[1];
+    const orderDir = orderMatch[2]?.toUpperCase() === "DESC" ? -1 : 1;
+    results.sort((a, b) => {
+      const aVal = a[orderCol];
+      const bVal = b[orderCol];
+      if (aVal === bVal) return 0;
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
+      return (aVal < bVal ? -1 : 1) * orderDir;
+    });
+  }
 
-    CREATE TABLE IF NOT EXISTS voucher_pool (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL REFERENCES tenants(id),
-      voucher_code TEXT NOT NULL,
-      duration_minutes INTEGER NOT NULL,
-      status TEXT NOT NULL,
-      package_id TEXT NOT NULL REFERENCES voucher_packages(id),
-      assigned_to_transaction TEXT,
-      assigned_to_email TEXT,
-      assigned_to_phone TEXT,
-      created_at TEXT NOT NULL,
-      assigned_at TEXT,
-      UNIQUE (tenant_id, voucher_code)
-    );
+  // Handle LIMIT
+  const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
+  if (limitMatch) {
+    results = results.slice(0, parseInt(limitMatch[1], 10));
+  }
 
-    CREATE TABLE IF NOT EXISTS transactions (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL REFERENCES tenants(id),
-      reference TEXT NOT NULL UNIQUE,
-      email TEXT NOT NULL,
-      phone TEXT NOT NULL,
-      amount_ngn INTEGER NOT NULL,
-      voucher_code TEXT,
-      voucher_source_mode TEXT,
-      package_id TEXT NOT NULL REFERENCES voucher_packages(id),
-      subscriber_id TEXT,
-      delivery_mode TEXT NOT NULL DEFAULT 'voucher',
-      authorization_url TEXT,
-      payment_status TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      expires_at TEXT,
-      paid_at TEXT,
-      notification_sms_sent INTEGER NOT NULL DEFAULT 0,
-      notification_email_sent INTEGER NOT NULL DEFAULT 0
-    );
+  // Handle specific columns (vs SELECT *)
+  const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM/i);
+  if (selectMatch && selectMatch[1].trim() !== "*") {
+    const columns = selectMatch[1].split(",").map(c => {
+      const asMatch = c.trim().match(/(.+?)\s+AS\s+(\w+)/i);
+      if (asMatch) return { source: asMatch[1].trim(), alias: asMatch[2].trim() };
+      return { source: c.trim(), alias: c.trim() };
+    });
 
-    CREATE TABLE IF NOT EXISTS portal_subscribers (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL REFERENCES tenants(id),
-      email TEXT NOT NULL,
-      phone TEXT,
-      full_name TEXT,
-      password_hash TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE (tenant_id, email)
-    );
+    results = results.map(row => {
+      const newRow: InMemoryRecord = {};
+      for (const col of columns) {
+        // Handle COUNT(*)
+        if (/COUNT\s*\(\s*\*\s*\)/i.test(col.source)) {
+          newRow[col.alias] = results.length;
+        } else {
+          newRow[col.alias] = row[col.source];
+        }
+      }
+      return newRow;
+    });
 
-    CREATE TABLE IF NOT EXISTS portal_subscriber_sessions (
-      id TEXT PRIMARY KEY,
-      subscriber_id TEXT NOT NULL REFERENCES portal_subscribers(id),
-      token_hash TEXT NOT NULL UNIQUE,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      revoked_at TEXT
-    );
+    // For COUNT(*), return single row
+    if (columns.some(c => /COUNT\s*\(\s*\*\s*\)/i.test(c.source))) {
+      return { rows: [{ [columns[0].alias]: Array.from(table.values()).filter(row => {
+        if (whereMatch) {
+          return evaluateWhere(whereMatch[1], row);
+        }
+        return true;
+      }).length }], changes: 0 };
+    }
+  }
 
-    CREATE TABLE IF NOT EXISTS subscriber_entitlements (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL REFERENCES tenants(id),
-      subscriber_id TEXT NOT NULL REFERENCES portal_subscribers(id),
-      package_id TEXT NOT NULL REFERENCES voucher_packages(id),
-      transaction_reference TEXT NOT NULL UNIQUE,
-      status TEXT NOT NULL DEFAULT 'active',
-      starts_at TEXT NOT NULL,
-      ends_at TEXT,
-      max_devices INTEGER,
-      bandwidth_profile TEXT,
-      data_limit_mb INTEGER,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
+  return { rows: results, changes: 0 };
+}
 
-    CREATE TABLE IF NOT EXISTS radius_accounting_sessions (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL REFERENCES tenants(id),
-      subscriber_id TEXT NOT NULL REFERENCES portal_subscribers(id),
-      entitlement_id TEXT NOT NULL REFERENCES subscriber_entitlements(id),
-      session_id TEXT NOT NULL,
-      calling_station_id TEXT,
-      called_station_id TEXT,
-      nas_ip_address TEXT,
-      status TEXT NOT NULL DEFAULT 'active',
-      input_octets INTEGER NOT NULL DEFAULT 0,
-      output_octets INTEGER NOT NULL DEFAULT 0,
-      started_at TEXT NOT NULL,
-      last_update_at TEXT NOT NULL,
-      stopped_at TEXT,
-      UNIQUE (tenant_id, session_id)
-    );
+function handleInsert(sql: string, db: InMemoryDb, args: QueryArg[]): { rows: InMemoryRecord[]; changes: number } {
+  const match = sql.match(/INSERT\s+INTO\s+(\w+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/i);
+  if (!match) return { rows: [], changes: 0 };
 
-    CREATE TABLE IF NOT EXISTS radius_voucher_sessions (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL REFERENCES tenants(id),
-      transaction_reference TEXT NOT NULL REFERENCES transactions(reference),
-      session_id TEXT NOT NULL,
-      calling_station_id TEXT,
-      called_station_id TEXT,
-      nas_ip_address TEXT,
-      status TEXT NOT NULL DEFAULT 'active',
-      input_octets INTEGER NOT NULL DEFAULT 0,
-      output_octets INTEGER NOT NULL DEFAULT 0,
-      started_at TEXT NOT NULL,
-      last_update_at TEXT NOT NULL,
-      stopped_at TEXT,
-      UNIQUE (tenant_id, session_id)
-    );
+  const tableName = match[1] as keyof InMemoryDb;
+  const table = db[tableName];
+  if (!table) return { rows: [], changes: 0 };
 
-    CREATE INDEX IF NOT EXISTS idx_voucher_packages_tenant_active
-      ON voucher_packages(tenant_id, active);
-    CREATE INDEX IF NOT EXISTS idx_voucher_pool_tenant_status
-      ON voucher_pool(tenant_id, status);
-    CREATE INDEX IF NOT EXISTS idx_voucher_pool_tenant_package_status
-      ON voucher_pool(tenant_id, package_id, status);
-    CREATE INDEX IF NOT EXISTS idx_transactions_tenant_status
-      ON transactions(tenant_id, payment_status);
-    CREATE INDEX IF NOT EXISTS idx_transactions_tenant_reference
-      ON transactions(tenant_id, reference);
-    CREATE INDEX IF NOT EXISTS idx_transactions_tenant_voucher_source_code
-      ON transactions(tenant_id, voucher_source_mode, voucher_code);
-    CREATE INDEX IF NOT EXISTS idx_portal_subscribers_tenant_email
-      ON portal_subscribers(tenant_id, email);
-    CREATE INDEX IF NOT EXISTS idx_portal_subscriber_sessions_subscriber
-      ON portal_subscriber_sessions(subscriber_id);
-    CREATE INDEX IF NOT EXISTS idx_portal_subscriber_sessions_expires
-      ON portal_subscriber_sessions(expires_at);
-    CREATE INDEX IF NOT EXISTS idx_subscriber_entitlements_subscriber_status
-      ON subscriber_entitlements(subscriber_id, status);
-    CREATE INDEX IF NOT EXISTS idx_subscriber_entitlements_tenant_status
-      ON subscriber_entitlements(tenant_id, status);
-    CREATE INDEX IF NOT EXISTS idx_radius_accounting_tenant_subscriber_status
-      ON radius_accounting_sessions(tenant_id, subscriber_id, status);
-    CREATE INDEX IF NOT EXISTS idx_radius_accounting_tenant_entitlement
-      ON radius_accounting_sessions(tenant_id, entitlement_id);
-    CREATE INDEX IF NOT EXISTS idx_radius_voucher_sessions_tenant_reference
-      ON radius_voucher_sessions(tenant_id, transaction_reference);
-    CREATE INDEX IF NOT EXISTS idx_radius_voucher_sessions_tenant_reference_status
-      ON radius_voucher_sessions(tenant_id, transaction_reference, status);
-  `);
+  const columns = match[2].split(",").map(c => c.trim());
+  const valuesRaw = match[3];
+  
+  // Parse values, handling quoted strings
+  const values: unknown[] = [];
+  let currentVal = "";
+  let inQuote = false;
+  let quoteChar = "";
+  
+  for (let i = 0; i < valuesRaw.length; i++) {
+    const char = valuesRaw[i];
+    if (!inQuote && (char === "'" || char === '"')) {
+      inQuote = true;
+      quoteChar = char;
+    } else if (inQuote && char === quoteChar) {
+      // Check for escaped quote
+      if (valuesRaw[i + 1] === quoteChar) {
+        currentVal += char;
+        i++;
+      } else {
+        inQuote = false;
+        quoteChar = "";
+      }
+    } else if (!inQuote && char === ",") {
+      values.push(parseValue(currentVal.trim()));
+      currentVal = "";
+    } else {
+      currentVal += char;
+    }
+  }
+  if (currentVal.trim()) {
+    values.push(parseValue(currentVal.trim()));
+  }
+
+  const record: InMemoryRecord = {};
+  for (let i = 0; i < columns.length; i++) {
+    record[columns[i]] = values[i];
+  }
+
+  // Use id as key
+  const id = record.id as string || randomUUID();
+  record.id = id;
+  table.set(id, record);
+  persistDb();
+
+  return { rows: [], changes: 1 };
+}
+
+function handleUpdate(sql: string, db: InMemoryDb, args: QueryArg[]): { rows: InMemoryRecord[]; changes: number } {
+  const match = sql.match(/UPDATE\s+(\w+)\s+SET\s+(.+?)\s+WHERE\s+(.+)/i);
+  if (!match) return { rows: [], changes: 0 };
+
+  const tableName = match[1] as keyof InMemoryDb;
+  const table = db[tableName];
+  if (!table) return { rows: [], changes: 0 };
+
+  // Parse SET clause
+  const setClause = match[2];
+  const whereClause = match[3];
+
+  let changes = 0;
+  for (const [id, row] of table.entries()) {
+    if (evaluateWhere(whereClause, row)) {
+      // Parse and apply SET values
+      const setParts = setClause.split(/,(?=(?:[^']*'[^']*')*[^']*$)/);
+      for (const part of setParts) {
+        const eqMatch = part.match(/(\w+)\s*=\s*(.+)/);
+        if (eqMatch) {
+          const col = eqMatch[1].trim();
+          const val = parseValue(eqMatch[2].trim());
+          row[col] = val;
+        }
+      }
+      table.set(id, row);
+      changes++;
+    }
+  }
+
+  if (changes > 0) persistDb();
+  return { rows: [], changes };
+}
+
+function handleDelete(sql: string, db: InMemoryDb): { rows: InMemoryRecord[]; changes: number } {
+  const match = sql.match(/DELETE\s+FROM\s+(\w+)(?:\s+WHERE\s+(.+))?/i);
+  if (!match) return { rows: [], changes: 0 };
+
+  const tableName = match[1] as keyof InMemoryDb;
+  const table = db[tableName];
+  if (!table) return { rows: [], changes: 0 };
+
+  const whereClause = match[2];
+  let changes = 0;
+
+  if (!whereClause) {
+    // Delete all
+    changes = table.size;
+    table.clear();
+  } else {
+    const toDelete: string[] = [];
+    for (const [id, row] of table.entries()) {
+      if (evaluateWhere(whereClause, row)) {
+        toDelete.push(id);
+      }
+    }
+    for (const id of toDelete) {
+      table.delete(id);
+      changes++;
+    }
+  }
+
+  if (changes > 0) persistDb();
+  return { rows: [], changes };
+}
+
+function parseValue(val: string): unknown {
+  if (val === "NULL" || val === "null") return null;
+  if (val === "TRUE" || val === "true" || val === "1") return 1;
+  if (val === "FALSE" || val === "false" || val === "0") return 0;
+  if (/^-?\d+$/.test(val)) return parseInt(val, 10);
+  if (/^-?\d+\.\d+$/.test(val)) return parseFloat(val);
+  // Remove quotes
+  if ((val.startsWith("'") && val.endsWith("'")) || (val.startsWith('"') && val.endsWith('"'))) {
+    return val.slice(1, -1).replace(/''/g, "'");
+  }
+  return val;
+}
+
+function evaluateWhere(whereClause: string, row: InMemoryRecord): boolean {
+  // Handle AND conditions
+  if (/\s+AND\s+/i.test(whereClause)) {
+    const parts = whereClause.split(/\s+AND\s+/i);
+    return parts.every(part => evaluateWhere(part.trim(), row));
+  }
+
+  // Handle OR conditions
+  if (/\s+OR\s+/i.test(whereClause)) {
+    const parts = whereClause.split(/\s+OR\s+/i);
+    return parts.some(part => evaluateWhere(part.trim(), row));
+  }
+
+  // Handle IS NULL
+  const isNullMatch = whereClause.match(/(\w+)\s+IS\s+NULL/i);
+  if (isNullMatch) {
+    return row[isNullMatch[1]] === null || row[isNullMatch[1]] === undefined;
+  }
+
+  // Handle IS NOT NULL
+  const isNotNullMatch = whereClause.match(/(\w+)\s+IS\s+NOT\s+NULL/i);
+  if (isNotNullMatch) {
+    return row[isNotNullMatch[1]] !== null && row[isNotNullMatch[1]] !== undefined;
+  }
+
+  // Handle comparisons
+  const compMatch = whereClause.match(/(\w+)\s*(=|!=|<>|<=|>=|<|>)\s*(.+)/);
+  if (compMatch) {
+    const col = compMatch[1];
+    const op = compMatch[2];
+    const val = parseValue(compMatch[3].trim());
+    const rowVal = row[col];
+
+    switch (op) {
+      case "=": return rowVal === val;
+      case "!=":
+      case "<>": return rowVal !== val;
+      case "<": return (rowVal as number) < (val as number);
+      case ">": return (rowVal as number) > (val as number);
+      case "<=": return (rowVal as number) <= (val as number);
+      case ">=": return (rowVal as number) >= (val as number);
+    }
+  }
+
+  return true;
 }
 
 function seedInitialData() {
   const now = new Date().toISOString();
-  const db = getSqliteDb();
+  const db = getMemDb();
 
   const ensureUser = (params: {
     email: string;
@@ -334,42 +439,28 @@ function seedInitialData() {
     mustChangePassword?: boolean;
   }) => {
     const normalizedUsername = params.username.trim().toLowerCase();
-    const existing = db
-      .prepare("SELECT id, email FROM users WHERE username = ?")
-      .get(normalizedUsername) as { id: string; email: string | null } | undefined;
-
-    if (existing?.id) {
-      const nextEmail = params.email.trim().toLowerCase();
-      const currentEmail = existing.email?.trim().toLowerCase() ?? "";
-      const needsUpdate =
-        !currentEmail || currentEmail === `${normalizedUsername}@local.test`;
-      if (needsUpdate && nextEmail && nextEmail !== currentEmail) {
-        db.prepare("UPDATE users SET email = ?, updated_at = ? WHERE id = ?").run(
-          nextEmail,
-          now,
-          existing.id
-        );
+    
+    // Check if user exists
+    for (const [id, user] of db.users.entries()) {
+      if (user.username === normalizedUsername) {
+        return id;
       }
-      return existing.id;
     }
 
     const id = randomUUID();
     const passwordHash = hashPassword(params.password);
-    db.prepare(`
-      INSERT INTO users (
-        id, email, username, role, tenant_id, password_hash, must_change_password, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    
+    db.users.set(id, {
       id,
-      params.email.trim().toLowerCase(),
-      normalizedUsername,
-      params.role,
-      params.tenantId ?? null,
-      passwordHash,
-      params.mustChangePassword ? 1 : 0,
-      now,
-      now
-    );
+      email: params.email.trim().toLowerCase(),
+      username: normalizedUsername,
+      role: params.role,
+      tenant_id: params.tenantId ?? null,
+      password_hash: passwordHash,
+      must_change_password: params.mustChangePassword ? 1 : 0,
+      created_at: now,
+      updated_at: now,
+    });
 
     return id;
   };
@@ -427,29 +518,46 @@ function seedInitialData() {
   ];
 
   for (const t of seedTenants) {
-    const existing = db
-      .prepare("SELECT id FROM tenants WHERE slug = ?")
-      .get(t.slug) as { id: string } | undefined;
-    
-    let tenantId = existing?.id ?? null;
+    // Check if tenant exists
+    let tenantId: string | null = null;
+    for (const [id, tenant] of db.tenants.entries()) {
+      if (tenant.slug === t.slug) {
+        tenantId = id;
+        break;
+      }
+    }
 
     if (!tenantId) {
       tenantId = randomUUID();
-      db.prepare(`
-        INSERT INTO tenants (
-          id, slug, name, admin_email, status, voucher_source_mode, portal_auth_mode, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        tenantId,
-        t.slug,
-        t.name,
-        t.email,
-        t.status,
-        t.voucherSourceMode,
-        t.portalAuthMode,
-        now,
-        now
-      );
+      db.tenants.set(tenantId, {
+        id: tenantId,
+        slug: t.slug,
+        name: t.name,
+        admin_email: t.email,
+        status: t.status,
+        voucher_source_mode: t.voucherSourceMode,
+        portal_auth_mode: t.portalAuthMode,
+        paystack_secret_enc: null,
+        paystack_secret_last4: null,
+        admin_api_key_hash: null,
+        omada_api_base_url: null,
+        omada_omadac_id: null,
+        omada_site_id: null,
+        omada_client_id: null,
+        omada_client_secret_enc: null,
+        omada_hotspot_operator_username: null,
+        omada_hotspot_operator_password_enc: null,
+        mikrotik_base_url: null,
+        mikrotik_username: null,
+        mikrotik_password_enc: null,
+        mikrotik_hotspot_server: null,
+        mikrotik_default_profile: null,
+        mikrotik_verify_tls: 1,
+        radius_adapter_secret_enc: null,
+        radius_adapter_secret_last4: null,
+        created_at: now,
+        updated_at: now,
+      });
 
       // Create demo voucher packages for active tenants
       if (t.status === "active") {
@@ -462,22 +570,45 @@ function seedInitialData() {
 
         for (const pkg of packages) {
           const pkgId = randomUUID();
-          db.prepare(`
-            INSERT INTO voucher_packages (
-              id, tenant_id, code, name, duration_minutes, price_ngn, active, description, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
-          `).run(pkgId, tenantId, pkg.code, pkg.name, pkg.duration, pkg.price, pkg.description, now, now);
+          db.voucher_packages.set(pkgId, {
+            id: pkgId,
+            tenant_id: tenantId,
+            code: pkg.code,
+            name: pkg.name,
+            duration_minutes: pkg.duration,
+            price_ngn: pkg.price,
+            max_devices: null,
+            bandwidth_profile: null,
+            data_limit_mb: null,
+            available_from: null,
+            available_to: null,
+            active: 1,
+            description: pkg.description,
+            radius_voucher_code_prefix: null,
+            radius_voucher_code_length: null,
+            radius_voucher_character_set: null,
+            created_at: now,
+            updated_at: now,
+          });
 
           // Create some demo vouchers for CSV mode tenants
           if (t.voucherSourceMode === "import_csv") {
             for (let i = 1; i <= 5; i++) {
               const voucherId = randomUUID();
               const voucherCode = `${pkg.code}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-              db.prepare(`
-                INSERT INTO voucher_pool (
-                  id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
-                ) VALUES (?, ?, ?, ?, 'available', ?, ?)
-              `).run(voucherId, tenantId, voucherCode, pkg.duration, pkgId, now);
+              db.voucher_pool.set(voucherId, {
+                id: voucherId,
+                tenant_id: tenantId,
+                voucher_code: voucherCode,
+                duration_minutes: pkg.duration,
+                status: "available",
+                package_id: pkgId,
+                assigned_to_transaction: null,
+                assigned_to_email: null,
+                assigned_to_phone: null,
+                created_at: now,
+                assigned_at: null,
+              });
             }
           }
         }
@@ -493,13 +624,15 @@ function seedInitialData() {
       mustChangePassword: false,
     });
   }
+
+  persistDb();
 }
 
 function ensureInitialized() {
-  if (initialized) return;
+  if (initialized) return Promise.resolve();
   if (!initPromise) {
     initPromise = Promise.resolve().then(() => {
-      initSchema();
+      getMemDb(); // Initialize db from file or fresh
       seedInitialData();
       initialized = true;
     });
@@ -511,16 +644,18 @@ function createStatement(sql: string): Statement {
   return {
     async get<T = Record<string, unknown>>(...args: QueryArg[]) {
       await ensureInitialized();
-      const rows = queryRows(sql, args);
+      const { rows } = parseAndExecute(sql, args);
       return rows[0] as T | undefined;
     },
     async all<T = Record<string, unknown>>(...args: QueryArg[]) {
       await ensureInitialized();
-      return queryRows(sql, args) as T[];
+      const { rows } = parseAndExecute(sql, args);
+      return rows as T[];
     },
     async run(...args: QueryArg[]) {
       await ensureInitialized();
-      return runSql(sql, args);
+      const { changes } = parseAndExecute(sql, args);
+      return { changes };
     },
   };
 }
@@ -528,29 +663,13 @@ function createStatement(sql: string): Statement {
 function transaction<T>(fn: () => Promise<T> | T) {
   return async () => {
     await ensureInitialized();
-    const db = getSqliteDb();
-    
-    return db.transaction(() => {
-      // Since better-sqlite3 transactions are sync, we need to handle async fn
-      const result = fn();
-      if (result instanceof Promise) {
-        throw new Error("SQLite transactions must be synchronous. Use sync operations inside transaction.");
-      }
-      return result;
-    })();
+    // For in-memory db, transactions just run the function
+    const result = fn();
+    if (result instanceof Promise) {
+      return await result;
+    }
+    return result;
   };
-}
-
-// Synchronous transaction for SQLite (preferred)
-function transactionSync<T>(fn: () => T): T {
-  const db = getSqliteDb();
-  // Ensure initialized synchronously
-  if (!initialized) {
-    initSchema();
-    seedInitialData();
-    initialized = true;
-  }
-  return db.transaction(fn)();
 }
 
 const db: DbLike = {
@@ -560,7 +679,7 @@ const db: DbLike = {
   transaction,
   async exec(sql: string) {
     await ensureInitialized();
-    getSqliteDb().exec(sql);
+    // For schema creation, we don't need to do anything with in-memory db
   },
 };
 
@@ -568,10 +687,7 @@ export function getDb() {
   return db;
 }
 
-// Export sync transaction for SQLite-specific usage
-export { transactionSync };
-
-// Export raw SQLite db for advanced usage
-export function getRawDb() {
-  return getSqliteDb();
+// Export for direct table access (useful for complex queries)
+export function getMemoryDb() {
+  return getMemDb();
 }
