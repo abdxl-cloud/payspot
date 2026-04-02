@@ -54,10 +54,8 @@ function getMemDb(): InMemoryDb {
   if (!memDb) {
     // Try to load from file
     let loadedData: InMemoryDb | null = null;
-    console.log("[v0] Initializing database from:", DB_PATH);
     try {
       if (fs.existsSync(DB_PATH)) {
-        console.log("[v0] Found existing database file, loading...");
         const raw = fs.readFileSync(DB_PATH, "utf-8");
         const parsed = JSON.parse(raw);
         loadedData = {
@@ -83,9 +81,7 @@ function getMemDb(): InMemoryDb {
 
     if (loadedData) {
       memDb = loadedData;
-      console.log("[v0] Database loaded with", memDb.users.size, "users");
     } else {
-      console.log("[v0] Creating fresh database");
       memDb = {
         tenants: new Map(),
         tenant_requests: new Map(),
@@ -448,7 +444,6 @@ function seedInitialData() {
     // Check if user exists by username or email
     for (const [id, user] of db.users.entries()) {
       if (user.username === normalizedUsername || user.email === normalizedEmail) {
-        console.log("[v0] User already exists:", normalizedEmail);
         return id;
       }
     }
@@ -468,7 +463,6 @@ function seedInitialData() {
       updated_at: now,
     });
 
-    console.log("[v0] Created user:", normalizedEmail);
     return id;
   };
 
@@ -642,7 +636,6 @@ function ensureInitialized() {
       getMemDb(); // Initialize db from file or fresh
       seedInitialData();
       initialized = true;
-      console.log("[v0] Database initialized, users:", getMemDb().users.size);
     });
   }
   return initPromise;

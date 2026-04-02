@@ -558,14 +558,12 @@ export async function consumePasswordResetToken(token: string) {
 export async function getSessionUser(sessionToken: string) {
   const db = getDb();
   const tokenHash = hashToken(sessionToken);
-  console.log("[v0] getSessionUser called with token hash:", tokenHash.substring(0, 16) + "...");
   
   // Get session first (simple query without JOIN)
   const session = await db
     .prepare("SELECT user_id, expires_at, revoked_at FROM sessions WHERE token_hash = ?")
     .get(tokenHash) as { user_id: string; expires_at: string; revoked_at: string | null } | undefined;
 
-  console.log("[v0] Session lookup result:", session ? { user_id: session.user_id, expires_at: session.expires_at } : null);
   if (!session) return null;
   if (session.revoked_at) return null;
   if (new Date(session.expires_at).getTime() < Date.now()) {
@@ -3039,17 +3037,21 @@ export async function getStats(tenantId: string) {
         total: number;
         unused: number;
         assigned: number;
-      };
+      } | undefined;
+
+      const total = totals?.total ?? 0;
+      const unused = totals?.unused ?? 0;
+      const assigned = totals?.assigned ?? 0;
 
       return {
         code: pkg.code,
         name: pkg.name,
-        total: totals.total ?? 0,
-        unused: totals.unused ?? 0,
-        assigned: totals.assigned ?? 0,
+        total,
+        unused,
+        assigned,
         percentageRemaining:
-          totals.total > 0
-            ? Math.round(((totals.unused ?? 0) / totals.total) * 10000) / 100
+          total > 0
+            ? Math.round((unused / total) * 10000) / 100
             : 0,
       };
     }),
@@ -3091,18 +3093,18 @@ export async function getTenantAdminStats(tenantId: string) {
     processing: number;
     failed: number;
     revenue_ngn: number;
-  };
+  } | undefined;
 
   return {
     voucherPool,
     packages,
     transactions: {
-      total: tx.total ?? 0,
-      success: tx.success ?? 0,
-      pending: tx.pending ?? 0,
-      processing: tx.processing ?? 0,
-      failed: tx.failed ?? 0,
-      revenueNgn: tx.revenue_ngn ?? 0,
+      total: tx?.total ?? 0,
+      success: tx?.success ?? 0,
+      pending: tx?.pending ?? 0,
+      processing: tx?.processing ?? 0,
+      failed: tx?.failed ?? 0,
+      revenueNgn: tx?.revenue_ngn ?? 0,
     },
   };
 }

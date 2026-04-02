@@ -9,19 +9,14 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  console.log("[v0] Login attempt started");
   const body = await request.json();
-  console.log("[v0] Login body:", { email: body.email });
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    console.log("[v0] Login validation failed:", parsed.error);
     return Response.json({ error: "Invalid request" }, { status: 400 });
   }
 
   const { email, password } = parsed.data;
-  console.log("[v0] Looking up user by email:", email);
   const user = await getUserByEmail(email);
-  console.log("[v0] User found:", user ? { id: user.id, email: user.email, role: user.role } : null);
   if (!user) {
     return Response.json({ error: "Invalid credentials" }, { status: 401 });
   }
