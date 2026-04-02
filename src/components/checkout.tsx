@@ -4,10 +4,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   CircleAlert,
+  Clock,
+  CreditCard,
   Lock,
   MessageSquareText,
   RefreshCcw,
   Search,
+  Signal,
+  Smartphone,
+  User,
+  Wifi,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CaptiveBrowserAuth } from "@/components/captive-browserauth";
@@ -168,7 +174,7 @@ function isValidEmailAddress(value: string) {
 
 function formatDuration(minutes: number | null | undefined) {
   if (!minutes || minutes <= 0) {
-    return "Unlimited time";
+    return "Unlimited";
   }
   if (minutes % (60 * 24 * 7) === 0) {
     const w = minutes / (60 * 24 * 7);
@@ -182,7 +188,7 @@ function formatDuration(minutes: number | null | undefined) {
     const h = minutes / 60;
     return `${h} hour${h === 1 ? "" : "s"}`;
   }
-  return `${minutes} minutes`;
+  return `${minutes} min`;
 }
 
 function formatPriceCompact(value: number) {
@@ -209,12 +215,12 @@ function formatDataLimitMb(value: number) {
 }
 
 function formatPlanDataLabel(dataLimitMb: number | null | undefined) {
-  if (!dataLimitMb || dataLimitMb <= 0) return "Unlimited data";
+  if (!dataLimitMb || dataLimitMb <= 0) return "Unlimited";
   return formatDataLimitMb(dataLimitMb);
 }
 
 function formatDeviceLimit(maxDevices: number | null | undefined) {
-  if (!maxDevices || maxDevices <= 0) return "Unlimited devices";
+  if (!maxDevices || maxDevices <= 0) return "Unlimited";
   return `${maxDevices} device${maxDevices === 1 ? "" : "s"}`;
 }
 
@@ -277,14 +283,15 @@ function formatRemainingTime(endAt: string | null | undefined) {
   const minutes = totalMinutes % 60;
 
   if (days > 0) {
-    return `${days}d ${hours}h remaining`;
+    return `${days}d ${hours}h`;
   }
   if (hours > 0) {
-    return `${hours}h ${minutes}m remaining`;
+    return `${hours}h ${minutes}m`;
   }
-  return `${Math.max(1, minutes)}m remaining`;
+  return `${Math.max(1, minutes)}m`;
 }
 
+/* ===== Progress Stepper - Mobile Optimized ===== */
 function Stepper({
   step,
   accessMode,
@@ -294,51 +301,143 @@ function Stepper({
 }) {
   const steps = accessMode === "account_access"
     ? [
-        { id: 1, label: "Sign In" },
-        { id: 2, label: "Choose Plan" },
-        { id: 3, label: "Pay Securely" },
+        { id: 1, label: "Sign In", icon: User },
+        { id: 2, label: "Plan", icon: Wifi },
+        { id: 3, label: "Pay", icon: CreditCard },
       ]
     : [
-        { id: 1, label: "Select Plan" },
-        { id: 2, label: "Email Address" },
-        { id: 3, label: "Pay Securely" },
+        { id: 1, label: "Plan", icon: Wifi },
+        { id: 2, label: "Email", icon: User },
+        { id: 3, label: "Pay", icon: CreditCard },
       ];
 
   return (
-    <div aria-label="Checkout progress" className="grid gap-2 sm:grid-cols-3">
-      {steps.map((item) => {
+    <div className="flex items-center justify-between gap-2">
+      {steps.map((item, index) => {
         const state = item.id < step ? "done" : item.id === step ? "active" : "todo";
+        const Icon = item.icon;
         return (
-          <div
-            key={item.id}
-            className={[
-              "rounded-xl border px-3 py-2 text-xs font-semibold transition",
-              state === "active"
-                ? "border-sky-300 bg-sky-50 text-sky-800"
-                : state === "done"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-slate-200 bg-white text-slate-500",
-            ].join(" ")}
-          >
-            <span className="inline-flex items-center gap-2">
+          <div key={item.id} className="flex flex-1 items-center">
+            <div
+              className={`
+                flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all
+                ${state === "active"
+                  ? "bg-primary/10 text-primary"
+                  : state === "done"
+                    ? "bg-[var(--status-success-soft)] text-[var(--status-success)]"
+                    : "bg-muted text-muted-foreground"}
+              `}
+            >
               <span
-                className={[
-                  "inline-flex size-5 items-center justify-center rounded-full text-[11px]",
-                  state === "active"
-                    ? "bg-sky-700 text-white"
+                className={`
+                  flex size-6 items-center justify-center rounded-full text-xs
+                  ${state === "active"
+                    ? "bg-primary text-primary-foreground"
                     : state === "done"
-                      ? "bg-emerald-700 text-white"
-                      : "bg-slate-100 text-slate-600",
-                ].join(" ")}
+                      ? "bg-[var(--status-success)] text-white"
+                      : "bg-secondary text-muted-foreground"}
+                `}
               >
-                {state === "done" ? <Check className="size-3" /> : item.id}
+                {state === "done" ? <Check className="size-3.5" /> : <Icon className="size-3.5" />}
               </span>
-              {item.label}
-            </span>
+              <span className="hidden sm:inline">{item.label}</span>
+            </div>
+            {index < steps.length - 1 && (
+              <div
+                className={`mx-2 h-0.5 flex-1 rounded-full ${
+                  item.id < step ? "bg-[var(--status-success)]" : "bg-border"
+                }`}
+              />
+            )}
           </div>
         );
       })}
     </div>
+  );
+}
+
+/* ===== Plan Card - Touch Optimized ===== */
+function PlanCard({
+  pkg,
+  isSelected,
+  isSoldOut,
+  isBestValue,
+  description,
+  onSelect,
+}: {
+  pkg: Package;
+  isSelected: boolean;
+  isSoldOut: boolean;
+  isBestValue: boolean;
+  description: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={isSoldOut}
+      onClick={onSelect}
+      className={`
+        plan-card w-full text-left
+        ${isSoldOut ? "cursor-not-allowed opacity-50" : ""}
+      `}
+      data-selected={isSelected}
+    >
+      {/* Best Value Badge */}
+      {isBestValue && (
+        <div className="absolute -top-2 right-3">
+          <Badge variant="default" size="sm" className="shadow-sm">
+            Best Value
+          </Badge>
+        </div>
+      )}
+
+      {/* Selection indicator */}
+      {isSelected && (
+        <div className="absolute right-3 top-3">
+          <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <Check className="size-4" />
+          </span>
+        </div>
+      )}
+
+      {/* Plan name */}
+      <p className="plan-card-name pr-10">{pkg.name}</p>
+
+      {/* Price */}
+      <div className="plan-card-price">
+        <span className="text-lg font-normal text-muted-foreground">NGN </span>
+        {formatPriceCompact(pkg.priceNgn)}
+      </div>
+
+      {/* Features */}
+      <div className="plan-card-details">
+        <span className="plan-card-badge flex items-center gap-1">
+          <Clock className="size-3" />
+          {formatDuration(pkg.durationMinutes)}
+        </span>
+        <span className="plan-card-badge flex items-center gap-1">
+          <Signal className="size-3" />
+          {formatPlanDataLabel(pkg.dataLimitMb)}
+        </span>
+        <span className="plan-card-badge flex items-center gap-1">
+          <Smartphone className="size-3" />
+          {formatDeviceLimit(pkg.maxDevices)}
+        </span>
+      </div>
+
+      {/* Description - hidden on mobile, visible on larger screens */}
+      <p className="mt-3 hidden text-xs leading-relaxed text-muted-foreground sm:block">
+        {description}
+      </p>
+
+      {/* Sold out overlay */}
+      {isSoldOut && (
+        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-background/80">
+          <Badge variant="muted">Sold Out</Badge>
+        </div>
+      )}
+    </button>
   );
 }
 
@@ -616,7 +715,6 @@ export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, 
 
   function openPaystackPopup(code: string, successUrl: string, fallbackUrl?: string) {
     if (!window.PaystackPop || typeof window.PaystackPop.resumeTransaction !== "function") {
-      // Script not loaded or wrong version — fall back to hosted page
       if (fallbackUrl) window.location.assign(fallbackUrl);
       return;
     }
@@ -904,7 +1002,6 @@ export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, 
           }
           return;
         }
-        // Keep the last known usage panel visible if refresh fails.
       }
     };
 
@@ -917,6 +1014,7 @@ export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, 
     };
   }, [isAccountAccessMode, subscriberToken, tenantSlug]);
 
+  /* ===== Render: Account Access Auth Card ===== */
   function renderAccountAccessAuthCard() {
     if (!isAccountAccessMode || allSoldOut || flowMode !== "purchase") {
       return null;
@@ -924,95 +1022,99 @@ export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, 
 
     if (hasTrackedActivePlan && activeEntitlement) {
       return (
-        <Card className="max-w-4xl border-emerald-200 bg-white/95">
-          <CardHeader className="space-y-2 pb-2">
-            <p className="section-kicker">Current plan</p>
+        <Card className="border-[var(--status-success)]/30 bg-[var(--status-success-soft)]">
+          <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
-                {activeEntitlement.package.name} is active
-              </CardTitle>
-              <Badge className="bg-emerald-700 text-white">Connected account</Badge>
+              <div>
+                <p className="section-kicker text-[var(--status-success)]">Active Plan</p>
+                <CardTitle className="mt-1">{activeEntitlement.package.name}</CardTitle>
+              </div>
+              <Badge variant="success">Connected</Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Usage Stats Grid - Mobile Optimized */}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Time remaining
-                </p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">
-                  {formatRemainingTime(activeEntitlement.endsAt)}
-                </p>
-                {activeEntitlement.endsAt ? (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Ends {formatDateTime(activeEntitlement.endsAt)}
-                  </p>
-                ) : (
-                  <p className="mt-1 text-xs text-slate-500">
-                    No expiry date
-                  </p>
-                )}
+              <div className="stat-card">
+                <div className="flex items-center gap-3">
+                  <div className="stat-card-icon">
+                    <Clock className="size-5" />
+                  </div>
+                  <div>
+                    <p className="stat-card-label">Time Left</p>
+                    <p className="stat-card-value">{formatRemainingTime(activeEntitlement.endsAt)}</p>
+                  </div>
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Active devices
-                </p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">
-                  {activeEntitlement.usage.activeSessions} / {activeEntitlement.maxDevices ?? "Unlimited"}
-                </p>
+              <div className="stat-card">
+                <div className="flex items-center gap-3">
+                  <div className="stat-card-icon">
+                    <Smartphone className="size-5" />
+                  </div>
+                  <div>
+                    <p className="stat-card-label">Devices</p>
+                    <p className="stat-card-value">
+                      {activeEntitlement.usage.activeSessions}/{activeEntitlement.maxDevices ?? "Unlimited"}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Data remaining
-                </p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">
-                  {activePlanRemainingMb !== null ? `${activePlanRemainingMb.toFixed(1)} MB` : "Unlimited"}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Used {activePlanUsedMb.toFixed(1)} MB
-                </p>
+              <div className="stat-card">
+                <div className="flex items-center gap-3">
+                  <div className="stat-card-icon">
+                    <Signal className="size-5" />
+                  </div>
+                  <div>
+                    <p className="stat-card-label">Data Left</p>
+                    <p className="stat-card-value">
+                      {activePlanRemainingMb !== null ? `${activePlanRemainingMb.toFixed(0)} MB` : "Unlimited"}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Data limit
-                </p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">
-                  {activePlanLimitMb ? `${activePlanLimitMb.toLocaleString()} MB` : "Unlimited"}
-                </p>
+              <div className="stat-card">
+                <div className="flex items-center gap-3">
+                  <div className="stat-card-icon">
+                    <Wifi className="size-5" />
+                  </div>
+                  <div>
+                    <p className="stat-card-label">Data Limit</p>
+                    <p className="stat-card-value">
+                      {activePlanLimitMb ? `${activePlanLimitMb.toLocaleString()} MB` : "Unlimited"}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {activePlanUsagePercent !== null ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+            {/* Usage Progress Bar */}
+            {activePlanUsagePercent !== null && (
+              <div className="rounded-xl border border-border/50 bg-card p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-slate-700">Usage progress</p>
-                  <p className="text-xs font-semibold text-slate-500">
+                  <p className="text-sm font-medium text-foreground">Data Usage</p>
+                  <p className="text-xs font-semibold text-muted-foreground">
                     {activePlanUsagePercent.toFixed(0)}%
                   </p>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-emerald-600"
+                    className="h-full rounded-full bg-[var(--status-success)] transition-all duration-500"
                     style={{ width: `${activePlanUsagePercent}%` }}
                   />
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Used {activePlanUsedMb.toFixed(1)} MB of {activePlanLimitMb?.toLocaleString() ?? "unlimited"} MB
+                </p>
               </div>
-            ) : null}
+            )}
 
-            <p className="text-xs text-slate-500">
-              Usage refreshes automatically every 45 seconds while this page stays open.
+            <p className="text-xs text-muted-foreground">
+              Usage refreshes automatically every 45 seconds.
             </p>
 
-            <div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={forgetThisDevice}
-              >
-                Forget this device
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" onClick={forgetThisDevice}>
+              Sign out from this device
+            </Button>
 
             <CaptiveBrowserAuth
               tenantSlug={tenantSlug}
@@ -1023,9 +1125,9 @@ export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, 
             />
 
             <Alert variant="info">
-              <AlertTitle>No purchase needed right now</AlertTitle>
+              <AlertTitle>You are all set</AlertTitle>
               <AlertDescription>
-                This account already has an active tracked plan. The purchase flow is hidden while this entitlement remains active.
+                Your account has an active plan. The purchase flow is hidden while your entitlement remains active.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -1034,29 +1136,27 @@ export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, 
     }
 
     return (
-      <Card className="max-w-4xl border-slate-200/80 bg-white/95">
-        <CardHeader className="space-y-2 pb-2">
-          <p className="section-kicker">Subscriber access</p>
+      <Card>
+        <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
-              1. Sign in or create your account
-            </CardTitle>
+            <div>
+              <p className="section-kicker">Step 1</p>
+              <CardTitle className="mt-1">Sign in or create account</CardTitle>
+            </div>
             {hasAuthenticatedSubscriber ? (
-              <Badge className="bg-emerald-700 text-white">Ready to choose a plan</Badge>
+              <Badge variant="success">Ready to choose plan</Badge>
             ) : (
-              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
-                Required before purchase
-              </Badge>
+              <Badge variant="warning">Required</Badge>
             )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-            <p className="text-sm text-slate-600">
+          <div className="rounded-xl border border-border/50 bg-muted/30 p-4">
+            <p className="text-sm text-muted-foreground">
               Start with your subscriber account. After sign-in, you can select a plan and pay.
             </p>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="grid gap-2">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
                 <Label htmlFor="subscriberEmail">Email</Label>
                 <Input
                   id="subscriberEmail"
@@ -1066,7 +1166,7 @@ export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, 
                   placeholder="you@example.com"
                 />
               </div>
-              <div className="grid gap-2">
+              <div className="space-y-2">
                 <Label htmlFor="subscriberPassword">Password</Label>
                 <Input
                   id="subscriberPassword"
@@ -1077,31 +1177,29 @@ export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, 
                 />
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <Button
-                type="button"
                 variant="outline"
-                size="sm"
                 disabled={!canSubmitSubscriberAuth}
                 onClick={() => authenticateSubscriber("login")}
+                className="flex-1"
               >
                 Sign in
               </Button>
               <Button
-                type="button"
-                size="sm"
                 disabled={!canSubmitSubscriberAuth}
                 onClick={() => authenticateSubscriber("signup")}
+                className="flex-1"
               >
                 Create account
               </Button>
             </div>
-            {subscriberAuthError ? (
-              <p className="text-xs text-rose-700">{subscriberAuthError}</p>
-            ) : null}
-            {subscriberAuthMessage ? (
-              <p className="text-xs text-emerald-700">{subscriberAuthMessage}</p>
-            ) : null}
+            {subscriberAuthError && (
+              <p className="mt-3 text-sm text-[var(--status-danger)]">{subscriberAuthError}</p>
+            )}
+            {subscriberAuthMessage && (
+              <p className="mt-3 text-sm text-[var(--status-success)]">{subscriberAuthMessage}</p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1109,427 +1207,328 @@ export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, 
   }
 
   return (
-    <div className="grid gap-4 sm:gap-5">
-      {packages.length === 0 ? (
+    <div className="space-y-4 sm:space-y-6">
+      {/* Empty State */}
+      {packages.length === 0 && (
         <Alert>
-          <AlertTitle>No plans imported yet</AlertTitle>
+          <AlertTitle>No plans available</AlertTitle>
           <AlertDescription>
-            Import voucher plans to make purchases available.
+            Plans will appear here once they are configured by the administrator.
           </AlertDescription>
         </Alert>
-      ) : null}
+      )}
 
-      {allSoldOut ? (
-        <Alert>
-          <CircleAlert className="size-4" />
-          <AlertTitle>All plans are temporarily unavailable</AlertTitle>
+      {/* Sold Out State */}
+      {allSoldOut && (
+        <Alert variant="warning">
+          <CircleAlert className="size-5" />
+          <AlertTitle>All plans temporarily unavailable</AlertTitle>
           <AlertDescription>
             Voucher inventory is currently empty. Please refresh and try again.
-            <div className="mt-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => window.location.reload()}
-              >
+            <div className="mt-4">
+              <Button variant="outline" onClick={() => window.location.reload()}>
                 <RefreshCcw className="size-4" />
                 Refresh availability
               </Button>
             </div>
           </AlertDescription>
         </Alert>
-      ) : null}
+      )}
 
-      {error ? (
+      {/* Error State */}
+      {error && (
         <Alert variant="destructive">
           <AlertTitle>Payment setup failed</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      ) : null}
+      )}
 
-      {portalContext ? (
+      {/* Captive Portal Info */}
+      {portalContext && (
         <Alert variant="info">
           <AlertTitle>Captive portal session detected</AlertTitle>
           <AlertDescription>
-            Continue with payment here. Your network session details will be preserved so you can
-            return to the Wi-Fi sign-in flow after payment.
+            Your network session details will be preserved so you can return to the Wi-Fi sign-in flow after payment.
           </AlertDescription>
         </Alert>
-      ) : null}
+      )}
 
+      {/* Account Access Auth Card */}
       {renderAccountAccessAuthCard()}
 
-      {!hasTrackedActivePlan ? (
-        <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-white p-1">
+      {/* Flow Mode Toggle */}
+      {!hasTrackedActivePlan && (
+        <div className="flex rounded-xl border border-border/50 bg-card p-1 sm:w-fit">
           <button
             type="button"
             onClick={() => setFlowMode("purchase")}
-            className={[
-              "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-all tap-target sm:flex-none ${
               isPurchaseFlow
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:bg-slate-100",
-            ].join(" ")}
-            aria-pressed={isPurchaseFlow}
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
             New purchase
           </button>
           <button
             type="button"
             onClick={() => setFlowMode("resume")}
-            className={[
-              "rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-4",
+            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-all tap-target sm:flex-none ${
               !isPurchaseFlow
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:bg-slate-100",
-            ].join(" ")}
-            aria-pressed={!isPurchaseFlow}
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
             Resume payment
           </button>
         </div>
-      ) : null}
+      )}
 
-      {showPlanSelection ? (
-      <Card className="border-slate-200/80 bg-white/90">
-        <CardHeader className="space-y-3 pb-3">
-          <Stepper step={step} accessMode={accessMode} />
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
-              {isAccountAccessMode ? "2. Choose a plan" : "1. Choose a plan"}
-            </CardTitle>
-            {selected ? (
-              <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700">
-                Selected: {selected.name}
-              </Badge>
-            ) : (
-              <Badge variant="secondary">Select a plan to continue</Badge>
+      {/* Plan Selection */}
+      {showPlanSelection && (
+        <Card>
+          <CardHeader>
+            <Stepper step={step} accessMode={accessMode} />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="section-kicker">
+                  {isAccountAccessMode ? "Step 2" : "Step 1"}
+                </p>
+                <CardTitle className="mt-1">Choose a plan</CardTitle>
+              </div>
+              {selected && (
+                <Badge variant="outline">
+                  {selected.name} selected
+                </Badge>
+              )}
+            </div>
+
+            {/* Search for long plan lists */}
+            {isLongPlanList && (
+              <div className="mt-4 rounded-xl border border-border/50 bg-muted/30 p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {filteredPackages.length} plans available
+                  </p>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={planQuery}
+                      onChange={(event) => {
+                        setPlanQuery(event.target.value);
+                        setVisiblePlanCount(8);
+                      }}
+                      placeholder="Search plans..."
+                      className="pl-10 sm:w-64"
+                    />
+                  </div>
+                </div>
+              </div>
             )}
-          </div>
+          </CardHeader>
 
-          {isLongPlanList ? (
-            <div className="grid gap-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 sm:grid-cols-[1fr_260px] sm:items-center">
-              <p className="text-xs text-slate-600 sm:text-sm">
-                {filteredPackages.length} plans available
-              </p>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  value={planQuery}
-                  onChange={(event) => {
-                    setPlanQuery(event.target.value);
-                    setVisiblePlanCount(8);
-                  }}
-                  placeholder="Search by plan, code, duration, price, or data"
-                  className="h-10 pl-9"
-                  aria-label="Search plans"
-                />
+          <CardContent className="space-y-4">
+            {/* Plan Grid - Responsive */}
+            <div
+              className={`grid gap-4 ${
+                visiblePlans.length <= 1
+                  ? "grid-cols-1 sm:max-w-md"
+                  : visiblePlans.length === 2
+                    ? "grid-cols-1 sm:grid-cols-2"
+                    : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+              }`}
+            >
+              {visiblePlans.map((pkg) => {
+                const isSoldOut = pkg.availableCount <= 0;
+                const isSelected = selected?.code === pkg.code;
+                const isBestValue = bestValueCode === pkg.code && !isSoldOut;
+                const description =
+                  pkg.description?.trim() ||
+                  getDefaultPlanDescription({
+                    pkg,
+                    mode: isAccountAccessMode ? "account_access" : "voucher_access",
+                  });
+
+                return (
+                  <PlanCard
+                    key={pkg.code}
+                    pkg={pkg}
+                    isSelected={isSelected}
+                    isSoldOut={isSoldOut}
+                    isBestValue={isBestValue}
+                    description={description}
+                    onSelect={() => selectPlan(pkg)}
+                  />
+                );
+              })}
+            </div>
+
+            {/* No results */}
+            {isLongPlanList && filteredPackages.length === 0 && (
+              <div className="empty-state">
+                <div className="empty-state-icon">
+                  <Search className="size-6" />
+                </div>
+                <p className="empty-state-title">No plans match your search</p>
+                <p className="empty-state-description">Try another name, code, or duration.</p>
+              </div>
+            )}
+
+            {/* Show more / collapse */}
+            {hasHiddenPlans && !collapsePlansAfterSelection && (
+              <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+                <Button variant="outline" onClick={() => setVisiblePlanCount((count) => count + 8)}>
+                  Show more plans
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Showing {displayedPackages.length} of {filteredPackages.length}
+                </span>
+              </div>
+            )}
+
+            {isLongPlanList && filteredPackages.length > 8 && !hasHiddenPlans && !collapsePlansAfterSelection && (
+              <div className="flex justify-center">
+                <Button variant="ghost" size="sm" onClick={() => setVisiblePlanCount(8)}>
+                  Collapse list
+                </Button>
+              </div>
+            )}
+
+            {/* Action bar */}
+            <div className="flex flex-col gap-3 rounded-xl border border-border/50 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-foreground">
+                  {selected ? `${selected.name} selected` : "Select a plan to continue"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {isAccountAccessMode
+                    ? "Continue directly to secure checkout."
+                    : "Enter your email and start payment."}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {collapsePlansAfterSelection && (
+                  <Button variant="outline" onClick={() => setSelected(null)}>
+                    Change plan
+                  </Button>
+                )}
+                <Button
+                  disabled={
+                    !selected ||
+                    selected.availableCount <= 0 ||
+                    (isAccountAccessMode && (!hasAuthenticatedSubscriber || loading))
+                  }
+                  onClick={continueToPaymentStep}
+                >
+                  {loading && isAccountAccessMode
+                    ? "Preparing..."
+                    : selected
+                      ? `Pay NGN ${formatPriceCompact(selected.priceNgn)}`
+                      : "Select a plan"}
+                </Button>
               </div>
             </div>
-          ) : null}
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div
-            className={[
-              "grid gap-3",
-              visiblePlans.length <= 1
-                ? "grid-cols-1"
-                : visiblePlans.length === 2
-                  ? "sm:grid-cols-2"
-                  : "sm:grid-cols-2 lg:grid-cols-3",
-            ].join(" ")}
-          >
-            {visiblePlans.map((pkg) => {
-              const isSoldOut = pkg.availableCount <= 0;
-              const isSelected = selected?.code === pkg.code;
-              const isBestValue = bestValueCode === pkg.code && !isSoldOut;
-              const description = pkg.description?.trim()
-                || getDefaultPlanDescription({
-                  pkg,
-                  mode: isAccountAccessMode ? "account_access" : "voucher_access",
-                });
 
-              return (
-                <Card
-                  key={pkg.code}
-                  role="button"
-                  tabIndex={isSoldOut ? -1 : 0}
-                  aria-disabled={isSoldOut}
-                  aria-pressed={isSelected}
-                  onClick={() => {
-                    if (!isSoldOut) selectPlan(pkg);
-                  }}
-                  onKeyDown={(event) => {
-                    if (isSoldOut) return;
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      selectPlan(pkg);
-                    }
-                  }}
-                  className={[
-                    "gap-0 border-slate-200/90 bg-white py-0 transition",
-                    !isSoldOut ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-md" : "cursor-not-allowed opacity-60",
-                    isSelected ? "ring-2 ring-sky-300" : "",
-                    visiblePlans.length === 1 ? "mx-auto w-full max-w-xl" : "",
-                  ].join(" ")}
-                >
-                  <CardContent className="p-4 sm:p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-900" title={pkg.name}>
-                          {pkg.name}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-600">
-                            {formatDuration(pkg.durationMinutes)}
-                          </span>
-                          <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-600">
-                            {formatPlanDataLabel(pkg.dataLimitMb)}
-                          </span>
-                          <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-600">
-                            {formatDeviceLimit(pkg.maxDevices)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        {isBestValue ? (
-                          <Badge className="bg-sky-700 text-white">Best Value</Badge>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="mt-5 flex items-end justify-between">
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">NGN</p>
-                        <p
-                          className="font-display text-[clamp(1.5rem,5.2vw,2.1rem)] font-semibold leading-none tracking-tight text-slate-900"
-                          title={pkg.priceNgn.toLocaleString()}
-                        >
-                          <span className="sm:hidden">{formatPriceCompact(pkg.priceNgn)}</span>
-                          <span className="hidden sm:inline">{pkg.priceNgn.toLocaleString()}</span>
-                        </p>
-                        <p className="mt-1 text-[11px] text-slate-500">Code: {pkg.code}</p>
-                      </div>
-                      {isSelected ? (
-                        <span className="inline-flex size-9 items-center justify-center rounded-full bg-sky-700 text-white">
-                          <Check className="size-4" />
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <p className="mt-3 text-xs leading-relaxed text-slate-600">
-                      {description}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          {isLongPlanList && filteredPackages.length === 0 ? (
-            <Alert>
-              <AlertTitle>No plans match your search</AlertTitle>
-              <AlertDescription>Try another name, code, or duration.</AlertDescription>
-            </Alert>
-          ) : null}
-
-          {hasHiddenPlans && !collapsePlansAfterSelection ? (
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setVisiblePlanCount((count) => count + 8)}
-              >
-                Show more plans
-              </Button>
-              <span className="text-xs text-slate-600">
-                Showing {displayedPackages.length} of {filteredPackages.length}
-              </span>
-            </div>
-          ) : null}
-
-          {isLongPlanList && filteredPackages.length > 8 && !hasHiddenPlans && !collapsePlansAfterSelection ? (
-            <div className="flex justify-center">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setVisiblePlanCount(8)}>
-                Collapse list
-              </Button>
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-            <div>
-              <p className="text-sm font-medium text-slate-900">
-                {selected ? `${selected.name} selected` : "Select a plan to continue"}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                {isAccountAccessMode
-                  ? "After selecting a plan, continue directly to secure checkout."
-                  : "Continue when you are ready to enter your email and start payment."}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {collapsePlansAfterSelection ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setSelected(null)}
-                >
-                  Change plan
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                disabled={
-                  !selected ||
-                  selected.availableCount <= 0 ||
-                  (isAccountAccessMode && (!hasAuthenticatedSubscriber || loading))
-                }
-                onClick={continueToPaymentStep}
-              >
-                {loading && isAccountAccessMode
-                  ? "Preparing payment..."
-                  : selected
-                    ? `Pay NGN ${selected.priceNgn.toLocaleString()}`
-                    : "Select a plan"}
-              </Button>
-            </div>
-          </div>
-
-          {isAccountAccessMode && paymentReference ? (
-            <Alert className="border-emerald-200 bg-emerald-50/90">
-              <AlertTitle>Reference saved: {paymentReference}</AlertTitle>
-              <AlertDescription className="space-y-2">
-                <p>Keep this reference. You can resume payment with it if interrupted.</p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyReference(paymentReference)}
-                  >
-                    Copy reference
-                  </Button>
-                  {(accessCode && verifyUrl) || authorizationUrl ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => {
-                        if (accessCode && verifyUrl) {
-                          openPaystackPopup(accessCode, verifyUrl, authorizationUrl ?? undefined);
-                        } else if (authorizationUrl) {
-                          window.location.assign(authorizationUrl);
-                        }
-                      }}
-                    >
-                      Retry payment
+            {/* Payment reference alert */}
+            {isAccountAccessMode && paymentReference && (
+              <Alert variant="success">
+                <AlertTitle>Reference: {paymentReference}</AlertTitle>
+                <AlertDescription className="space-y-3">
+                  <p>Keep this reference to resume payment if interrupted.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => copyReference(paymentReference)}>
+                      Copy reference
                     </Button>
-                  ) : null}
-                </div>
-                {copyMessage ? <p className="text-xs text-slate-600">{copyMessage}</p> : null}
-              </AlertDescription>
-            </Alert>
-          ) : null}
+                    {(accessCode && verifyUrl) || authorizationUrl ? (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (accessCode && verifyUrl) {
+                            openPaystackPopup(accessCode, verifyUrl, authorizationUrl ?? undefined);
+                          } else if (authorizationUrl) {
+                            window.location.assign(authorizationUrl);
+                          }
+                        }}
+                      >
+                        Retry payment
+                      </Button>
+                    ) : null}
+                  </div>
+                  {copyMessage && <p className="text-xs">{copyMessage}</p>}
+                </AlertDescription>
+              </Alert>
+            )}
 
-          {isAccountAccessMode ? (
-            <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              <Lock className="size-4 text-slate-500" />
-              <MessageSquareText className="size-4 text-slate-500" />
-              Paystack-secured checkout with instant account plan activation.
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
-      ) : null}
+            {/* Security note */}
+            {isAccountAccessMode && (
+              <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+                <Lock className="size-4" />
+                <MessageSquareText className="size-4" />
+                <span>Paystack-secured checkout with instant account activation.</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-      {showPaymentStep ? (
-        <Card ref={customerCardRef} className="max-w-4xl border-slate-200/80 bg-white/90">
-          <CardHeader className="space-y-2 pb-2">
-            <p className="section-kicker">Customer details</p>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
-                {isAccountAccessMode ? "3. Confirm account and pay" : "2. Enter email address"}
-              </CardTitle>
+      {/* Payment Step (Voucher Mode) */}
+      {showPaymentStep && (
+        <Card ref={customerCardRef}>
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="section-kicker">Step 2</p>
+                <CardTitle className="mt-1">Enter email address</CardTitle>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
-                {selected ? (
-                  <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
-                    {selected.name} • NGN {selected.priceNgn.toLocaleString()}
+                {selected && (
+                  <Badge variant="info">
+                    {selected.name} - NGN {formatPriceCompact(selected.priceNgn)}
                   </Badge>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPurchaseStage("plan")}
-                >
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setPurchaseStage("plan")}>
                   Change plan
                 </Button>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_230px] lg:items-end" onSubmit={handleSubmit}>
-              {isAccountAccessMode && !hasAuthenticatedSubscriber ? (
-                <Alert className="border-amber-200 bg-amber-50/90 lg:col-span-2">
-                  <AlertTitle>Complete account sign-in first</AlertTitle>
-                  <AlertDescription>
-                    Sign in or create your subscriber account above before continuing to payment.
-                  </AlertDescription>
-                </Alert>
-              ) : null}
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="voucherEmail">Email address</Label>
+                <Input
+                  id="voucherEmail"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={voucherEmail}
+                  onChange={(event) => setVoucherEmail(event.target.value)}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used for payment confirmation and your voucher receipt.
+                </p>
+              </div>
 
-              {isAccountAccessMode ? (
-                <div className="grid gap-2">
-                  <Label>Account email</Label>
-                  <p className="h-11 rounded-md border border-input bg-muted/30 px-3 py-2 text-sm text-slate-700">
-                    {subscriberOverview?.subscriber.email || subscriberEmail.trim()}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Your signed-in email is used for this plan purchase.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid gap-2">
-                  <Label htmlFor="voucherEmail">Email address</Label>
-                  <Input
-                    id="voucherEmail"
-                    type="email"
-                    className="h-11"
-                    placeholder="you@example.com"
-                    value={voucherEmail}
-                    onChange={(event) => setVoucherEmail(event.target.value)}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Used for payment confirmation and your voucher receipt.
-                  </p>
-                </div>
-              )}
-
-              <Button type="submit" disabled={!canSubmit} className="h-11 lg:mb-[22px]">
+              <Button type="submit" disabled={!canSubmit} className="w-full sm:w-auto">
                 {loading
                   ? "Preparing payment..."
                   : selected
-                    ? `Pay NGN ${selected.priceNgn.toLocaleString()}`
+                    ? `Pay NGN ${formatPriceCompact(selected.priceNgn)}`
                     : "Select a plan"}
               </Button>
 
-              {paymentReference ? (
-                <Alert className="border-emerald-200 bg-emerald-50/90 lg:col-span-2">
-                  <AlertTitle>Reference saved: {paymentReference}</AlertTitle>
-                  <AlertDescription className="space-y-2">
-                    <p>Keep this reference. You can resume payment with it if interrupted.</p>
+              {/* Payment reference */}
+              {paymentReference && (
+                <Alert variant="success">
+                  <AlertTitle>Reference: {paymentReference}</AlertTitle>
+                  <AlertDescription className="space-y-3">
+                    <p>Keep this reference to resume payment if interrupted.</p>
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyReference(paymentReference)}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => copyReference(paymentReference)}>
                         Copy reference
                       </Button>
                       {(accessCode && verifyUrl) || authorizationUrl ? (
                         <Button
-                          type="button"
                           size="sm"
                           onClick={() => {
                             if (accessCode && verifyUrl) {
@@ -1543,93 +1542,73 @@ export function Checkout({ tenantSlug, packages, accessMode, voucherSourceMode, 
                         </Button>
                       ) : null}
                     </div>
-                    {copyMessage ? <p className="text-xs text-slate-600">{copyMessage}</p> : null}
+                    {copyMessage && <p className="text-xs">{copyMessage}</p>}
                   </AlertDescription>
                 </Alert>
-              ) : null}
+              )}
 
-              <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 lg:col-span-2">
-                <Lock className="size-4 text-slate-500" />
-                <MessageSquareText className="size-4 text-slate-500" />
-                {isAccountAccessMode
-                  ? "Paystack-secured checkout with instant account plan activation."
-                  : "Paystack-secured checkout with instant email voucher delivery."}
+              {/* Security note */}
+              <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+                <Lock className="size-4" />
+                <MessageSquareText className="size-4" />
+                <span>Paystack-secured checkout with instant email voucher delivery.</span>
               </div>
             </form>
           </CardContent>
         </Card>
-      ) : null}
+      )}
 
-      {flowMode === "resume" && !hasTrackedActivePlan ? (
-        <Card className="max-w-3xl border-slate-200/80 bg-white/90">
-          <CardHeader className="space-y-2 pb-2">
-            <div className="inline-flex w-fit rounded-xl border border-slate-200 bg-white p-1">
-              <button
-                type="button"
-                onClick={() => setFlowMode("purchase")}
-                className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 sm:px-4"
-                aria-pressed={false}
-              >
-                New purchase
-              </button>
-              <button
-                type="button"
-                onClick={() => setFlowMode("resume")}
-                className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition sm:px-4"
-                aria-pressed={true}
-              >
-                Resume payment
-              </button>
-            </div>
+      {/* Resume Payment Flow */}
+      {flowMode === "resume" && !hasTrackedActivePlan && (
+        <Card>
+          <CardHeader>
             <p className="section-kicker">Recover interrupted checkout</p>
-            <CardTitle className="text-base font-semibold text-slate-900 sm:text-lg">
-              Resume a payment
-            </CardTitle>
+            <CardTitle className="mt-1">Resume a payment</CardTitle>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-3 md:grid-cols-2" onSubmit={handleResume}>
-              {resumeMessage ? (
-                <Alert className="md:col-span-2">
+            <form className="space-y-4" onSubmit={handleResume}>
+              {resumeMessage && (
+                <Alert>
                   <AlertTitle>Resume status</AlertTitle>
                   <AlertDescription>{resumeMessage}</AlertDescription>
                 </Alert>
-              ) : null}
-              <div className="grid gap-2">
-                <Label htmlFor="resume-reference">Payment reference</Label>
-                <Input
-                  id="resume-reference"
-                  type="text"
-                  className="h-11"
-                  placeholder="WIFI-ABC123"
-                  value={resumeReference}
-                  onChange={(event) => setResumeReference(event.target.value)}
-                  required
-                />
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="resume-reference">Payment reference</Label>
+                  <Input
+                    id="resume-reference"
+                    type="text"
+                    placeholder="WIFI-ABC123"
+                    value={resumeReference}
+                    onChange={(event) => setResumeReference(event.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="resume-lookup">
+                    {isAccountAccessMode ? "Account email used" : "Email used"}
+                  </Label>
+                  <Input
+                    id="resume-lookup"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={resumeLookup}
+                    onChange={(event) => setResumeLookup(event.target.value)}
+                    required
+                  />
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="resume-lookup">
-                  {isAccountAccessMode ? "Account email used" : "Email used"}
-                </Label>
-                <Input
-                  id="resume-lookup"
-                  type="email"
-                  className="h-11"
-                  placeholder="you@example.com"
-                  value={resumeLookup}
-                  onChange={(event) => setResumeLookup(event.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" variant="outline" disabled={resumeLoading} className="md:col-span-2">
+              <Button type="submit" variant="outline" disabled={resumeLoading} className="w-full sm:w-auto">
                 {resumeLoading ? "Checking status..." : "Resume payment"}
               </Button>
             </form>
           </CardContent>
         </Card>
-      ) : null}
+      )}
 
+      {/* Voucher History */}
       <VoucherHistory tenantSlug={tenantSlug} voucherSourceMode={voucherSourceMode} />
-
     </div>
   );
 }

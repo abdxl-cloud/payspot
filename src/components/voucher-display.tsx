@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Wifi } from "lucide-react";
 import { saveVoucher } from "@/lib/voucher-storage";
+import { Button } from "@/components/ui/button";
 
 type Props = {
   code: string;
@@ -28,27 +29,56 @@ export function VoucherDisplay({ code, tenantSlug, voucherSourceMode, planName, 
   }
 
   return (
-    <div className="mt-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/90 via-white to-sky-50/70 px-5 py-7 text-center shadow-[0_8px_28px_rgba(79,70,229,0.1)] sm:px-6 sm:py-8">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-indigo-400">Voucher code</p>
-      <p className="mt-3 break-all font-mono text-3xl font-black tracking-[0.2em] text-indigo-950 sm:text-4xl sm:tracking-[0.24em]">
-        {code}
+    <div className="mt-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card to-accent/5 p-6 text-center shadow-[var(--shadow-md)] sm:rounded-3xl sm:p-8">
+      {/* Success Icon */}
+      <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl bg-[var(--status-success-soft)]">
+        <Wifi className="size-8 text-[var(--status-success)]" />
+      </div>
+
+      {/* Label */}
+      <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+        Your Voucher Code
       </p>
-      <button
+
+      {/* Code Display - Large Touch Friendly */}
+      <div className="mt-4 rounded-xl bg-card p-4 shadow-[var(--shadow-xs)]">
+        <p className="break-all font-mono text-2xl font-bold tracking-[0.15em] text-foreground sm:text-3xl md:text-4xl md:tracking-[0.2em]">
+          {code}
+        </p>
+      </div>
+
+      {/* Plan Name */}
+      {planName && (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Plan: <span className="font-medium text-foreground">{planName}</span>
+        </p>
+      )}
+
+      {/* Copy Button - Large Touch Target */}
+      <Button
         onClick={handleCopy}
-        className="mt-5 inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-5 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-[0_6px_16px_rgba(79,70,229,0.15)] active:scale-95"
+        variant={copied ? "success" : "outline"}
+        className="mt-5"
       >
         {copied ? (
           <>
-            <Check className="h-4 w-4 text-emerald-600" />
-            <span className="text-emerald-600">Copied!</span>
+            <Check className="size-4" />
+            Copied!
           </>
         ) : (
           <>
-            <Copy className="h-4 w-4" />
+            <Copy className="size-4" />
             Copy code
           </>
         )}
-      </button>
+      </Button>
+
+      {/* Reference */}
+      {reference && (
+        <p className="mt-4 text-xs text-muted-foreground">
+          Reference: <span className="font-mono">{reference}</span>
+        </p>
+      )}
     </div>
   );
 }

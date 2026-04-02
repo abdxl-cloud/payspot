@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ArrowLeft, KeyRound, Lock } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { readJsonResponse } from "@/lib/http";
@@ -68,64 +69,91 @@ export function ResetPasswordForm({ token }: Props) {
       : null;
 
   return (
-    <Card className="border-slate-200/85 bg-white/92">
-      <CardHeader className="space-y-2">
-        <p className="section-kicker">Password update</p>
-        <CardTitle className="section-title">Set a new password</CardTitle>
+    <Card className="w-full">
+      <CardHeader className="text-center">
+        {/* Icon */}
+        <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary/10">
+          <Lock className="size-7 text-primary" />
+        </div>
+        <p className="section-kicker">Security</p>
+        <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          Set a new password
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Create a strong password for your account
+        </p>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        {error ? (
+      <CardContent className="space-y-4">
+        {error && (
           <Alert variant="destructive">
             <AlertTitle>Reset failed</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-        ) : null}
+        )}
 
-        {success ? (
+        {success && (
           <Alert variant="success">
-            <AlertTitle>Success</AlertTitle>
+            <AlertTitle>Password updated</AlertTitle>
             <AlertDescription>{success}</AlertDescription>
           </Alert>
-        ) : null}
+        )}
 
-        <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="space-y-2">
             <Label htmlFor="newPassword">New password</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              className="h-11"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-            />
+            <div className="relative">
+              <KeyRound className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="newPassword"
+                type="password"
+                className="pl-12"
+                placeholder="Enter new password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+              />
+            </div>
             <p className="text-xs text-muted-foreground">
-              At least 8 characters, with upper/lowercase and a number.
+              At least 8 characters with upper/lowercase and a number.
             </p>
           </div>
 
-          <div className="grid gap-2">
+          <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              className="h-11"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
+            <div className="relative">
+              <KeyRound className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="confirmPassword"
+                type="password"
+                className="pl-12"
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+              />
+            </div>
           </div>
 
-          {passwordError ? <p className="text-sm text-red-700">{passwordError}</p> : null}
-          {mismatch ? <p className="text-sm text-red-700">{mismatch}</p> : null}
+          {passwordError && (
+            <p className="text-sm text-[var(--status-danger)]">{passwordError}</p>
+          )}
+          {mismatch && (
+            <p className="text-sm text-[var(--status-danger)]">{mismatch}</p>
+          )}
 
-          <Button type="submit" className="h-12" disabled={!canSubmit}>
+          <Button type="submit" className="w-full" size="lg" disabled={!canSubmit}>
             {loading ? "Saving..." : "Set new password"}
           </Button>
         </form>
 
-        <p className="text-center text-sm text-slate-600">
-          <Link href="/login" className="underline underline-offset-4">
+        <p className="text-center">
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            <ArrowLeft className="size-4" />
             Back to login
           </Link>
         </p>

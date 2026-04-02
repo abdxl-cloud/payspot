@@ -5,31 +5,31 @@ import { Slot } from "@radix-ui/react-slot"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-full border border-transparent px-2.5 py-1 text-xs font-semibold w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden",
+  "inline-flex items-center justify-center rounded-full border border-transparent px-2.5 py-1 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3.5 gap-1.5 [&>svg]:pointer-events-none transition-colors overflow-hidden",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
-        secondary:
-          "bg-slate-100 text-slate-700 [a&]:hover:bg-slate-200",
-        destructive:
-          "bg-destructive text-white [a&]:hover:bg-destructive/90",
-        outline:
-          "border-slate-300/90 bg-white/90 text-slate-700 [a&]:hover:bg-slate-100",
-        ghost: "text-slate-700 [a&]:hover:bg-slate-100",
-        link: "text-primary underline-offset-4 [a&]:hover:underline",
-        success:
-          "border-emerald-200/80 bg-emerald-100 text-emerald-800 [a&]:hover:bg-emerald-200",
-        warning:
-          "border-amber-200/80 bg-amber-100 text-amber-800 [a&]:hover:bg-amber-200",
-        info:
-          "border-sky-200/80 bg-sky-100 text-sky-800 [a&]:hover:bg-sky-200",
-        muted:
-          "border-slate-200/80 bg-slate-100 text-slate-600 [a&]:hover:bg-slate-200",
+        default: "bg-primary text-primary-foreground",
+        secondary: "bg-secondary text-secondary-foreground",
+        destructive: "bg-destructive text-white",
+        outline: "border-border bg-card text-foreground",
+        ghost: "text-muted-foreground",
+        // Status variants - soft pastel backgrounds
+        success: "border-[var(--status-success)]/20 bg-[var(--status-success-soft)] text-[var(--status-success)]",
+        warning: "border-[var(--status-warning)]/20 bg-[var(--status-warning-soft)] text-[var(--status-warning)]",
+        danger: "border-[var(--status-danger)]/20 bg-[var(--status-danger-soft)] text-[var(--status-danger)]",
+        info: "border-[var(--status-info)]/20 bg-[var(--status-info-soft)] text-[var(--status-info)]",
+        muted: "bg-muted text-muted-foreground",
+      },
+      size: {
+        default: "px-2.5 py-1 text-xs",
+        sm: "px-2 py-0.5 text-[10px]",
+        lg: "px-3 py-1.5 text-sm",
       },
     },
     defaultVariants: {
       variant: "default",
+      size: "default",
     },
   }
 )
@@ -37,6 +37,7 @@ const badgeVariants = cva(
 function Badge({
   className,
   variant = "default",
+  size = "default",
   asChild = false,
   ...props
 }: React.ComponentProps<"span"> &
@@ -47,7 +48,7 @@ function Badge({
     <Comp
       data-slot="badge"
       data-variant={variant}
-      className={cn(badgeVariants({ variant }), className)}
+      className={cn(badgeVariants({ variant, size }), className)}
       {...props}
     />
   )

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { KeyRound, Mail } from "lucide-react";
+import { KeyRound, Mail, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -47,59 +47,73 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="border-slate-200/85 bg-white/92">
-      <CardHeader className="space-y-2">
-        <p className="section-kicker">Authentication</p>
-        <CardTitle className="section-title">Sign in to PaySpot</CardTitle>
+    <Card className="w-full">
+      <CardHeader className="text-center">
+        {/* Logo */}
+        <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary/10">
+          <Wifi className="size-7 text-primary" />
+        </div>
+        <p className="section-kicker">Admin Access</p>
+        <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          Sign in to PaySpot
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Enter your credentials to access the dashboard
+        </p>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        {error ? (
+      <CardContent className="space-y-4">
+        {error && (
           <Alert variant="destructive">
             <AlertTitle>Login failed</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-        ) : null}
+        )}
 
-        <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <Mail className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="email"
                 type="email"
-                className="h-11 pl-9"
-                placeholder="seeduser@example.com"
+                className="pl-12"
+                placeholder="you@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
               />
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <div className="relative">
-              <KeyRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <KeyRound className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="password"
                 type="password"
-                className="h-11 pl-9"
-                placeholder="********"
+                className="pl-12"
+                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
               />
             </div>
           </div>
 
-          <Button type="submit" className="h-12" disabled={!canSubmit}>
+          <Button type="submit" className="w-full" size="lg" disabled={!canSubmit}>
             {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
 
-        <p className="text-center text-sm text-slate-600">
-          <Link href="/forgot-password" className="underline underline-offset-4">
+        <p className="text-center text-sm text-muted-foreground">
+          <Link
+            href="/forgot-password"
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
             Forgot password?
           </Link>
         </p>

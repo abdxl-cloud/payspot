@@ -8,9 +8,25 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
       type={type}
       data-slot="input"
       className={cn(
-        "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-input h-11 w-full min-w-0 rounded-xl border bg-white/94 px-3 py-2 text-sm shadow-[0_6px_16px_rgba(15,23,42,0.06)] transition-[color,box-shadow,border-color,background-color] outline-none hover:border-slate-300 file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:opacity-100",
-        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-        "aria-invalid:ring-destructive/20 aria-invalid:border-destructive",
+        // Base styles - mobile first with larger touch targets
+        "flex w-full min-w-0 rounded-xl border border-input bg-card text-foreground",
+        "min-h-[52px] px-4 py-3 text-base",
+        "sm:min-h-[44px] sm:py-2.5 sm:text-sm",
+        // Placeholder & selection
+        "placeholder:text-muted-foreground",
+        "selection:bg-primary selection:text-primary-foreground",
+        // Shadows & transitions
+        "shadow-[var(--shadow-xs)] transition-all duration-200",
+        // Hover state
+        "hover:border-border/80",
+        // Focus state
+        "focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30",
+        // Disabled state
+        "disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground",
+        // Invalid state
+        "aria-invalid:border-destructive aria-invalid:ring-destructive/20",
+        // File input
+        "file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground",
         className
       )}
       {...props}

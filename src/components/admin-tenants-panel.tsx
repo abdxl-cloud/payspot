@@ -3,18 +3,22 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
-  PencilLine,
+  CreditCard,
+  KeyRound,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
-  ShieldCheck,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { readJsonResponse } from "@/lib/http";
 import { isPaystackSecretKey } from "@/lib/paystack-key";
 
@@ -35,16 +39,16 @@ type TenantUpdatePayload = Partial<TenantDto> & {
 
 const COMMON_STATUSES = ["active", "pending", "inactive", "suspended"];
 
-function statusBadge(status: string) {
+function StatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   if (normalized === "active") {
-    return <Badge className="bg-emerald-700 text-white">Active</Badge>;
+    return <Badge variant="success">Active</Badge>;
   }
   if (normalized === "pending") {
-    return <Badge className="bg-amber-600 text-white">Pending</Badge>;
+    return <Badge variant="warning">Pending</Badge>;
   }
   if (normalized === "suspended") {
-    return <Badge variant="destructive">Suspended</Badge>;
+    return <Badge variant="danger">Suspended</Badge>;
   }
   return <Badge variant="outline">{status}</Badge>;
 }
@@ -301,258 +305,345 @@ export function AdminTenantsPanel() {
 
   return (
     <>
-      <div className="grid gap-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatTile label="Total tenants" value={String(tenantStats.total)} />
-          <StatTile label="Active" value={String(tenantStats.active)} />
-          <StatTile label="Pending" value={String(tenantStats.pending)} />
-          <StatTile label="Paystack configured" value={String(tenantStats.configuredPayments)} />
+      <div className="space-y-4 sm:space-y-6">
+        {/* Stats Grid */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            icon={Users}
+            label="Total Tenants"
+            value={tenantStats.total}
+          />
+          <StatCard
+            icon={Building2}
+            label="Active"
+            value={tenantStats.active}
+            variant="success"
+          />
+          <StatCard
+            icon={Building2}
+            label="Pending"
+            value={tenantStats.pending}
+            variant="warning"
+          />
+          <StatCard
+            icon={CreditCard}
+            label="Payments Configured"
+            value={tenantStats.configuredPayments}
+          />
         </div>
 
-        <p className="text-xs text-slate-500">
+        {/* Last sync */}
+        <p className="text-xs text-muted-foreground">
           {lastRefreshedAt ? `Last synced ${lastRefreshedAt.toLocaleTimeString()}` : "No sync yet"}
         </p>
 
-        {error ? (
+        {/* Alerts */}
+        {error && (
           <Alert variant="destructive">
             <AlertTitle>Action failed</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-        ) : null}
-        {notice ? (
-          <Alert>
+        )}
+        {notice && (
+          <Alert variant="success">
             <AlertTitle>Update</AlertTitle>
-            <AlertDescription className="break-words">{notice}</AlertDescription>
+            <AlertDescription className="break-words font-mono text-xs">{notice}</AlertDescription>
           </Alert>
-        ) : null}
+        )}
 
-        <section id="tenant-directory" className="panel-surface w-full max-w-full overflow-hidden rounded-lg">
-          <div className="mb-3 flex items-center gap-2">
-            <Building2 className="size-4 text-indigo-600" />
-            <h2 className="text-base font-semibold text-slate-900">Tenant directory</h2>
-          </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_200px] md:items-center">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+        {/* Tenant Directory */}
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Building2 className="size-5 text-primary" />
+                <CardTitle>Tenant Directory</CardTitle>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadTenants}
+                  disabled={loading}
+                >
+                  <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+                <Button size="sm" onClick={() => setShowCreateModal(true)}>
+                  <Plus className="size-4" />
+                  <span className="hidden sm:inline">Add Tenant</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Search & Filter */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search by slug, name, email..."
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="pl-11"
+                />
+              </div>
+              <select
+                className="w-full"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option value="all">All statuses</option>
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              Showing {filteredTenants.length} of {tenants.length} tenants
+            </p>
+          </CardHeader>
+
+          <CardContent>
+            {/* Mobile Cards */}
+            <div className="space-y-3 lg:hidden">
+              {filteredTenants.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">
+                    <Building2 className="size-6" />
+                  </div>
+                  <p className="empty-state-title">
+                    {loading ? "Loading tenants..." : "No tenants found"}
+                  </p>
+                  <p className="empty-state-description">
+                    {loading ? "Please wait..." : "Try adjusting your search or filters."}
+                  </p>
+                </div>
+              ) : (
+                filteredTenants.map((tenant) => (
+                  <TenantCard
+                    key={tenant.id}
+                    tenant={tenant}
+                    disabled={loading}
+                    onEdit={() => openEditModal(tenant)}
+                    onDelete={() => handleDelete(tenant.id)}
+                    onResetPassword={() => handleResetPassword(tenant.id)}
+                  />
+                ))
+              )}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden overflow-x-auto rounded-xl border border-border/50 lg:block">
+              <table className="w-full min-w-[800px] text-sm">
+                <thead className="border-b border-border bg-muted/50 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3">Tenant</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Paystack</th>
+                    <th className="px-4 py-3">Updated</th>
+                    <th className="px-4 py-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {filteredTenants.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>
+                        {loading ? "Loading tenants..." : "No tenants match your filters."}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTenants.map((tenant) => (
+                      <TenantRow
+                        key={tenant.id}
+                        tenant={tenant}
+                        disabled={loading}
+                        onEdit={() => openEditModal(tenant)}
+                        onDelete={() => handleDelete(tenant.id)}
+                        onResetPassword={() => handleResetPassword(tenant.id)}
+                      />
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <ModalShell title="Create Tenant" onClose={() => setShowCreateModal(false)}>
+          <form className="space-y-4" onSubmit={handleCreate}>
+            <div className="space-y-2">
+              <Label htmlFor="new-slug">Slug</Label>
               <Input
-                placeholder="Search by slug, name, email"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                aria-label="Search tenants"
-                className="pl-9"
+                id="new-slug"
+                placeholder="e.g. coffee-shop"
+                value={newSlug}
+                onChange={(event) => setNewSlug(event.target.value)}
+                required
               />
             </div>
-            <select
-              className="w-full"
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              aria-label="Filter tenants by status"
-            >
-              <option value="all">All statuses</option>
-              {statusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <p className="mt-3 text-xs text-slate-500">
-            Showing {filteredTenants.length} of {tenants.length} tenants
-          </p>
-
-          <div className="mt-3 space-y-3 lg:hidden">
-            {filteredTenants.length === 0 ? (
-              <div className="rounded-xl border border-slate-200/85 bg-white p-4 text-sm text-slate-600">
-                {loading ? "Loading tenants..." : "No tenants match your filters."}
-              </div>
-            ) : (
-              filteredTenants.map((tenant) => (
-                <TenantCard
-                  key={tenant.id}
-                  tenant={tenant}
-                  disabled={loading}
-                  onEdit={() => openEditModal(tenant)}
-                  onDelete={() => handleDelete(tenant.id)}
-                  onResetPassword={() => handleResetPassword(tenant.id)}
-                />
-              ))
-            )}
-          </div>
-
-          <div className="mt-3 hidden overflow-x-auto border border-slate-200/85 bg-white lg:block">
-            <table className="w-full min-w-[860px] text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
-                <tr>
-                  <th className="px-3 py-2">Tenant</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Paystack</th>
-                  <th className="px-3 py-2">Updated</th>
-                  <th className="px-3 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTenants.length === 0 ? (
-                  <tr>
-                    <td className="px-3 py-4 text-slate-600" colSpan={5}>
-                      {loading ? "Loading tenants..." : "No tenants match your filters."}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredTenants.map((tenant) => (
-                    <TenantRow
-                      key={tenant.id}
-                      tenant={tenant}
-                      disabled={loading}
-                      onEdit={() => openEditModal(tenant)}
-                      onDelete={() => handleDelete(tenant.id)}
-                      onResetPassword={() => handleResetPassword(tenant.id)}
-                    />
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-
-      <div className="fixed right-5 top-1/2 z-40 hidden -translate-y-1/2 lg:flex lg:flex-col lg:gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={loadTenants}
-          disabled={loading}
-          type="button"
-          aria-label="Refresh tenants"
-          className="bg-white shadow-[var(--shadow-sm)]"
-        >
-          <RefreshCw className={["size-4", loading ? "animate-spin" : ""].join(" ")} />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          type="button"
-          onClick={() => setShowCreateModal(true)}
-          aria-label="Create tenant"
-          className="bg-white shadow-[var(--shadow-sm)]"
-        >
-          <Plus className="size-4" />
-        </Button>
-      </div>
-
-      <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 lg:hidden">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={loadTenants}
-          disabled={loading}
-          type="button"
-          aria-label="Refresh tenants"
-          className="bg-white shadow-[var(--shadow-sm)]"
-        >
-          <RefreshCw className={["size-4", loading ? "animate-spin" : ""].join(" ")} />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          type="button"
-          onClick={() => setShowCreateModal(true)}
-          aria-label="Create tenant"
-          className="bg-white shadow-[var(--shadow-sm)]"
-        >
-          <Plus className="size-4" />
-        </Button>
-      </div>
-
-      {showCreateModal ? (
-        <ModalShell title="Create tenant" onClose={() => setShowCreateModal(false)}>
-          <form className="grid gap-3" onSubmit={handleCreate}>
-            <Input
-              placeholder="Slug"
-              value={newSlug}
-              onChange={(event) => setNewSlug(event.target.value)}
-              required
-            />
-            <Input
-              placeholder="Name"
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-              required
-            />
-            <Input
-              type="email"
-              placeholder="Admin email"
-              value={newEmail}
-              onChange={(event) => setNewEmail(event.target.value)}
-              required
-            />
-            <Input
-              type="text"
-              placeholder="Temp password (optional)"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-            />
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="space-y-2">
+              <Label htmlFor="new-name">Name</Label>
+              <Input
+                id="new-name"
+                placeholder="e.g. Coffee Shop WiFi"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-email">Admin Email</Label>
+              <Input
+                id="new-email"
+                type="email"
+                placeholder="admin@example.com"
+                value={newEmail}
+                onChange={(event) => setNewEmail(event.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">Temporary Password (optional)</Label>
+              <Input
+                id="new-password"
+                type="text"
+                placeholder="Leave blank to auto-generate"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)} disabled={loading}>
                 Cancel
               </Button>
               <Button type="submit" disabled={!canCreate}>
-                {loading ? "Working..." : "Create tenant"}
+                {loading ? "Creating..." : "Create Tenant"}
               </Button>
             </div>
           </form>
         </ModalShell>
-      ) : null}
+      )}
 
-      {editingTenant ? (
+      {/* Edit Modal */}
+      {editingTenant && (
         <ModalShell title={`Edit ${editingTenant.name}`} onClose={() => setEditingTenant(null)}>
-          <form className="grid gap-3" onSubmit={saveEdit}>
-            <Input value={editSlug} onChange={(event) => setEditSlug(event.target.value)} required />
-            <Input value={editName} onChange={(event) => setEditName(event.target.value)} required />
-            <Input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} required />
-            <select className="w-full" value={editStatus} onChange={(event) => setEditStatus(event.target.value)}>
-              {statusOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <div className="rounded-lg border border-slate-200/85 bg-slate-50 p-3">
-              <p className="text-xs text-slate-600">
-                Current Paystack key: {editingTenant.paystackLast4 ? `****${editingTenant.paystackLast4}` : "not set"}
-              </p>
+          <form className="space-y-4" onSubmit={saveEdit}>
+            <div className="space-y-2">
+              <Label htmlFor="edit-slug">Slug</Label>
               <Input
-                className="mt-2"
-                type="password"
-                placeholder="New Paystack secret (sk_test_... or sk_live_...)"
-                value={editPaystackSecretKey}
-                onChange={(event) => setEditPaystackSecretKey(event.target.value)}
+                id="edit-slug"
+                value={editSlug}
+                onChange={(event) => setEditSlug(event.target.value)}
+                required
               />
             </div>
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Name</Label>
+              <Input
+                id="edit-name"
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Admin Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editEmail}
+                onChange={(event) => setEditEmail(event.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-status">Status</Label>
+              <select
+                id="edit-status"
+                className="w-full"
+                value={editStatus}
+                onChange={(event) => setEditStatus(event.target.value)}
+              >
+                {statusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-paystack">Paystack Secret Key</Label>
+              <div className="rounded-xl border border-border/50 bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">
+                  Current: {editingTenant.paystackLast4 ? `****${editingTenant.paystackLast4}` : "Not set"}
+                </p>
+                <Input
+                  id="edit-paystack"
+                  type="password"
+                  className="mt-2"
+                  placeholder="sk_test_... or sk_live_..."
+                  value={editPaystackSecretKey}
+                  onChange={(event) => setEditPaystackSecretKey(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" onClick={() => setEditingTenant(null)} disabled={loading}>
                 Cancel
               </Button>
               <Button type="submit" disabled={!canSaveEdit}>
-                Save changes
+                {loading ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </form>
         </ModalShell>
-      ) : null}
+      )}
     </>
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+/* ===== Stat Card ===== */
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  variant,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: number;
+  variant?: "success" | "warning";
+}) {
   return (
-    <div className="rounded-xl border border-slate-200/85 bg-slate-50/80 px-3 py-2.5">
-      <p className="dashboard-kpi-label">{label}</p>
-      <p className="dashboard-kpi-value">{value}</p>
+    <div className="stat-card">
+      <div className="flex items-center gap-3">
+        <div
+          className={`stat-card-icon ${
+            variant === "success"
+              ? "bg-[var(--status-success-soft)] text-[var(--status-success)]"
+              : variant === "warning"
+                ? "bg-[var(--status-warning-soft)] text-[var(--status-warning)]"
+                : ""
+          }`}
+        >
+          <Icon className="size-5" />
+        </div>
+        <div>
+          <p className="stat-card-label">{label}</p>
+          <p className="stat-card-value">{value}</p>
+        </div>
+      </div>
     </div>
   );
 }
 
+/* ===== Tenant Row (Desktop) ===== */
 function TenantRow(props: {
   tenant: TenantDto;
   disabled: boolean;
@@ -561,54 +652,50 @@ function TenantRow(props: {
   onResetPassword: () => void;
 }) {
   return (
-    <tr className="border-b border-slate-100 last:border-0">
-      <td className="px-3 py-2 align-top">
-        <p className="font-semibold text-slate-900">{props.tenant.name}</p>
-        <p className="text-xs text-slate-500">/{props.tenant.slug}</p>
-        <p className="text-xs text-slate-500">{props.tenant.adminEmail}</p>
+    <tr className="hover:bg-muted/30">
+      <td className="px-4 py-3">
+        <p className="font-medium text-foreground">{props.tenant.name}</p>
+        <p className="text-xs text-muted-foreground">/{props.tenant.slug}</p>
+        <p className="text-xs text-muted-foreground">{props.tenant.adminEmail}</p>
       </td>
-      <td className="px-3 py-2 align-top">{statusBadge(props.tenant.status)}</td>
-      <td className="px-3 py-2 align-top text-xs text-slate-600">
-        {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
+      <td className="px-4 py-3">
+        <StatusBadge status={props.tenant.status} />
       </td>
-      <td className="px-3 py-2 align-top text-xs text-slate-600">
-        {new Date(props.tenant.updatedAt).toLocaleString()}
+      <td className="px-4 py-3 text-sm text-muted-foreground">
+        {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "Not set"}
       </td>
-      <td className="px-3 py-2 align-top">
-        <div className="flex flex-wrap gap-2">
+      <td className="px-4 py-3 text-sm text-muted-foreground">
+        {new Date(props.tenant.updatedAt).toLocaleDateString()}
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex gap-2">
           <Button
             type="button"
-            size="icon"
+            size="icon-xs"
             variant="outline"
             onClick={props.onEdit}
             disabled={props.disabled}
-            aria-label="Edit tenant"
-            title="Edit tenant"
-            className="size-8"
+            title="Edit"
           >
-            <PencilLine className="size-3.5" />
+            <Pencil className="size-3.5" />
           </Button>
           <Button
             type="button"
-            size="icon"
+            size="icon-xs"
             variant="outline"
             onClick={props.onResetPassword}
             disabled={props.disabled}
-            aria-label="Reset tenant password"
-            title="Reset tenant password"
-            className="size-8"
+            title="Reset Password"
           >
-            <ShieldCheck className="size-3.5" />
+            <KeyRound className="size-3.5" />
           </Button>
           <Button
             type="button"
-            size="icon"
+            size="icon-xs"
             variant="destructive"
             onClick={props.onDelete}
             disabled={props.disabled}
-            aria-label="Delete tenant"
-            title="Delete tenant"
-            className="size-8"
+            title="Delete"
           >
             <Trash2 className="size-3.5" />
           </Button>
@@ -618,6 +705,7 @@ function TenantRow(props: {
   );
 }
 
+/* ===== Tenant Card (Mobile) ===== */
 function TenantCard(props: {
   tenant: TenantDto;
   disabled: boolean;
@@ -626,36 +714,59 @@ function TenantCard(props: {
   onResetPassword: () => void;
 }) {
   return (
-    <article className="rounded-xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
-      <div className="mb-2 flex items-center justify-between gap-3">
+    <div className="mobile-table-card">
+      <div className="mobile-table-card-header">
         <div>
-          <p className="text-sm font-semibold text-slate-900">{props.tenant.name}</p>
-          <p className="text-xs text-slate-500">/{props.tenant.slug}</p>
+          <p className="mobile-table-card-title">{props.tenant.name}</p>
+          <p className="text-xs text-muted-foreground">/{props.tenant.slug}</p>
         </div>
-        {statusBadge(props.tenant.status)}
+        <StatusBadge status={props.tenant.status} />
       </div>
 
-      <p className="text-xs text-slate-500">{props.tenant.adminEmail}</p>
-      <p className="mt-1 text-xs text-slate-500">
-        Paystack: {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "not set"}
-      </p>
-      <p className="mt-1 text-xs text-slate-500">{new Date(props.tenant.updatedAt).toLocaleString()}</p>
+      <div className="mobile-table-card-meta">
+        <span>{props.tenant.adminEmail}</span>
+        <span>
+          Paystack: {props.tenant.paystackLast4 ? `****${props.tenant.paystackLast4}` : "Not set"}
+        </span>
+        <span>{new Date(props.tenant.updatedAt).toLocaleDateString()}</span>
+      </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={props.onEdit} disabled={props.disabled}>
-          <PencilLine className="size-3.5" />
+      <div className="mobile-table-card-actions">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={props.onEdit}
+          disabled={props.disabled}
+          className="flex-1"
+        >
+          <Pencil className="size-4" />
+          Edit
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={props.onResetPassword} disabled={props.disabled}>
-          <ShieldCheck className="size-3.5" />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={props.onResetPassword}
+          disabled={props.disabled}
+        >
+          <KeyRound className="size-4" />
         </Button>
-        <Button type="button" size="sm" variant="destructive" onClick={props.onDelete} disabled={props.disabled}>
-          <Trash2 className="size-3.5" />
+        <Button
+          type="button"
+          size="sm"
+          variant="destructive"
+          onClick={props.onDelete}
+          disabled={props.disabled}
+        >
+          <Trash2 className="size-4" />
         </Button>
       </div>
-    </article>
+    </div>
   );
 }
 
+/* ===== Modal Shell ===== */
 function ModalShell({
   title,
   onClose,
@@ -666,20 +777,27 @@ function ModalShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm p-0 sm:items-center sm:p-4"
+      onClick={onClose}
+    >
       <div
-        className="w-full max-w-lg rounded-xl border border-slate-200/90 bg-white p-5 shadow-[var(--shadow-lg)]"
+        className="w-full max-w-lg rounded-t-3xl border border-border/50 bg-card p-5 shadow-[var(--shadow-xl)] sm:rounded-3xl"
         onClick={(event) => event.stopPropagation()}
       >
+        {/* Handle for mobile */}
+        <div className="mb-3 flex justify-center sm:hidden">
+          <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
+        </div>
+
         <div className="mb-4 flex items-center justify-between gap-2">
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <h3 className="font-display text-lg font-semibold text-foreground">{title}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex size-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-100"
-            aria-label="Close"
+            className="flex size-10 items-center justify-center rounded-xl border border-border text-muted-foreground transition-colors hover:bg-muted tap-target"
           >
-            <X className="size-4" />
+            <X className="size-5" />
           </button>
         </div>
         {children}
