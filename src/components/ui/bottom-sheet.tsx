@@ -58,7 +58,7 @@ function BottomSheetContent({
             <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
           </div>
         )}
-        <div className="overflow-y-auto p-4 pb-8 safe-area-inset-bottom">
+        <div className="bottom-sheet-content">
           {children}
         </div>
         <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full p-2 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none tap-target">
