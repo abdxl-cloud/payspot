@@ -1,8 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { TenantAdminPanel } from "@/components/tenant-admin-panel";
-import { LogoutButton } from "@/components/logout-button";
-import { AppTopbar } from "@/components/app-topbar";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
 import { getSessionUser, getTenantBySlug } from "@/lib/store";
 
@@ -31,18 +29,5 @@ export default async function TenantAdminPage({ params }: Props) {
     redirect(`/t/${tenant.slug}/setup`);
   }
 
-  return (
-    <div className="app-shell">
-      <div className="app-container">
-        <AppTopbar
-          breadcrumb={`Tenant admin / ${tenant.slug}`}
-          environment="Production"
-          accountLabel={tenant.name}
-          action={<LogoutButton />}
-        />
-
-        <TenantAdminPanel tenantSlug={tenant.slug} />
-      </div>
-    </div>
-  );
+  return <TenantAdminPanel tenantSlug={tenant.slug} tenantName={tenant.name} />;
 }

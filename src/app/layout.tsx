@@ -1,17 +1,25 @@
 import type { Metadata } from "next";
-import { Exo_2, Manrope } from "next/font/google";
+import { DM_Mono, DM_Sans, Syne } from "next/font/google";
 import "./globals.css";
 
-const bodyFont = Manrope({
+const bodyFont = DM_Sans({
   variable: "--font-body",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
-const headingFont = Exo_2({
+const headingFont = Syne({
   variable: "--font-heading",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: ["600", "700", "800"],
+  display: "swap",
+});
+
+const monoFont = DM_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
   display: "swap",
 });
 
@@ -27,8 +35,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${bodyFont.variable} ${headingFont.variable} antialiased`}>{children}</body>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className={`${bodyFont.variable} ${headingFont.variable} ${monoFont.variable} antialiased`}>{children}</body>
     </html>
   );
 }

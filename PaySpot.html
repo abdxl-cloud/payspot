@@ -1,0 +1,2452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PaySpot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@500;600;700&family=Unbounded:wght@600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Reset ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{font-family:var(--font-body),'DM Sans',system-ui,sans-serif;background:#0d0d0d;color:#efefef;line-height:1.5;font-size:15px}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input,select,textarea{font-family:inherit}
+a{text-decoration:none;color:inherit}
+
+/* ── Font system ── */
+:root{
+  --font-display:'Syne';
+  --font-body:'DM Sans';
+  --font-mono:'DM Mono';
+}
+body.f2{--font-display:'Space Grotesk'}
+body.f3{--font-display:'Unbounded'}
+body.f4{--font-display:'Fraunces'}
+body.f5{--font-display:'Plus Jakarta Sans';--font-body:'Plus Jakarta Sans'}
+.display{font-family:var(--font-display),sans-serif}
+
+/* ── Tokens ── */
+:root{
+  --bg:#0d0d0d;--s1:#141414;--s2:#1a1a1a;--s3:#222;
+  --bd:#262626;--bd2:#333;
+  --tx:#efefef;--tx2:#888;--tx3:#555;
+  --ac:oklch(0.85 0.22 140);
+  --ac-dim:oklch(0.85 0.22 140/.10);
+  --ac-bd:oklch(0.85 0.22 140/.30);
+  --green:oklch(0.72 0.17 155);
+  --amber:oklch(0.78 0.18 80);
+  --red:oklch(0.65 0.18 25);
+  --r:6px;--r2:10px;--r3:14px;
+}
+
+/* ── Proto Nav ── */
+.pnav{
+  position:fixed;top:0;left:0;right:0;z-index:9999;height:40px;
+  background:#0d0d0d;border-bottom:1px solid var(--bd);
+  display:flex;align-items:center;gap:2px;padding:0 10px;overflow-x:auto;
+}
+.pnav::-webkit-scrollbar{display:none}
+.pnav-label{font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--tx3);margin-right:8px;white-space:nowrap;font-family:'DM Mono',monospace;flex-shrink:0}
+.pnav button{padding:4px 10px;border-radius:4px;font-size:12px;font-weight:500;
+  color:var(--tx3);white-space:nowrap;transition:all .15s}
+.pnav button:hover{color:var(--tx2);background:var(--s2)}
+.pnav button.on{color:var(--ac);background:var(--ac-dim)}
+.pnav-sep{width:1px;height:20px;background:var(--bd);flex-shrink:0;margin:0 6px}
+.font-btn{font-size:11px!important;padding:3px 8px!important}
+.font-btn.f1{font-family:'Syne',sans-serif}
+.font-btn.f2{font-family:'Space Grotesk',sans-serif}
+.font-btn.f3{font-family:'Unbounded',sans-serif;font-size:10px!important}
+.font-btn.f4{font-family:'Fraunces',sans-serif}
+.font-btn.f5{font-family:'Plus Jakarta Sans',sans-serif}
+
+/* ── Screens ── */
+.screen{display:none;min-height:calc(100vh - 40px);margin-top:40px}
+.screen.on{display:block}
+
+/* ── Components ── */
+.logo{display:flex;align-items:center;gap:9px}
+.logo-text{font-family:var(--font-display),sans-serif;font-weight:800;font-size:17px;letter-spacing:-.03em;color:var(--tx)}
+.wifimark{display:inline-flex;align-items:center;justify-content:center;color:var(--ac)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:9px 18px;border-radius:var(--r);font-size:13px;font-weight:600;
+  transition:all .15s;cursor:pointer;white-space:nowrap;line-height:1}
+.btn-ac{background:var(--ac);color:#0d0d0d}
+.btn-ac:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.btn-ghost{background:transparent;color:var(--tx2);border:1px solid var(--bd2)}
+.btn-ghost:hover{border-color:var(--tx3);color:var(--tx);background:var(--s2)}
+.btn-muted{background:var(--s2);color:var(--tx2);border:1px solid var(--bd)}
+.btn-muted:hover{background:var(--s3);color:var(--tx)}
+.btn-red{background:oklch(0.65 0.18 25/.15);color:var(--red);border:1px solid oklch(0.65 0.18 25/.25)}
+.btn-red:hover{background:oklch(0.65 0.18 25/.25)}
+.btn-lg{padding:13px 26px;font-size:14px;border-radius:var(--r2)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-xs{padding:4px 9px;font-size:11px}
+.btn-icon{width:34px;height:34px;padding:0;justify-content:center;border-radius:var(--r);color:var(--tx2);border:1px solid var(--bd);background:var(--s2)}
+.btn-icon:hover{color:var(--tx);border-color:var(--bd2)}
+
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:600;font-family:'DM Mono',monospace;white-space:nowrap}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.badge-g{background:oklch(0.72 0.17 155/.12);color:var(--green);border:1px solid oklch(0.72 0.17 155/.2)}.badge-g::before{background:var(--green)}
+.badge-a{background:oklch(0.78 0.18 80/.12);color:var(--amber);border:1px solid oklch(0.78 0.18 80/.2)}.badge-a::before{background:var(--amber)}
+.badge-r{background:oklch(0.65 0.18 25/.12);color:var(--red);border:1px solid oklch(0.65 0.18 25/.2)}.badge-r::before{background:var(--red)}
+.badge-m{background:var(--s2);color:var(--tx3);border:1px solid var(--bd)}.badge-m::before{background:var(--tx3)}
+.badge-ac{background:var(--ac-dim);color:var(--ac);border:1px solid var(--ac-bd)}.badge-ac::before{background:var(--ac)}
+
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:5px;letter-spacing:.02em}
+.field input,.field select,.field textarea{width:100%;height:42px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);
+  padding:0 13px;font-size:14px;color:var(--tx);outline:none;transition:border-color .15s}
+.field textarea{height:80px;padding:10px 13px;resize:vertical}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--ac-bd);background:var(--s1)}
+.field input::placeholder,.field textarea::placeholder{color:var(--tx3)}
+.field .hint{font-size:11px;color:var(--tx3);margin-top:5px}
+.field select option{background:#1a1a1a}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* Toggle switch */
+.toggle{display:flex;align-items:center;gap:8px;cursor:pointer}
+.toggle-track{width:36px;height:20px;border-radius:100px;background:var(--s3);border:1px solid var(--bd2);
+  position:relative;transition:background .2s;flex-shrink:0}
+.toggle-track.on{background:var(--ac);border-color:var(--ac)}
+.toggle-track::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;
+  border-radius:50%;background:#fff;transition:transform .2s}
+.toggle-track.on::after{transform:translateX(16px)}
+.toggle-label{font-size:13px;color:var(--tx2)}
+
+/* ════════════════════════════════════════
+   LANDING
+════════════════════════════════════════ */
+#s-land{background:var(--bg)}
+.land-nav{
+  position:sticky;top:40px;z-index:100;
+  background:rgba(13,13,13,.9);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--bd);
+  padding:0 clamp(16px,4vw,56px);height:62px;
+  display:flex;align-items:center;justify-content:space-between;gap:20px;
+}
+.land-links{display:flex;gap:24px;list-style:none}
+.land-links a{font-size:13px;color:var(--tx2);transition:color .15s}
+.land-links a:hover{color:var(--tx)}
+.land-nav-right{display:flex;gap:8px;align-items:center}
+@media(max-width:640px){.land-links{display:none}}
+
+.hero{max-width:1200px;margin:0 auto;padding:clamp(48px,8vw,96px) clamp(16px,4vw,56px) clamp(40px,6vw,72px)}
+.hero-layout{display:grid;grid-template-columns:1fr 1fr;gap:clamp(40px,6vw,80px);align-items:center}
+@media(max-width:860px){.hero-layout{grid-template-columns:1fr}}
+.hero-kicker{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:500;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ac);font-family:'DM Mono',monospace;margin-bottom:24px}
+.hero-kicker::before{content:'';width:20px;height:1px;background:var(--ac);flex-shrink:0}
+.hero h1{font-family:var(--font-display),sans-serif;font-size:clamp(36px,5.5vw,72px);font-weight:800;
+  line-height:1.04;letter-spacing:-.035em;color:var(--tx);margin-bottom:22px;text-wrap:balance}
+.hero h1 em{font-style:normal;color:var(--ac)}
+.hero-sub{font-size:clamp(14px,1.4vw,16px);color:var(--tx2);line-height:1.75;max-width:480px;margin-bottom:32px}
+.hero-ctas{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:48px}
+.hero-stats{display:flex;gap:clamp(24px,4vw,48px);padding-top:28px;border-top:1px solid var(--bd);flex-wrap:wrap}
+.stat-val{font-family:var(--font-display),sans-serif;font-size:clamp(22px,2.5vw,30px);font-weight:800;color:var(--tx);font-variant-numeric:tabular-nums}
+.stat-lbl{font-size:12px;color:var(--tx3);margin-top:2px}
+
+.mockup{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r3);padding:16px;overflow:hidden}
+.mock-chrome{display:flex;align-items:center;gap:6px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--bd)}
+.mock-dot{width:8px;height:8px;border-radius:50%}
+.mock-url{flex:1;background:var(--s2);border-radius:4px;padding:4px 10px;font-size:10px;color:var(--tx3);font-family:'DM Mono',monospace}
+.mock-kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.mock-kpi{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px}
+.mock-kpi-l{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.mock-kpi-v{font-size:18px;font-weight:600;font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums}
+.mock-kpi-v.a{color:var(--ac)}.mock-kpi-v.g{color:var(--green)}
+.mock-txn-label{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px;font-family:'DM Mono',monospace}
+.mock-row{display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--s2);border:1px solid var(--bd);border-radius:6px;margin-bottom:5px}
+.mock-av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#0d0d0d;flex-shrink:0;font-family:'DM Mono',monospace}
+.mock-name{font-size:10px;font-weight:500;color:var(--tx)}
+.mock-amt{font-size:10px;color:var(--tx3)}
+.mock-pill{font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;margin-left:auto;font-family:'DM Mono',monospace;background:oklch(0.72 0.17 155/.15);color:var(--green)}
+
+.land-section{max-width:1200px;margin:0 auto;padding:clamp(32px,5vw,72px) clamp(16px,4vw,56px)}
+.sec-kicker{font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ac);font-family:'DM Mono',monospace;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.sec-kicker::before{content:'';width:20px;height:1px;background:var(--ac)}
+.sec-title{font-family:var(--font-display),sans-serif;font-size:clamp(24px,3vw,38px);font-weight:800;letter-spacing:-.025em;color:var(--tx);margin-bottom:12px}
+.sec-sub{font-size:15px;color:var(--tx2);line-height:1.7;max-width:480px;margin-bottom:36px}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:var(--bd);border:1px solid var(--bd);border-radius:var(--r3);overflow:hidden}
+.feat-card{background:var(--s1);padding:28px 26px;transition:background .2s}
+.feat-card:hover{background:var(--s2)}
+.feat-tag{font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);font-family:'DM Mono',monospace;margin-bottom:12px}
+.feat-title{font-family:var(--font-display),sans-serif;font-size:15px;font-weight:700;color:var(--tx);margin-bottom:8px}
+.feat-desc{font-size:13px;color:var(--tx2);line-height:1.65}
+
+.int-strip{border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);padding:18px clamp(16px,4vw,56px)}
+.int-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.int-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--tx3);white-space:nowrap;font-family:'DM Mono',monospace}
+.int-chips{display:flex;gap:8px;flex-wrap:wrap}
+.int-chip{padding:5px 12px;background:var(--s1);border:1px solid var(--bd);border-radius:4px;font-size:12px;color:var(--tx2)}
+
+.cta-band{border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);padding:clamp(48px,6vw,80px) clamp(16px,4vw,56px);text-align:center;position:relative;overflow:hidden}
+.cta-band::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 60% 120% at 50% 100%,oklch(0.85 0.22 140/.05),transparent)}
+.cta-band h2{font-family:var(--font-display),sans-serif;font-size:clamp(26px,3.5vw,44px);font-weight:800;letter-spacing:-.025em;color:var(--tx);margin-bottom:10px}
+.cta-band p{font-size:15px;color:var(--tx2);margin-bottom:28px}
+.cta-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.land-footer{padding:24px clamp(16px,4vw,56px);border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.land-footer p{font-size:12px;color:var(--tx3)}
+
+/* ════════════════════════════════════════
+   PORTAL
+════════════════════════════════════════ */
+#s-portal{display:none;flex-direction:column;min-height:calc(100vh - 40px);margin-top:40px}
+#s-portal.on{display:flex}
+.portal-head{background:var(--s1);border-bottom:1px solid var(--bd);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:40px;z-index:10}
+.venue-mark{width:38px;height:38px;border-radius:9px;background:var(--s2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-family:var(--font-display),sans-serif;font-size:16px;font-weight:800;color:var(--ac)}
+.venue-name{font-size:14px;font-weight:600;color:var(--tx)}
+.venue-sub{font-size:11px;color:var(--tx3)}
+.poweredby{font-size:11px;color:var(--tx3)}.poweredby strong{color:var(--tx2)}
+.portal-hero{padding:clamp(24px,4vw,40px) 20px 16px;text-align:center}
+.portal-hero h1{font-family:var(--font-display),sans-serif;font-size:clamp(20px,3vw,28px);font-weight:800;letter-spacing:-.02em;color:var(--tx);margin-bottom:6px}
+.portal-hero p{font-size:13px;color:var(--tx2)}
+.portal-body{flex:1;padding:16px 20px 100px;max-width:560px;width:100%;margin:0 auto}
+.plans-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:12px;font-family:'DM Mono',monospace}
+.plan-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);padding:16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .15s;position:relative}
+.plan-card:hover{border-color:var(--bd2);background:var(--s2)}
+.plan-card.sel{border-color:var(--ac-bd);background:var(--ac-dim)}
+.plan-card.popular::before{content:'Popular';position:absolute;top:-9px;left:12px;background:var(--ac);color:#0d0d0d;font-size:9px;font-weight:700;padding:2px 9px;border-radius:100px;letter-spacing:.06em;font-family:'DM Mono',monospace}
+.plan-abbr{width:42px;height:42px;border-radius:8px;background:var(--s2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;color:var(--tx2);flex-shrink:0}
+.plan-name{font-size:14px;font-weight:600;color:var(--tx);margin-bottom:3px}
+.plan-tags{display:flex;gap:10px;flex-wrap:wrap}
+.plan-tag{font-size:11px;color:var(--tx3)}
+.plan-price{text-align:right;flex-shrink:0}
+.plan-amt{font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:var(--tx);font-variant-numeric:tabular-nums}
+.plan-per{font-size:10px;color:var(--tx3)}
+.portal-foot{position:fixed;bottom:0;left:0;right:0;background:rgba(13,13,13,.95);backdrop-filter:blur(12px);border-top:1px solid var(--bd);padding:14px 20px}
+.portal-foot-inner{max-width:560px;margin:0 auto}
+.portal-foot .btn{width:100%;height:48px;font-size:14px;border-radius:var(--r2);margin-bottom:8px}
+.portal-foot p{text-align:center;font-size:11px;color:var(--tx3)}
+
+/* ════════════════════════════════════════
+   CHECKOUT
+════════════════════════════════════════ */
+#s-checkout{background:var(--bg)}
+.co-head{background:var(--s1);border-bottom:1px solid var(--bd);padding:0 20px;height:54px;display:flex;align-items:center;gap:12px;position:sticky;top:40px;z-index:10}
+.co-back{width:32px;height:32px;border-radius:var(--r);background:var(--s2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;color:var(--tx2);font-size:16px}
+.co-back:hover{border-color:var(--bd2);color:var(--tx)}
+.co-head-title{font-size:14px;font-weight:600;color:var(--tx)}
+.co-layout{max-width:880px;margin:0 auto;padding:clamp(16px,3vw,32px) clamp(16px,3vw,32px) 40px;display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+@media(max-width:680px){.co-layout{grid-template-columns:1fr}}
+.co-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);padding:20px;margin-bottom:14px}
+.co-card:last-child{margin-bottom:0}
+.co-card-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:16px;font-family:'DM Mono',monospace}
+.order-row{display:flex;gap:12px;align-items:center;padding-bottom:16px;border-bottom:1px solid var(--bd);margin-bottom:14px}
+.order-ico{width:42px;height:42px;border-radius:8px;background:var(--s2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:11px;color:var(--ac)}
+.order-name{font-size:14px;font-weight:600;color:var(--tx)}
+.order-specs{font-size:12px;color:var(--tx3);margin-top:2px}
+.order-total{display:flex;align-items:center;justify-content:space-between}
+.order-total-lbl{font-size:13px;color:var(--tx2)}
+.order-total-amt{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--tx);font-variant-numeric:tabular-nums}
+.pay-btn{width:100%;height:50px;background:var(--ac);color:#0d0d0d;border:none;border-radius:var(--r2);font-size:14px;font-weight:700;cursor:pointer;transition:filter .15s;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px}
+.pay-btn:hover{filter:brightness(1.08)}
+.co-secure{text-align:center;font-size:11px;color:var(--tx3)}
+
+/* ════════════════════════════════════════
+   VOUCHER
+════════════════════════════════════════ */
+#s-voucher{background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;min-height:calc(100vh - 40px)}
+#s-voucher.on{display:flex}
+.v-icon{width:54px;height:54px;border-radius:50%;background:oklch(0.72 0.17 155/.10);border:1px solid oklch(0.72 0.17 155/.2);display:flex;align-items:center;justify-content:center;margin-bottom:18px;animation:pop .45s cubic-bezier(.34,1.56,.64,1)}
+@keyframes pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+#s-voucher h2{font-family:var(--font-display),sans-serif;font-size:clamp(22px,3vw,28px);font-weight:800;letter-spacing:-.02em;color:var(--tx);margin-bottom:6px;text-align:center}
+#s-voucher>p{font-size:14px;color:var(--tx2);text-align:center;margin-bottom:28px}
+.v-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r3);padding:28px;text-align:center;width:100%;max-width:380px;margin-bottom:12px}
+.v-card-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:16px;font-family:'DM Mono',monospace}
+.v-code{font-family:'DM Mono',monospace;font-size:clamp(28px,5vw,38px);font-weight:500;color:var(--ac);letter-spacing:.25em;margin-bottom:20px}
+.v-copy{width:100%;height:42px;background:var(--ac-dim);color:var(--ac);border:1px solid var(--ac-bd);border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:16px}
+.v-copy:hover{background:oklch(0.85 0.22 140/.18)}
+.v-details{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.v-detail{background:var(--s2);border-radius:6px;padding:10px}
+.v-detail-l{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em}
+.v-detail-v{font-size:14px;font-weight:500;color:var(--tx);margin-top:2px;font-family:'DM Mono',monospace}
+.v-sms{background:oklch(0.72 0.17 155/.08);border:1px solid oklch(0.72 0.17 155/.15);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--green);max-width:380px;width:100%;display:flex;align-items:center;gap:8px;margin-bottom:20px}
+.v-actions{display:flex;gap:8px}
+
+/* ════════════════════════════════════════
+   LOGIN
+════════════════════════════════════════ */
+#s-login{background:var(--bg);display:none;grid-template-columns:1fr 1fr;min-height:calc(100vh - 40px);margin-top:40px}
+#s-login.on{display:grid}
+@media(max-width:720px){#s-login.on{display:flex;flex-direction:column}}
+.login-brand{background:var(--s1);border-right:1px solid var(--bd);padding:clamp(32px,5vw,64px);display:flex;flex-direction:column;justify-content:space-between}
+@media(max-width:720px){.login-brand{display:none}}
+.lb-copy{padding:clamp(40px,6vw,80px) 0}
+.lb-headline{font-family:var(--font-display),sans-serif;font-size:clamp(26px,3.5vw,40px);font-weight:800;letter-spacing:-.025em;color:var(--tx);line-height:1.15;margin-bottom:12px}
+.lb-sub{font-size:14px;color:var(--tx2);line-height:1.7;max-width:340px}
+.lb-feats{display:flex;flex-direction:column;gap:10px}
+.lb-feat{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)}
+.lb-n{font-family:'DM Mono',monospace;font-size:10px;color:var(--ac);width:20px;flex-shrink:0}
+.login-form-col{display:flex;align-items:center;justify-content:center;padding:clamp(24px,4vw,56px);background:var(--bg)}
+.lf-wrap{width:100%;max-width:360px}
+.lf-title{font-family:var(--font-display),sans-serif;font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--tx);margin-bottom:6px}
+.lf-sub{font-size:13px;color:var(--tx2);margin-bottom:24px}
+.lf-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);padding:22px}
+.lf-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.lf-row label{margin-bottom:0}
+.lf-submit{width:100%;height:46px;background:var(--ac);color:#0d0d0d;border:none;border-radius:var(--r);font-size:14px;font-weight:700;cursor:pointer;transition:filter .15s;margin-top:4px}
+.lf-submit:hover{filter:brightness(1.08)}
+.lf-forgot{font-size:12px;color:var(--tx3);transition:color .15s}
+.lf-forgot:hover{color:var(--ac)}
+.lf-footer{margin-top:16px;text-align:center;font-size:12px;color:var(--tx3)}
+.lf-footer a{color:var(--ac)}
+
+/* ════════════════════════════════════════
+   DASHBOARD CHROME (shared)
+════════════════════════════════════════ */
+.dash-layout{display:flex;min-height:calc(100vh - 40px)}
+.sidebar{width:216px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:sticky;top:40px;height:calc(100vh - 40px);overflow-y:auto}
+@media(max-width:900px){.sidebar{display:none}}
+.sb-brand{padding:14px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:9px}
+.sb-mark{width:32px;height:32px;border-radius:7px;background:var(--s2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-family:var(--font-display),sans-serif;font-size:13px;font-weight:800;color:var(--ac);flex-shrink:0}
+.sb-name{font-size:13px;font-weight:600;color:var(--tx)}
+.sb-url{font-size:10px;color:var(--tx3);font-family:'DM Mono',monospace}
+.sb-nav{padding:8px 6px;flex:1}
+.sb-sec{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.09em;color:var(--tx3);padding:12px 8px 6px;font-family:'DM Mono',monospace}
+.sb-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:5px;font-size:13px;font-weight:500;color:var(--tx2);cursor:pointer;transition:all .15s;margin-bottom:1px;position:relative}
+.sb-item:hover{color:var(--tx);background:var(--s2)}
+.sb-item.on{color:var(--tx);background:var(--s2)}
+.sb-item.on::after{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:2px;height:16px;background:var(--ac);border-radius:0 2px 2px 0}
+.sb-bdg{margin-left:auto;background:var(--ac-dim);color:var(--ac);border:1px solid var(--ac-bd);font-size:10px;font-weight:500;padding:1px 6px;border-radius:100px;font-family:'DM Mono',monospace}
+.sb-foot{padding:10px;border-top:1px solid var(--bd)}
+.sb-user{display:flex;align-items:center;gap:9px;padding:8px;border-radius:var(--r);cursor:pointer;transition:background .15s}
+.sb-user:hover{background:var(--s2)}
+.sb-av{width:30px;height:30px;border-radius:50%;background:var(--s2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--ac);flex-shrink:0;font-family:'DM Mono',monospace}
+.sb-uname{font-size:12px;font-weight:600;color:var(--tx)}
+.sb-urole{font-size:10px;color:var(--tx3)}
+.dash-main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.dash-topbar{background:var(--s1);border-bottom:1px solid var(--bd);padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px}
+.dash-crumb{font-size:12px;color:var(--tx3);display:flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;white-space:nowrap;overflow:hidden}
+.dash-crumb span:last-child{color:var(--tx)}
+.dash-crumb-sep{color:var(--bd2)}
+.dash-topbar-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.dash-content{padding:clamp(14px,2.5vw,24px);overflow-y:auto;flex:1}
+.dash-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.dash-title{font-family:var(--font-display),sans-serif;font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--tx)}
+.dash-sub{font-size:12px;color:var(--tx3);margin-top:3px;font-family:'DM Mono',monospace}
+.dash-hdr-r{display:flex;gap:8px;flex-wrap:wrap}
+
+/* Section visibility */
+.dash-section{display:none}
+.dash-section.on{display:block}
+
+/* KPIs */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.kpi{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);padding:16px}
+.kpi-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.kpi-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);font-family:'DM Mono',monospace}
+.kpi-val{font-family:'DM Mono',monospace;font-size:clamp(18px,2.5vw,24px);font-weight:500;color:var(--tx);margin-bottom:4px;font-variant-numeric:tabular-nums}
+.kpi-delta{font-size:11px;font-weight:500;font-family:'DM Mono',monospace}
+.kpi-delta.up{color:var(--green)}.kpi-delta.dn{color:var(--red)}.kpi-delta.neu{color:var(--tx3)}
+.kpi-delta.warn{color:var(--amber)}
+
+/* 2-col layout */
+.dash-grid{display:grid;grid-template-columns:1fr 300px;gap:14px}
+@media(max-width:1080px){.dash-grid{grid-template-columns:1fr}}
+
+/* Admin card */
+.ac{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);overflow:hidden;margin-bottom:14px}
+.ac:last-child{margin-bottom:0}
+.ac-hdr{padding:13px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ac-title{font-size:13px;font-weight:600;color:var(--tx)}
+.ac-sub{font-size:11px;color:var(--tx3);font-family:'DM Mono',monospace}
+
+/* Table */
+.tbar{padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tsearch{height:32px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:0 12px;font-size:12px;color:var(--tx);outline:none;transition:border-color .15s;width:200px;font-family:'DM Mono',monospace}
+.tsearch:focus{border-color:var(--ac-bd)}
+.tsearch::placeholder{color:var(--tx3)}
+.tfilter{height:32px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:0 10px;font-size:12px;color:var(--tx2);outline:none;cursor:pointer;font-family:'DM Mono',monospace}
+table.t{width:100%;border-collapse:collapse}
+table.t th{padding:8px 14px;text-align:left;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);border-bottom:1px solid var(--bd);background:var(--s2);font-family:'DM Mono',monospace;white-space:nowrap}
+table.t td{padding:11px 14px;font-size:12px;color:var(--tx2);border-bottom:1px solid var(--bd)}
+table.t tr:last-child td{border-bottom:none}
+table.t tr:hover td{background:var(--s2)}
+table.t .td-main{color:var(--tx);font-weight:500}
+table.t .td-mono{font-family:'DM Mono',monospace;font-size:12px;color:var(--ac)}
+table.t .td-muted{font-family:'DM Mono',monospace;font-size:12px;color:var(--tx2)}
+.t-pagination{padding:12px 16px;border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--tx3);font-family:'DM Mono',monospace}
+
+/* Widget */
+.widget{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);padding:16px;margin-bottom:10px}
+.widget:last-child{margin-bottom:0}
+.widget-title{font-size:12px;font-weight:600;color:var(--tx);margin-bottom:14px}
+.bar-row{margin-bottom:10px}
+.bar-meta{display:flex;justify-content:space-between;margin-bottom:4px}
+.bar-name{font-size:12px;color:var(--tx)}
+.bar-val{font-size:12px;color:var(--tx2);font-family:'DM Mono',monospace}
+.bar-track{height:3px;background:var(--s2);border-radius:100px}
+.bar-fill{height:3px;border-radius:100px;background:var(--ac)}
+
+/* Plan management cards */
+.plan-mgmt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.plan-mgmt-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);overflow:hidden}
+.plan-mgmt-card.inactive{opacity:.6}
+.pmcard-head{padding:14px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
+.pmcard-name{font-size:14px;font-weight:600;color:var(--tx)}
+.pmcard-price{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--tx);font-variant-numeric:tabular-nums}
+.pmcard-per{font-size:11px;color:var(--tx3)}
+.pmcard-body{padding:14px 16px}
+.pmcard-spec-row{display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap}
+.pmcard-spec{font-size:12px;color:var(--tx2)}.pmcard-spec strong{color:var(--tx);font-weight:500}
+.pmcard-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:12px;border-top:1px solid var(--bd)}
+.pmcard-stat-lbl{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;font-family:'DM Mono',monospace}
+.pmcard-stat-val{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:var(--tx);margin-top:2px;font-variant-numeric:tabular-nums}
+.pmcard-foot{padding:12px 16px;border-top:1px solid var(--bd);display:flex;gap:6px;align-items:center}
+
+/* Network setup */
+.platform-pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}
+.platform-pill{padding:8px 16px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);font-size:13px;font-weight:500;color:var(--tx2);cursor:pointer;transition:all .15s}
+.platform-pill:hover{border-color:var(--bd2);color:var(--tx)}
+.platform-pill.on{background:var(--ac-dim);border-color:var(--ac-bd);color:var(--ac)}
+.netform{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);padding:20px;margin-bottom:16px}
+.netform-title{font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:16px;text-transform:uppercase;letter-spacing:.06em;font-family:'DM Mono',monospace}
+.net-status{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--r);font-size:13px;font-weight:500;margin-top:16px}
+.net-status.ok{background:oklch(0.72 0.17 155/.08);border:1px solid oklch(0.72 0.17 155/.15);color:var(--green)}
+.net-status.warn{background:oklch(0.78 0.18 80/.08);border:1px solid oklch(0.78 0.18 80/.15);color:var(--amber)}
+
+/* Settings tabs */
+.settings-layout{display:grid;grid-template-columns:180px 1fr;gap:16px;align-items:start}
+@media(max-width:680px){.settings-layout{grid-template-columns:1fr}}
+.settings-tabs{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);overflow:hidden}
+.settings-tab{padding:10px 14px;font-size:13px;font-weight:500;color:var(--tx2);cursor:pointer;transition:all .15s;border-bottom:1px solid var(--bd)}
+.settings-tab:last-child{border-bottom:none}
+.settings-tab:hover{background:var(--s2);color:var(--tx)}
+.settings-tab.on{color:var(--ac);background:var(--ac-dim)}
+.settings-panel{display:none}
+.settings-panel.on{display:block}
+.settings-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);padding:20px;margin-bottom:14px}
+.settings-card:last-child{margin-bottom:0}
+.settings-card-title{font-size:13px;font-weight:600;color:var(--tx);margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--bd)}
+.settings-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.key-display{display:flex;align-items:center;gap:8px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:10px 13px}
+.key-display span{font-family:'DM Mono',monospace;font-size:13px;color:var(--tx2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Alert banner */
+.alert-banner{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:var(--r);margin-bottom:16px;font-size:13px;font-weight:500}
+.alert-banner.warn{background:oklch(0.78 0.18 80/.08);border:1px solid oklch(0.78 0.18 80/.2);color:var(--amber)}
+.alert-banner.info{background:var(--ac-dim);border:1px solid var(--ac-bd);color:var(--ac)}
+
+/* Revenue bars */
+.rev-bar-row{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.rev-bar-label{width:130px;font-size:12px;color:var(--tx2);flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rev-bar-track{flex:1;height:8px;background:var(--s2);border-radius:100px;position:relative}
+.rev-bar-fill{height:8px;border-radius:100px;background:var(--ac)}
+.rev-bar-val{font-family:'DM Mono',monospace;font-size:12px;color:var(--tx2);text-align:right;width:80px;flex-shrink:0;font-variant-numeric:tabular-nums}
+
+/* Integration cards */
+.int-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.int-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);padding:18px}
+.int-card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.int-card-name{font-size:14px;font-weight:600;color:var(--tx)}
+.int-card-tag{font-size:10px;color:var(--tx3);font-family:'DM Mono',monospace;margin-top:2px}
+.int-card-detail{font-size:12px;color:var(--tx3);margin-bottom:4px;font-family:'DM Mono',monospace}
+.int-card-detail strong{color:var(--tx2);font-weight:500}
+
+/* Platform badge */
+.plat-tag{font-size:9px;font-weight:600;background:oklch(0.65 0.18 25/.15);color:var(--red);padding:2px 6px;border-radius:3px;font-family:'DM Mono',monospace;letter-spacing:.04em;border:1px solid oklch(0.65 0.18 25/.2)}
+
+/* Tenant rows */
+.tenant-row{display:flex;align-items:center;gap:14px;padding:13px 16px;border-bottom:1px solid var(--bd);cursor:pointer;transition:background .15s;flex-wrap:wrap}
+.tenant-row:last-child{border-bottom:none}
+.tenant-row:hover{background:var(--s2)}
+.t-av{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#0d0d0d;flex-shrink:0;font-family:var(--font-display),sans-serif}
+.t-name{font-size:13px;font-weight:600;color:var(--tx)}
+.t-slug{font-size:11px;color:var(--tx3);font-family:'DM Mono',monospace}
+.t-mid{flex:1;min-width:0}
+.t-rev{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--tx);text-align:right;font-variant-numeric:tabular-nums}
+.t-txn{font-size:11px;color:var(--tx3);text-align:right;font-family:'DM Mono',monospace}
+
+/* Mobile bottom nav */
+.mob-menu{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--s1);border-top:1px solid var(--bd);padding:8px 16px;z-index:50;gap:4px}
+@media(max-width:900px){.mob-menu{display:flex;justify-content:space-around}}
+.mob-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 10px;border-radius:var(--r);cursor:pointer;transition:background .15s;font-size:10px;color:var(--tx3);flex:1}
+.mob-btn:hover,.mob-btn.on{background:var(--s2);color:var(--tx)}
+.mob-btn svg{width:18px;height:18px}
+@media(max-width:900px){.dash-content{padding-bottom:80px}}
+
+/* ════════════════════════════════════════
+   ONBOARDING WIZARD
+════════════════════════════════════════ */
+#s-onboarding{background:var(--bg)}
+.ob-layout{display:grid;grid-template-columns:272px 1fr;min-height:calc(100vh - 40px)}
+@media(max-width:760px){.ob-layout{grid-template-columns:1fr}}
+.ob-sidebar{background:var(--s1);border-right:1px solid var(--bd);padding:36px 24px;display:flex;flex-direction:column;position:sticky;top:40px;height:calc(100vh - 40px)}
+@media(max-width:760px){.ob-sidebar{display:none}}
+.ob-logo{display:flex;align-items:center;gap:9px;margin-bottom:48px}
+.ob-steps{display:flex;flex-direction:column;flex:1}
+.ob-step{display:flex;align-items:flex-start;gap:12px;padding:8px 10px;border-radius:var(--r);position:relative}
+.ob-step-col{display:flex;flex-direction:column;align-items:center}
+.ob-step-dot{width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;font-family:'DM Mono',monospace;background:var(--s2);border:1px solid var(--bd);color:var(--tx3);transition:all .25s}
+.ob-step.done .ob-step-dot{background:oklch(0.72 0.17 155/.15);border-color:oklch(0.72 0.17 155/.3);color:var(--green)}
+.ob-step.active .ob-step-dot{background:var(--ac-dim);border-color:var(--ac-bd);color:var(--ac)}
+.ob-step-line{width:1px;flex:1;min-height:20px;background:var(--bd);margin:4px 0}
+.ob-step-info{padding-top:3px;padding-bottom:16px}
+.ob-step-label{font-size:13px;font-weight:600;color:var(--tx3);transition:color .2s}
+.ob-step.active .ob-step-label{color:var(--tx)}
+.ob-step.done .ob-step-label{color:var(--tx2)}
+.ob-step-sub{font-size:11px;color:var(--tx3);margin-top:2px}
+
+.ob-mobile-top{display:none;padding:14px 20px;border-bottom:1px solid var(--bd);background:var(--s1);align-items:center;gap:10px}
+@media(max-width:760px){.ob-mobile-top{display:flex}}
+.ob-mob-dots{display:flex;gap:6px}
+.ob-mob-dot{width:6px;height:6px;border-radius:50%;background:var(--bd2);transition:all .25s}
+.ob-mob-dot.done{background:var(--green)}
+.ob-mob-dot.active{background:var(--ac);width:20px;border-radius:100px}
+.ob-mob-label{font-size:13px;font-weight:600;color:var(--tx);margin-left:6px}
+.ob-mob-count{font-size:11px;color:var(--tx3);font-family:'DM Mono',monospace;margin-left:auto}
+
+.ob-main{display:flex;flex-direction:column}
+.ob-body{flex:1;overflow-y:auto}
+.ob-content{padding:clamp(28px,5vw,52px) clamp(20px,5vw,52px);max-width:580px}
+.ob-kicker{font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);font-family:'DM Mono',monospace;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.ob-kicker::before{content:'';width:20px;height:1px;background:var(--ac)}
+.ob-title{font-family:var(--font-display),sans-serif;font-size:clamp(22px,3vw,30px);font-weight:800;letter-spacing:-.025em;color:var(--tx);margin-bottom:8px}
+.ob-desc{font-size:14px;color:var(--tx2);line-height:1.7;margin-bottom:28px;max-width:440px}
+.ob-panel{display:none}.ob-panel.on{display:block}
+
+.ob-footer{border-top:1px solid var(--bd);padding:14px clamp(20px,5vw,52px);display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);position:sticky;bottom:0}
+.ob-progress-dots{display:flex;gap:5px}
+.ob-prog-dot{width:5px;height:5px;border-radius:50%;background:var(--bd2);transition:all .2s}
+.ob-prog-dot.done{background:var(--green)}
+.ob-prog-dot.active{background:var(--ac);width:14px;border-radius:100px}
+.ob-footer-r{display:flex;gap:8px;align-items:center}
+
+.ob-launch{display:flex;flex-direction:column;align-items:center;text-align:center;padding:clamp(40px,6vw,64px) clamp(20px,5vw,52px)}
+.ob-launch-ring{width:72px;height:72px;border-radius:50%;background:var(--ac-dim);border:1px solid var(--ac-bd);display:flex;align-items:center;justify-content:center;margin:0 auto 22px;animation:pop .5s cubic-bezier(.34,1.56,.64,1)}
+.ob-launch h2{font-family:var(--font-display),sans-serif;font-size:clamp(22px,3vw,32px);font-weight:800;letter-spacing:-.025em;color:var(--tx);margin-bottom:8px}
+.ob-launch>p{font-size:14px;color:var(--tx2);line-height:1.7;margin-bottom:28px;max-width:400px}
+.ob-url-box{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:11px 14px;font-family:'DM Mono',monospace;font-size:13px;color:var(--ac);display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;max-width:420px;margin-bottom:24px}
+.ob-checklist{display:flex;flex-direction:column;gap:8px;margin-bottom:32px;text-align:left;width:100%;max-width:420px}
+.ob-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--tx2)}
+.ob-check svg{flex-shrink:0}
+.ob-launch-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+
+/* plan builder inside onboarding */
+.ob-plan-builder{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);padding:20px}
+.ob-plan-preview{background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:14px;margin-top:16px}
+.ob-plan-preview-label{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;font-family:'DM Mono',monospace;margin-bottom:10px}
+.ob-plan-preview-row{display:flex;align-items:center;justify-content:space-between}
+.ob-plan-preview-name{font-size:15px;font-weight:600;color:var(--tx)}
+.ob-plan-preview-price{font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:var(--ac);font-variant-numeric:tabular-nums}
+.ob-plan-preview-tags{display:flex;gap:10px;margin-top:4px}
+.ob-plan-preview-tag{font-size:11px;color:var(--tx3)}
+
+/* multi-plan table (onboarding CSV) */
+.ob-multi-plans{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);overflow:hidden;margin-bottom:14px}
+.ob-multi-header{display:grid;grid-template-columns:1.4fr .9fr .9fr .7fr .7fr .8fr 28px;gap:10px;padding:8px 14px;background:var(--s2);border-bottom:1px solid var(--bd);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);font-family:'DM Mono',monospace;align-items:center}
+.ob-plan-row{display:grid;grid-template-columns:1.4fr .9fr .9fr .7fr .7fr .8fr 28px;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bd);align-items:center}
+.ob-plan-row:last-child{border-bottom:none}
+.ob-plan-row input,.ob-plan-row select{height:34px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:0 9px;font-size:12px;color:var(--tx);outline:none;width:100%;transition:border-color .15s;font-family:'DM Mono',monospace}
+.ob-plan-row input:focus,.ob-plan-row select:focus{border-color:var(--ac-bd)}
+.ob-plan-row select option{background:#1a1a1a}
+.ob-plan-csv-row{padding:10px 14px;border-bottom:1px solid var(--bd);background:oklch(0.85 0.22 140/.04)}
+.ob-plan-csv-row:last-of-type{border-bottom:none}
+.ob-csv-drop{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--tx3)}
+.ob-csv-drop-zone{flex:1;border:1px dashed var(--bd2);border-radius:var(--r);padding:7px 12px;cursor:pointer;transition:border-color .15s;text-align:center}
+.ob-csv-drop-zone:hover{border-color:var(--ac-bd);color:var(--ac)}
+.ob-add-plan-row{padding:10px 14px;display:flex;align-items:center;justify-content:center}
+.ob-plan-row-del{width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--tx3);cursor:pointer;transition:all .15s;flex-shrink:0;font-size:14px}
+.ob-plan-row-del:hover{background:oklch(0.65 0.18 25/.15);color:var(--red)}
+
+/* plans dashboard - table/list layout */
+.plans-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.plans-toolbar-r{margin-left:auto;display:flex;gap:6px}
+.view-toggle{display:flex;border:1px solid var(--bd);border-radius:var(--r);overflow:hidden}
+.view-btn{padding:6px 10px;font-size:12px;color:var(--tx3);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px}
+.view-btn:hover{color:var(--tx);background:var(--s2)}
+.view-btn.on{color:var(--tx);background:var(--s2)}
+
+/* plans table */
+.plans-table-wrap{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);overflow:hidden}
+table.plans-t{width:100%;border-collapse:collapse}
+table.plans-t th{padding:8px 14px;text-align:left;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--tx3);border-bottom:1px solid var(--bd);background:var(--s2);font-family:'DM Mono',monospace;white-space:nowrap}
+table.plans-t td{padding:11px 14px;font-size:13px;color:var(--tx2);border-bottom:1px solid var(--bd);vertical-align:middle}
+table.plans-t tr:last-child td{border-bottom:none}
+table.plans-t tr:hover td{background:rgba(255,255,255,.02)}
+table.plans-t .td-name{font-weight:600;color:var(--tx)}
+table.plans-t .td-price{font-family:'DM Mono',monospace;font-size:13px;color:var(--tx);font-variant-numeric:tabular-nums}
+table.plans-t .td-stats{font-family:'DM Mono',monospace;font-size:12px;color:var(--tx2)}
+table.plans-t .td-spec{font-size:11px;color:var(--tx3)}
+.plans-acts{display:flex;gap:5px}
+
+/* plans grid (compact, 20+ support) */
+.plans-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.plan-grid-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2);padding:14px;transition:border-color .15s}
+.plan-grid-card:hover{border-color:var(--bd2)}
+.plan-grid-card.inactive{opacity:.55}
+.pgc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.pgc-name{font-size:13px;font-weight:600;color:var(--tx)}
+.pgc-price{font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:var(--ac);font-variant-numeric:tabular-nums}
+.pgc-specs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.pgc-spec{font-size:11px;color:var(--tx3)}
+.pgc-stats{display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--bd)}
+.pgc-stat-v{font-family:'DM Mono',monospace;font-size:12px;color:var(--tx)}
+.pgc-stat-l{font-size:10px;color:var(--tx3);margin-top:1px}
+.pgc-foot{display:flex;gap:5px;margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
+/* ════════════════════════════════════════
+   PORTAL — category tabs & color system
+════════════════════════════════════════ */
+#s-portal{--vc:var(--ac);--vc-dim:var(--ac-dim);--vc-bd:var(--ac-bd)}
+.portal-tabs{display:flex;gap:4px;padding:0 20px 14px;overflow-x:auto}
+.portal-tabs::-webkit-scrollbar{display:none}
+.portal-tab{padding:6px 14px;border-radius:100px;font-size:12px;font-weight:600;color:var(--tx2);cursor:pointer;transition:all .15s;white-space:nowrap;border:1px solid transparent;flex-shrink:0}
+.portal-tab:hover{color:var(--tx);background:var(--s2)}
+.portal-tab.on{background:var(--vc-dim);color:var(--vc);border-color:var(--vc-bd)}
+.plan-card.sel{border-color:var(--vc-bd);background:var(--vc-dim)}
+.portal-foot .btn-ac{background:var(--vc)}
+.portal-empty{text-align:center;padding:40px 20px;color:var(--tx3);font-size:13px}
+#s-portal .venue-mark{background:var(--vc-dim);color:var(--vc)}
+#s-portal .plan-card.sel .plan-abbr{border-color:var(--vc-bd);color:var(--vc)}
+
+/* ════════════════════════════════════════
+   COLOR SWATCH PICKER
+════════════════════════════════════════ */
+.color-swatches{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.color-swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;transition:transform .15s,box-shadow .15s;position:relative;flex-shrink:0}
+.color-swatch:hover{transform:scale(1.12)}
+.color-swatch.on{box-shadow:0 0 0 2px var(--bg),0 0 0 4px currentColor;transform:scale(1.1)}
+.color-swatch.on::after{content:'';position:absolute;inset:5px;border-radius:50%;background:rgba(0,0,0,.35)}
+
+/* ════════════════════════════════════════
+   REQUEST ACCESS PAGE
+════════════════════════════════════════ */
+#s-request{background:var(--bg)}
+.req-page{min-height:calc(100vh - 40px);display:flex;align-items:center;justify-content:center;padding:clamp(24px,4vw,48px) 20px}
+.req-inner{width:100%;max-width:960px;display:grid;grid-template-columns:1fr 1fr;gap:clamp(32px,5vw,72px);align-items:start}
+@media(max-width:720px){.req-inner{grid-template-columns:1fr}}
+.req-brand{padding-top:8px}
+.req-brand-logo{display:flex;align-items:center;gap:9px;margin-bottom:32px}
+.req-kicker{font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);font-family:'DM Mono',monospace;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.req-kicker::before{content:'';width:20px;height:1px;background:var(--ac)}
+.req-title{font-family:var(--font-display),sans-serif;font-size:clamp(26px,3.5vw,40px);font-weight:800;letter-spacing:-.025em;color:var(--tx);margin-bottom:12px;line-height:1.1}
+.req-desc{font-size:14px;color:var(--tx2);line-height:1.75;margin-bottom:28px}
+.req-perks{display:flex;flex-direction:column;gap:10px}
+.req-perk{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)}
+.req-perk-dot{width:6px;height:6px;border-radius:50%;background:var(--ac);flex-shrink:0}
+.req-form-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r3);padding:clamp(20px,3vw,32px)}
+.req-form-title{font-family:var(--font-display),sans-serif;font-size:18px;font-weight:700;color:var(--tx);margin-bottom:4px}
+.req-form-sub{font-size:12px;color:var(--tx3);margin-bottom:20px}
+.req-submit{width:100%;height:48px;background:var(--ac);color:#0d0d0d;border:none;border-radius:var(--r2);font-size:14px;font-weight:700;cursor:pointer;transition:filter .15s;margin-top:4px}
+.req-submit:hover{filter:brightness(1.08)}
+.req-success{display:none;text-align:center;padding:16px 0}
+.req-success-icon{width:52px;height:52px;border-radius:50%;background:var(--ac-dim);border:1px solid var(--ac-bd);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;animation:pop .4s cubic-bezier(.34,1.56,.64,1)}
+.req-success h3{font-family:var(--font-display),sans-serif;font-size:20px;font-weight:800;color:var(--tx);margin-bottom:6px}
+.req-success p{font-size:13px;color:var(--tx2);line-height:1.65}
+
+/* ════════════════════════════════════════
+   RESPONSIVE REFINEMENTS
+════════════════════════════════════════ */
+@media(max-width:900px){
+  body{overflow-x:hidden}
+  .dash-layout{display:block}
+  .dash-main{min-height:calc(100vh - 40px)}
+  .dash-topbar{height:auto;min-height:52px;padding:10px 14px;align-items:flex-start;flex-wrap:wrap}
+  .dash-crumb{width:100%;min-width:0}
+  .dash-topbar-right{width:100%;overflow-x:auto;padding-bottom:2px}
+  .dash-topbar-right::-webkit-scrollbar{display:none}
+  .dash-content{padding:16px 14px 90px}
+  .kpi-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .mob-menu{overflow-x:auto;justify-content:flex-start;padding:8px 10px}
+  .mob-menu::-webkit-scrollbar{display:none}
+  .mob-btn{min-width:72px;flex:0 0 auto;padding:7px 8px}
+  div[style*="overflow-x:auto"]{max-width:100%;-webkit-overflow-scrolling:touch}
+  table.t,table.plans-t{min-width:720px}
+}
+
+@media(max-width:700px){
+  .btn{white-space:normal;min-height:36px}
+  .btn-sm,.btn-xs{min-height:32px}
+  .field-row{grid-template-columns:1fr}
+  .dash-header{align-items:stretch}
+  .dash-header>div:first-child{min-width:0}
+  .dash-hdr-r{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+  .dash-hdr-r .btn{width:100%}
+  .tbar{align-items:stretch}
+  .tbar>*{width:100%!important}
+  .tsearch,.tfilter{width:100%!important}
+  .t-pagination{align-items:stretch;gap:10px;flex-direction:column}
+  .t-pagination>div{justify-content:space-between}
+  .t-pagination .btn{flex:1}
+  .plans-toolbar{align-items:stretch}
+  .plans-toolbar>*{width:100%!important}
+  .plans-toolbar-r{margin-left:0;width:100%}
+  .view-toggle,.view-btn{width:100%}
+  .view-btn{justify-content:center}
+  .plans-grid{grid-template-columns:1fr}
+  .plan-mgmt-grid{grid-template-columns:1fr}
+  .settings-tabs{display:flex;overflow-x:auto}
+  .settings-tabs::-webkit-scrollbar{display:none}
+  .settings-tab{white-space:nowrap;border-bottom:none;border-right:1px solid var(--bd);flex:0 0 auto}
+  .settings-tab:last-child{border-right:none}
+  .settings-card,.netform,.int-card,.kpi,.widget{padding:14px}
+  .settings-foot{justify-content:stretch;flex-wrap:wrap}
+  .settings-foot .btn{flex:1;min-width:130px}
+  .key-display{align-items:stretch;flex-direction:column}
+  .key-display span{white-space:normal;word-break:break-all;overflow:visible;text-overflow:clip}
+  .key-display .btn{width:100%}
+  .platform-pills{overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px}
+  .platform-pills::-webkit-scrollbar{display:none}
+  .platform-pill{flex:0 0 auto}
+  .alert-banner{align-items:flex-start;line-height:1.55}
+  .alert-banner svg{flex-shrink:0;margin-top:2px}
+  .rev-bar-row{display:grid;grid-template-columns:1fr auto;gap:6px 10px}
+  .rev-bar-label{width:auto}
+  .rev-bar-track{grid-column:1/-1;order:3}
+  .rev-bar-val{width:auto}
+  .tenant-row{align-items:flex-start;padding:14px}
+  .tenant-row .badge{margin-right:0!important}
+  .tenant-row>div:last-child{display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important;margin-left:0!important;width:100%}
+  .tenant-row>div:last-child .btn{width:100%}
+  .t-rev,.t-txn{text-align:left}
+}
+
+@media(max-width:560px){
+  .pnav{height:38px;padding:0 8px}
+  .screen,#s-login,#s-portal{margin-top:38px;min-height:calc(100vh - 38px)}
+  .land-nav,.portal-head,.co-head{top:38px}
+  .dash-title{font-size:18px}
+  .dash-sub{font-size:11px}
+  .kpi-row{grid-template-columns:1fr}
+  .kpi-val{font-size:22px}
+  .ac-hdr{padding:12px 14px;align-items:stretch}
+  .ac-hdr .btn{width:100%}
+  .portal-head{padding:10px 14px;height:auto}
+  .plan-card{align-items:flex-start}
+  .plan-price{margin-left:auto}
+  .co-card,.lf-card,.req-form-card{padding:16px}
+
+  .ob-layout{min-height:calc(100vh - 38px)}
+  .ob-mobile-top{position:sticky;top:38px;z-index:20;padding:12px 14px}
+  .ob-main{min-width:0}
+  .ob-content{padding:24px 14px;max-width:none!important}
+  .ob-desc{margin-bottom:20px}
+  .ob-footer{padding:10px 14px;align-items:stretch}
+  .ob-progress-dots{display:none}
+  .ob-footer-r{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .ob-footer-r .btn{width:100%;padding-left:10px;padding-right:10px}
+  #ob-next-btn{grid-column:1/-1}
+  .ob-multi-header{display:none}
+  .ob-plan-row{grid-template-columns:1fr 1fr;gap:8px;padding:12px}
+  .ob-plan-row input,.ob-plan-row select{height:38px}
+  .ob-plan-row-del{grid-column:1/-1;width:100%;height:34px;border:1px solid var(--bd);background:var(--s2)}
+  .ob-csv-drop{align-items:stretch;flex-direction:column}
+  .ob-url-box{align-items:stretch;flex-direction:column}
+  .ob-url-box span{word-break:break-all}
+  .ob-url-box .btn{width:100%}
+  .ob-launch-btns{width:100%;display:grid;grid-template-columns:1fr}
+  .ob-launch-btns .btn{width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ PROTO NAV ══ -->
+<nav class="pnav">
+  <span class="pnav-label">PaySpot</span>
+  <button class="on" onclick="go('land')">Landing</button>
+  <button onclick="go('portal')">Portal</button>
+  <button onclick="go('checkout')">Checkout</button>
+  <button onclick="go('voucher')">Voucher</button>
+  <button onclick="go('login')">Login</button>
+  <button onclick="go('request')">Request Access</button>
+  <button onclick="go('onboarding')">Onboarding ✦</button>
+  <button onclick="go('dash')">Dashboard</button>
+  <button onclick="go('platform')">Platform Admin</button>
+  <div class="pnav-sep"></div>
+  <button class="font-btn f1 on" onclick="setFont(1,this)">Aa Syne</button>
+  <button class="font-btn f2" onclick="setFont(2,this)">Aa Space</button>
+  <button class="font-btn f3" onclick="setFont(3,this)">Aa Unbounded</button>
+  <button class="font-btn f4" onclick="setFont(4,this)">Aa Fraunces</button>
+  <button class="font-btn f5" onclick="setFont(5,this)">Aa Jakarta</button>
+</nav>
+
+<!-- ══════════════════════════════════════
+     LANDING
+══════════════════════════════════════ -->
+<div id="s-land" class="screen on" data-screen-label="01 Landing">
+  <nav class="land-nav">
+    <div class="logo"><span class="wifimark" id="wm1"></span><span class="logo-text">PaySpot</span></div>
+    <ul class="land-links">
+      <li><a href="#">Features</a></li><li><a href="#">Integrations</a></li>
+      <li><a href="#">Pricing</a></li><li><a href="#">Docs</a></li>
+    </ul>
+    <div class="land-nav-right">
+      <button class="btn btn-ghost btn-sm" onclick="go('login')">Sign in</button>
+      <button class="btn btn-ac btn-sm" onclick="go('request')">Request Access</button>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <div class="hero-layout">
+      <div>
+        <div class="hero-kicker">MikroTik · Omada · RADIUS</div>
+        <h1>Sell WiFi.<br><em>Get paid.</em><br>Instantly.</h1>
+        <p class="hero-sub">A branded online store, Paystack payments, and automatic SMS voucher delivery — for hotspot operators who want to stop doing it manually.</p>
+        <div class="hero-ctas">
+          <button class="btn btn-ac btn-lg" onclick="go('portal')">See Demo Store →</button>
+          <button class="btn btn-ghost btn-lg" onclick="go('request')">Request Access</button>
+        </div>
+        <div class="hero-stats">
+          <div><div class="stat-val">500+</div><div class="stat-lbl">Operators</div></div>
+          <div><div class="stat-val">₦2.4B+</div><div class="stat-lbl">Processed</div></div>
+          <div><div class="stat-val">99.9%</div><div class="stat-lbl">Uptime</div></div>
+        </div>
+      </div>
+      <div class="mockup">
+        <div class="mock-chrome">
+          <div class="mock-dot" style="background:#ef4444"></div>
+          <div class="mock-dot" style="background:#f59e0b"></div>
+          <div class="mock-dot" style="background:#22c55e"></div>
+          <div class="mock-url">walstreet.payspot.app/admin</div>
+        </div>
+        <div style="font-size:10px;color:var(--tx3);margin-bottom:10px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.06em">Dashboard · Today</div>
+        <div class="mock-kpis">
+          <div class="mock-kpi"><div class="mock-kpi-l">Revenue</div><div class="mock-kpi-v a">₦48,500</div></div>
+          <div class="mock-kpi"><div class="mock-kpi-l">Txns</div><div class="mock-kpi-v">142</div></div>
+          <div class="mock-kpi"><div class="mock-kpi-l">Vouchers</div><div class="mock-kpi-v g">834</div></div>
+          <div class="mock-kpi"><div class="mock-kpi-l">Plans</div><div class="mock-kpi-v">4</div></div>
+        </div>
+        <div class="mock-txn-label">Recent</div>
+        <div class="mock-row"><div class="mock-av" style="background:var(--ac)">A</div><div style="flex:1"><div class="mock-name">Amaka Obi</div><div class="mock-amt">1 Day · ₦1,000</div></div><div class="mock-pill">Paid</div></div>
+        <div class="mock-row"><div class="mock-av" style="background:#a78bfa">K</div><div style="flex:1"><div class="mock-name">Kelechi Eze</div><div class="mock-amt">3 Hours · ₦500</div></div><div class="mock-pill">Paid</div></div>
+        <div class="mock-row"><div class="mock-av" style="background:var(--amber)">T</div><div style="flex:1"><div class="mock-name">Taiwo Adeyemi</div><div class="mock-amt">1 Week · ₦3,500</div></div><div class="mock-pill" style="background:oklch(0.78 0.18 80/.15);color:var(--amber)">Pending</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="int-strip">
+    <div class="int-inner">
+      <span class="int-label">Works with</span>
+      <div class="int-chips">
+        <span class="int-chip">Paystack</span><span class="int-chip">Termii SMS</span>
+        <span class="int-chip">Omada Cloud</span><span class="int-chip">MikroTik RouterOS</span>
+        <span class="int-chip">FreeRADIUS</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="land-section">
+    <div class="sec-kicker">Built for operators</div>
+    <h2 class="sec-title">Everything to monetize WiFi</h2>
+    <p class="sec-sub">From CSV import to full Omada API — PaySpot adapts to your existing setup.</p>
+    <div class="feat-grid">
+      <div class="feat-card"><div class="feat-tag">Payments</div><div class="feat-title">Paystack Collection</div><div class="feat-desc">Card, bank transfer, USSD. Funds land directly in your account — we never hold your money.</div></div>
+      <div class="feat-card"><div class="feat-tag">Delivery</div><div class="feat-title">Instant SMS Vouchers</div><div class="feat-desc">Termii delivers voucher codes the moment payment is confirmed. Zero manual work.</div></div>
+      <div class="feat-card"><div class="feat-tag">Network</div><div class="feat-title">Multi-platform Hotspot</div><div class="feat-desc">Omada Cloud OpenAPI, MikroTik REST, RADIUS portals, or just upload a CSV.</div></div>
+      <div class="feat-card"><div class="feat-tag">Analytics</div><div class="feat-title">Real-time Dashboard</div><div class="feat-desc">Revenue, transactions, voucher inventory, plan performance — all in one view, live.</div></div>
+      <div class="feat-card"><div class="feat-tag">Branding</div><div class="feat-title">Branded Portal</div><div class="feat-desc">Your customers see your name on a custom URL. Mobile-first checkout in minutes.</div></div>
+      <div class="feat-card"><div class="feat-tag">Security</div><div class="feat-title">Secure by Default</div><div class="feat-desc">Encrypted credentials, HttpOnly sessions, Paystack webhooks verified on every event.</div></div>
+    </div>
+  </div>
+
+  <div class="cta-band">
+    <h2>Ready to start?</h2>
+    <p>Join hundreds of operators already running their WiFi business on PaySpot.</p>
+    <div class="cta-btns">
+      <button class="btn btn-ac btn-lg" onclick="go('request')">Request Operator Access</button>
+      <button class="btn btn-ghost btn-lg" onclick="go('portal')">See Live Demo →</button>
+    </div>
+  </div>
+
+  <footer class="land-footer">
+    <div class="logo"><span class="wifimark" id="wm2"></span><span class="logo-text">PaySpot</span></div>
+    <p>© 2026 PaySpot · All rights reserved</p>
+  </footer>
+</div>
+
+<!-- ══════════════════════════════════════
+     PORTAL
+══════════════════════════════════════ -->
+<div id="s-portal" class="screen" data-screen-label="02 Portal">
+  <div class="portal-head">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="venue-mark" id="portal-venue-mark">W</div>
+      <div><div class="venue-name" id="portal-venue-name">WalStreet Café</div><div class="venue-sub">WiFi Access Portal</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="poweredby">Secured by <strong>PaySpot</strong></div>
+    </div>
+  </div>
+
+  <div class="portal-hero">
+    <h1>Get Online in Seconds</h1>
+    <p>Choose a plan, pay securely, receive your access code by SMS</p>
+  </div>
+
+  <!-- Category tabs -->
+  <div class="portal-tabs" id="portal-tabs">
+    <div class="portal-tab on" onclick="setPortalTab('all',this)">All Plans</div>
+    <div class="portal-tab" onclick="setPortalTab('quick',this)">Quick Access</div>
+    <div class="portal-tab" onclick="setPortalTab('daily',this)">Daily</div>
+    <div class="portal-tab" onclick="setPortalTab('weekly',this)">Weekly</div>
+    <div class="portal-tab" onclick="setPortalTab('monthly',this)">Monthly</div>
+  </div>
+
+  <div class="portal-body" id="portal-plans-list"></div>
+
+  <div class="portal-foot">
+    <div class="portal-foot-inner">
+      <button class="btn btn-ac" id="portal-cta" onclick="go('checkout')" style="width:100%;height:48px;font-size:14px;border-radius:var(--r2);margin-bottom:8px">Select a plan to continue</button>
+      <p>Payments via Paystack · Voucher sent by SMS</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CHECKOUT
+══════════════════════════════════════ -->
+<div id="s-checkout" class="screen" data-screen-label="03 Checkout">
+  <div class="co-head">
+    <button class="co-back" onclick="go('portal')">←</button>
+    <div class="co-head-title">Complete Purchase</div>
+  </div>
+  <div class="co-layout">
+    <div>
+      <div class="co-card">
+        <div class="co-card-label">Order Summary</div>
+        <div class="order-row">
+          <div class="order-ico">1D</div>
+          <div><div class="order-name">1 Day Plan · WalStreet Café</div><div class="order-specs">10 Mbps · 2 Devices · Unlimited Data</div></div>
+        </div>
+        <div class="order-total"><div class="order-total-lbl">Total</div><div class="order-total-amt">₦1,000.00</div></div>
+      </div>
+      <div class="co-card" style="background:var(--ac-dim);border-color:var(--ac-bd)">
+        <div style="font-size:12px;color:var(--tx2);line-height:1.6">After payment, your voucher code will arrive by SMS and display on screen. Use it on the WalStreet Café WiFi login page.</div>
+      </div>
+    </div>
+    <div>
+      <div class="co-card">
+        <div class="co-card-label">Your Details</div>
+        <div class="field"><label>Phone Number</label><input type="tel" value="0801 234 5678"><div class="hint">Voucher code will be sent to this number</div></div>
+        <div class="field" style="margin-bottom:0"><label>Email <span style="color:var(--tx3);font-weight:400">(optional)</span></label><input type="email" placeholder="you@example.com"><div class="hint">For receipt only</div></div>
+      </div>
+      <button class="pay-btn" onclick="go('voucher')">Pay ₦1,000 with Paystack</button>
+      <div class="co-secure">Payment secured by Paystack</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VOUCHER
+══════════════════════════════════════ -->
+<div id="s-voucher" class="screen" data-screen-label="04 Voucher">
+  <div class="v-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--green)"><polyline points="20 6 9 17 4 12"/></svg></div>
+  <h2>Payment Successful!</h2>
+  <p>Your 1 Day access code for WalStreet Café WiFi</p>
+  <div class="v-card">
+    <div class="v-card-label">WiFi Voucher Code</div>
+    <div class="v-code">4F7K-M2QR</div>
+    <button class="v-copy" onclick="this.innerHTML='✓ Copied!'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      Copy Code
+    </button>
+    <div class="v-details">
+      <div class="v-detail"><div class="v-detail-l">Duration</div><div class="v-detail-v">1 Day</div></div>
+      <div class="v-detail"><div class="v-detail-l">Speed</div><div class="v-detail-v">10 Mbps</div></div>
+      <div class="v-detail"><div class="v-detail-l">Devices</div><div class="v-detail-v">2</div></div>
+      <div class="v-detail"><div class="v-detail-l">Data</div><div class="v-detail-v">Unlimited</div></div>
+    </div>
+  </div>
+  <div class="v-sms">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Code also sent to 0801 234 5678 via SMS
+  </div>
+  <div class="v-actions">
+    <button class="btn btn-muted" onclick="go('portal')">Buy Another Plan</button>
+    <button class="btn btn-ghost">Download Receipt</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     LOGIN
+══════════════════════════════════════ -->
+<div id="s-login" class="screen" data-screen-label="05 Login">
+  <div class="login-brand">
+    <div class="logo"><span class="wifimark" id="wm3"></span><span class="logo-text">PaySpot</span></div>
+    <div class="lb-copy">
+      <div class="lb-headline">Your WiFi business,<br>fully automated.</div>
+      <div class="lb-sub" style="margin-top:12px;margin-bottom:28px">Manage vouchers, track revenue, and run your hotspot from one clean dashboard.</div>
+      <div class="lb-feats">
+        <div class="lb-feat"><span class="lb-n">01</span>Paystack payment collection</div>
+        <div class="lb-feat"><span class="lb-n">02</span>Instant SMS via Termii</div>
+        <div class="lb-feat"><span class="lb-n">03</span>Real-time revenue dashboard</div>
+        <div class="lb-feat"><span class="lb-n">04</span>MikroTik, Omada &amp; RADIUS</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--tx3)">© 2026 PaySpot</div>
+  </div>
+  <div class="login-form-col">
+    <div class="lf-wrap">
+      <div class="lf-title">Welcome back</div>
+      <div class="lf-sub">Sign in to your operator dashboard</div>
+      <div class="lf-card">
+        <div class="field"><label>Email address</label><input type="email" value="walstreet@example.com"></div>
+        <div class="field" style="margin-bottom:8px">
+          <div class="lf-row"><label>Password</label><a href="#" class="lf-forgot">Forgot?</a></div>
+          <input type="password" value="••••••••••••">
+        </div>
+        <button class="lf-submit" onclick="go('dash')">Sign In →</button>
+      </div>
+      <div class="lf-footer">Need access? <a href="#">Request an account</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TENANT DASHBOARD
+══════════════════════════════════════ -->
+<div id="s-dash" class="screen" data-screen-label="06 Tenant Dashboard">
+  <div class="dash-layout">
+    <aside class="sidebar">
+      <div class="sb-brand">
+        <div class="sb-mark">W</div>
+        <div><div class="sb-name">WalStreet Café</div><div class="sb-url">walstreet.payspot.app</div></div>
+      </div>
+      <nav class="sb-nav">
+        <div class="sb-sec">Operations</div>
+        <div class="sb-item on" onclick="dSection('overview',this)">Dashboard</div>
+        <div class="sb-item" onclick="dSection('transactions',this)">Transactions <span class="sb-bdg">12</span></div>
+        <div class="sb-item" onclick="dSection('vouchers',this)">Vouchers</div>
+        <div class="sb-sec">Configuration</div>
+        <div class="sb-item" onclick="dSection('plans',this)">Plans</div>
+        <div class="sb-item" onclick="dSection('network',this)">Network Setup</div>
+        <div class="sb-item" onclick="dSection('settings',this)">Settings</div>
+        <div class="sb-sec">Links</div>
+        <div class="sb-item" onclick="go('portal')">My Store ↗</div>
+      </nav>
+      <div class="sb-foot">
+        <div class="sb-user"><div class="sb-av">W</div><div><div class="sb-uname">WalStreet Admin</div><div class="sb-urole">Tenant Admin</div></div></div>
+      </div>
+    </aside>
+
+    <div class="dash-main">
+      <div class="dash-topbar">
+        <div class="dash-crumb"><span>PaySpot</span><span class="dash-crumb-sep">›</span><span>WalStreet</span><span class="dash-crumb-sep">›</span><span id="d-crumb-cur">Dashboard</span></div>
+        <div class="dash-topbar-right">
+          <button class="btn btn-icon" title="Notifications"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></button>
+          <button class="btn btn-muted btn-sm" onclick="go('onboarding')">First-time Setup</button>
+  <button class="btn btn-ac btn-sm" onclick="go('portal')">View Store</button>
+        </div>
+      </div>
+
+      <div class="dash-content">
+
+        <!-- OVERVIEW -->
+        <div id="ds-overview" class="dash-section on">
+          <div class="dash-header">
+            <div><div class="dash-title">Dashboard</div><div class="dash-sub">Sun 27 Apr 2026 · All-time</div></div>
+            <div class="dash-hdr-r"><button class="btn btn-muted btn-sm" onclick="dSection('vouchers')">Import CSV</button><button class="btn btn-ac btn-sm" onclick="dSection('plans')">+ Add Plan</button></div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-hdr"><div class="kpi-label">Total Revenue</div></div><div class="kpi-val">₦248,500</div><div class="kpi-delta up">↑ 12.4% vs last month</div></div>
+            <div class="kpi"><div class="kpi-hdr"><div class="kpi-label">Transactions</div></div><div class="kpi-val">1,284</div><div class="kpi-delta up">↑ 8.1%</div></div>
+            <div class="kpi"><div class="kpi-hdr"><div class="kpi-label">Vouchers Left</div></div><div class="kpi-val">834</div><div class="kpi-delta warn">42 week vouchers low</div></div>
+            <div class="kpi"><div class="kpi-hdr"><div class="kpi-label">Active Plans</div></div><div class="kpi-val">4</div><div class="kpi-delta neu">All live</div></div>
+          </div>
+          <div class="dash-grid">
+            <div>
+              <div class="ac">
+                <div class="ac-hdr"><div><div class="ac-title">Recent Transactions</div><div class="ac-sub">Last 24 hours</div></div><button class="btn btn-muted btn-sm" onclick="dSection('transactions')">View all →</button></div>
+                <div style="overflow-x:auto">
+                  <table class="t">
+                    <thead><tr><th>Customer</th><th>Plan</th><th>Voucher</th><th>Amount</th><th>Status</th><th>Time</th></tr></thead>
+                    <tbody>
+                      <tr><td class="td-main">Amaka Obi</td><td>1 Day</td><td class="td-mono">4F7K-M2QR</td><td class="td-muted">₦1,000</td><td><span class="badge badge-g">Paid</span></td><td>2 min ago</td></tr>
+                      <tr><td class="td-main">Kelechi Eze</td><td>3 Hours</td><td class="td-mono">9X2P-JQVB</td><td class="td-muted">₦500</td><td><span class="badge badge-g">Paid</span></td><td>11 min ago</td></tr>
+                      <tr><td class="td-main">Taiwo Adeyemi</td><td>1 Week</td><td class="td-mono">—</td><td class="td-muted">₦3,500</td><td><span class="badge badge-a">Pending</span></td><td>23 min ago</td></tr>
+                      <tr><td class="td-main">Ngozi Okafor</td><td>1 Month</td><td class="td-mono">ZK8R-4LPM</td><td class="td-muted">₦10,000</td><td><span class="badge badge-g">Paid</span></td><td>1 hr ago</td></tr>
+                      <tr><td class="td-main">Emeka Dike</td><td>1 Day</td><td class="td-mono">—</td><td class="td-muted">₦1,000</td><td><span class="badge badge-r">Failed</span></td><td>2 hr ago</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="widget">
+                <div class="widget-title">Plan Breakdown</div>
+                <div class="bar-row"><div class="bar-meta"><span class="bar-name">1 Day</span><span class="bar-val">62%</span></div><div class="bar-track"><div class="bar-fill" style="width:62%"></div></div></div>
+                <div class="bar-row"><div class="bar-meta"><span class="bar-name">3 Hours</span><span class="bar-val">21%</span></div><div class="bar-track"><div class="bar-fill" style="width:21%;background:var(--amber)"></div></div></div>
+                <div class="bar-row"><div class="bar-meta"><span class="bar-name">1 Week</span><span class="bar-val">11%</span></div><div class="bar-track"><div class="bar-fill" style="width:11%;background:var(--green)"></div></div></div>
+                <div class="bar-row" style="margin:0"><div class="bar-meta"><span class="bar-name">1 Month</span><span class="bar-val">6%</span></div><div class="bar-track"><div class="bar-fill" style="width:6%;background:var(--red)"></div></div></div>
+              </div>
+              <div class="widget">
+                <div class="widget-title">Voucher Stock</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--tx2)">3 Hours</span><span style="font-family:'DM Mono',monospace;color:var(--tx)">312</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--tx2)">1 Day</span><span style="font-family:'DM Mono',monospace;color:var(--tx)">280</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--tx2)">1 Week</span><span style="font-family:'DM Mono',monospace;color:var(--amber)">42 ⚠</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--tx2)">1 Month</span><span style="font-family:'DM Mono',monospace;color:var(--tx)">200</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRANSACTIONS -->
+        <div id="ds-transactions" class="dash-section">
+          <div class="dash-header">
+            <div><div class="dash-title">Transactions</div><div class="dash-sub">1,284 total · ₦248,500 revenue</div></div>
+            <div class="dash-hdr-r"><button class="btn btn-muted btn-sm">Export CSV</button></div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Total Txns</div><div class="kpi-val">1,284</div><div class="kpi-delta up">↑ 8.1%</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Success Rate</div><div class="kpi-val">96.2%</div><div class="kpi-delta up">↑ 1.3%</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Pending</div><div class="kpi-val">32</div><div class="kpi-delta warn">Awaiting confirm</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Failed</div><div class="kpi-val">17</div><div class="kpi-delta neu">1.3% rate</div></div>
+          </div>
+          <div class="ac">
+            <div class="tbar">
+              <input class="tsearch" placeholder="Search name, phone, code…">
+              <select class="tfilter"><option>All statuses</option><option>Paid</option><option>Pending</option><option>Failed</option></select>
+              <select class="tfilter"><option>All plans</option><option>3 Hours</option><option>1 Day</option><option>1 Week</option><option>1 Month</option></select>
+              <select class="tfilter"><option>All time</option><option>Today</option><option>This week</option><option>This month</option></select>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="t">
+                <thead><tr><th>Customer</th><th>Phone</th><th>Plan</th><th>Method</th><th>Amount</th><th>Voucher</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody>
+                  <tr><td class="td-main">Amaka Obi</td><td>0801 234 5678</td><td>1 Day</td><td>Card</td><td class="td-muted">₦1,000</td><td class="td-mono">4F7K-M2QR</td><td><span class="badge badge-g">Paid</span></td><td>27 Apr 08:14</td></tr>
+                  <tr><td class="td-main">Kelechi Eze</td><td>0702 567 8901</td><td>3 Hours</td><td>USSD</td><td class="td-muted">₦500</td><td class="td-mono">9X2P-JQVB</td><td><span class="badge badge-g">Paid</span></td><td>27 Apr 08:03</td></tr>
+                  <tr><td class="td-main">Taiwo Adeyemi</td><td>0813 456 7890</td><td>1 Week</td><td>Transfer</td><td class="td-muted">₦3,500</td><td class="td-mono">—</td><td><span class="badge badge-a">Pending</span></td><td>27 Apr 07:51</td></tr>
+                  <tr><td class="td-main">Ngozi Okafor</td><td>0909 876 5432</td><td>1 Month</td><td>Card</td><td class="td-muted">₦10,000</td><td class="td-mono">ZK8R-4LPM</td><td><span class="badge badge-g">Paid</span></td><td>27 Apr 07:12</td></tr>
+                  <tr><td class="td-main">Emeka Dike</td><td>0805 321 0987</td><td>1 Day</td><td>Card</td><td class="td-muted">₦1,000</td><td class="td-mono">—</td><td><span class="badge badge-r">Failed</span></td><td>27 Apr 06:44</td></tr>
+                  <tr><td class="td-main">Funmi Balogun</td><td>0706 543 2109</td><td>3 Hours</td><td>USSD</td><td class="td-muted">₦500</td><td class="td-mono">2VN9-XRWT</td><td><span class="badge badge-g">Paid</span></td><td>27 Apr 06:31</td></tr>
+                  <tr><td class="td-main">Seun Adesanya</td><td>0812 109 8765</td><td>1 Day</td><td>Transfer</td><td class="td-muted">₦1,000</td><td class="td-mono">7QMP-L3RX</td><td><span class="badge badge-g">Paid</span></td><td>27 Apr 05:58</td></tr>
+                  <tr><td class="td-main">Chioma Nwosu</td><td>0903 678 9012</td><td>1 Week</td><td>Card</td><td class="td-muted">₦3,500</td><td class="td-mono">KV5T-8NJW</td><td><span class="badge badge-g">Paid</span></td><td>27 Apr 05:20</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="t-pagination"><span>Showing 1–8 of 1,284</span><div style="display:flex;gap:6px"><button class="btn btn-muted btn-xs">← Prev</button><button class="btn btn-muted btn-xs">Next →</button></div></div>
+          </div>
+        </div>
+
+        <!-- VOUCHERS -->
+        <div id="ds-vouchers" class="dash-section">
+          <div class="dash-header">
+            <div><div class="dash-title">Vouchers</div><div class="dash-sub">834 available · 450 used</div></div>
+            <div class="dash-hdr-r"><button class="btn btn-muted btn-sm">Import CSV</button></div>
+          </div>
+          <div class="alert-banner warn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Low stock warning: 1 Week vouchers down to 42. Import more before they run out.
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Total Stock</div><div class="kpi-val">1,284</div><div class="kpi-delta neu">All plans combined</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Used</div><div class="kpi-val">450</div><div class="kpi-delta neu">35.1% utilisation</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Available</div><div class="kpi-val">834</div><div class="kpi-delta up">Ready to sell</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Low Stock Plans</div><div class="kpi-val">1</div><div class="kpi-delta warn">1 Week needs import</div></div>
+          </div>
+          <div class="ac">
+            <div class="ac-hdr"><div class="ac-title">Stock by Plan</div><button class="btn btn-ac btn-sm">Import CSV</button></div>
+            <div style="overflow-x:auto">
+              <table class="t">
+                <thead><tr><th>Plan</th><th>Duration</th><th>Total Imported</th><th>Used</th><th>Available</th><th>Last Import</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                  <tr><td class="td-main">3 Hours</td><td>3 hr</td><td class="td-muted">500</td><td class="td-muted">188</td><td class="td-mono">312</td><td>24 Apr 2026</td><td><span class="badge badge-g">Good</span></td><td><button class="btn btn-muted btn-xs">Import more</button></td></tr>
+                  <tr><td class="td-main">1 Day</td><td>24 hr</td><td class="td-muted">500</td><td class="td-muted">220</td><td class="td-mono">280</td><td>22 Apr 2026</td><td><span class="badge badge-g">Good</span></td><td><button class="btn btn-muted btn-xs">Import more</button></td></tr>
+                  <tr><td class="td-main">1 Week</td><td>7 days</td><td class="td-muted">84</td><td class="td-muted">42</td><td class="td-mono" style="color:var(--amber)">42</td><td>10 Apr 2026</td><td><span class="badge badge-a">Low</span></td><td><button class="btn btn-ac btn-xs">Import now</button></td></tr>
+                  <tr><td class="td-main">1 Month</td><td>30 days</td><td class="td-muted">200</td><td class="td-muted">0</td><td class="td-mono">200</td><td>20 Apr 2026</td><td><span class="badge badge-g">Good</span></td><td><button class="btn btn-muted btn-xs">Import more</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="ac" style="margin-top:14px">
+            <div class="ac-hdr"><div class="ac-title">Recent Imports</div></div>
+            <div style="overflow-x:auto">
+              <table class="t">
+                <thead><tr><th>Plan</th><th>Codes Imported</th><th>Source</th><th>Imported By</th><th>Date</th></tr></thead>
+                <tbody>
+                  <tr><td class="td-main">3 Hours</td><td class="td-muted">200</td><td>CSV upload</td><td>WalStreet Admin</td><td>24 Apr 2026 14:22</td></tr>
+                  <tr><td class="td-main">1 Day</td><td class="td-muted">100</td><td>Omada API</td><td>WalStreet Admin</td><td>22 Apr 2026 09:10</td></tr>
+                  <tr><td class="td-main">1 Month</td><td class="td-muted">200</td><td>CSV upload</td><td>WalStreet Admin</td><td>20 Apr 2026 11:45</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PLANS -->
+        <div id="ds-plans" class="dash-section">
+          <div class="dash-header">
+            <div><div class="dash-title">Plans</div><div class="dash-sub" id="plans-count-sub">4 active plans</div></div>
+            <div class="dash-hdr-r"><button class="btn btn-ac btn-sm" onclick="addPlanRow()">+ New Plan</button></div>
+          </div>
+
+          <div class="plans-toolbar">
+            <input class="tsearch" placeholder="Search plans…" oninput="filterPlans(this.value)" style="width:220px">
+            <select class="tfilter" onchange="filterPlanStatus(this.value)">
+              <option value="all">All plans</option>
+              <option value="active">Active only</option>
+              <option value="inactive">Inactive only</option>
+            </select>
+            <div class="plans-toolbar-r">
+              <div class="view-toggle">
+                <div class="view-btn on" id="vbtn-list" onclick="setPlansView('list',this)" title="List view">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                  List
+                </div>
+                <div class="view-btn" id="vbtn-grid" onclick="setPlansView('grid',this)" title="Grid view">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                  Grid
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- LIST VIEW -->
+          <div id="plans-list-view" class="plans-table-wrap">
+            <div style="overflow-x:auto">
+              <table class="plans-t" id="plans-table">
+                <thead>
+                  <tr>
+                    <th>Plan Name</th>
+                    <th>Price</th>
+                    <th>Duration</th>
+                    <th>Speed / Devices / Data</th>
+                    <th>Txns / mo</th>
+                    <th>Revenue / mo</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="plans-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- GRID VIEW -->
+          <div id="plans-grid-view" class="plans-grid" style="display:none"></div>
+        </div>
+
+        <!-- NETWORK SETUP -->
+        <div id="ds-network" class="dash-section">
+          <div class="dash-header">
+            <div><div class="dash-title">Network Setup</div><div class="dash-sub">Configure your hotspot platform</div></div>
+          </div>
+          <div class="platform-pills">
+            <div class="platform-pill on" onclick="setPlatform('omada',this)">Omada Cloud</div>
+            <div class="platform-pill" onclick="setPlatform('mikrotik',this)">MikroTik RouterOS</div>
+            <div class="platform-pill" onclick="setPlatform('radius',this)">RADIUS / FreeRADIUS</div>
+            <div class="platform-pill" onclick="setPlatform('csv',this)">CSV Only</div>
+          </div>
+
+          <div id="net-omada">
+            <div class="netform">
+              <div class="netform-title">Omada Cloud OpenAPI</div>
+              <div class="field-row">
+                <div class="field"><label>Omada Cloud ID</label><input value="f4b2e9c1-3d8a-4f20-9e71-0c2a5b6f8d14"></div>
+                <div class="field"><label>API Key</label><input type="password" value="••••••••••••••••••••••••"></div>
+              </div>
+              <div class="field-row">
+                <div class="field"><label>Site ID</label><input value="walstreet-ikeja-01"></div>
+                <div class="field"><label>Voucher Group Name</label><input value="PaySpot-Generated"></div>
+              </div>
+              <div style="display:flex;gap:10px;align-items:center">
+                <button class="btn btn-ac btn-sm">Test Connection</button>
+                <button class="btn btn-muted btn-sm">Save</button>
+              </div>
+              <div class="net-status ok">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Connected · Last verified 27 Apr 2026 07:00
+              </div>
+            </div>
+          </div>
+
+          <div id="net-mikrotik" style="display:none">
+            <div class="netform">
+              <div class="netform-title">MikroTik RouterOS REST API</div>
+              <div class="field-row">
+                <div class="field"><label>Router IP / Hostname</label><input placeholder="192.168.88.1"></div>
+                <div class="field"><label>Port</label><input value="443"></div>
+              </div>
+              <div class="field-row">
+                <div class="field"><label>API Username</label><input placeholder="admin"></div>
+                <div class="field"><label>API Password</label><input type="password" placeholder="••••••••"></div>
+              </div>
+              <div class="field"><label>Hotspot Server Name</label><input placeholder="hsproxy"></div>
+              <div style="display:flex;gap:10px">
+                <button class="btn btn-ac btn-sm">Test Connection</button>
+                <button class="btn btn-muted btn-sm">Save</button>
+              </div>
+              <div class="net-status warn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Not configured — enter credentials and test
+              </div>
+            </div>
+          </div>
+
+          <div id="net-radius" style="display:none">
+            <div class="netform">
+              <div class="netform-title">RADIUS Server</div>
+              <div class="field-row">
+                <div class="field"><label>RADIUS Host</label><input placeholder="radius.example.com"></div>
+                <div class="field"><label>Auth Port</label><input value="1812"></div>
+              </div>
+              <div class="field"><label>Shared Secret</label><input type="password" placeholder="••••••••"></div>
+              <div style="display:flex;gap:10px">
+                <button class="btn btn-ac btn-sm">Test Connection</button>
+                <button class="btn btn-muted btn-sm">Save</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="net-csv" style="display:none">
+            <div class="netform">
+              <div class="netform-title">CSV Voucher Pool</div>
+              <div style="font-size:13px;color:var(--tx2);margin-bottom:16px;line-height:1.6">Upload pre-generated voucher codes via CSV. PaySpot will dispense them one per purchase. CSV must have a single column with one code per row.</div>
+              <div style="border:1px dashed var(--bd2);border-radius:var(--r);padding:28px;text-align:center;color:var(--tx3);font-size:13px">Drop CSV file here or <span style="color:var(--ac);cursor:pointer">browse</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SETTINGS -->
+        <div id="ds-settings" class="dash-section">
+          <div class="dash-header">
+            <div><div class="dash-title">Settings</div><div class="dash-sub">Account and integration config</div></div>
+          </div>
+          <div class="settings-layout">
+            <div class="settings-tabs">
+              <div class="settings-tab on" onclick="setTab('st',0,this)">General</div>
+              <div class="settings-tab" onclick="setTab('st',1,this)">Payments</div>
+              <div class="settings-tab" onclick="setTab('st',2,this)">SMS</div>
+              <div class="settings-tab" onclick="setTab('st',3,this)">Notifications</div>
+            </div>
+            <div>
+              <div id="st-0" class="settings-panel on">
+                <div class="settings-card">
+                  <div class="settings-card-title">Venue Details</div>
+                  <div class="field"><label>Venue Name</label><input value="WalStreet Café"></div>
+                  <div class="field"><label>Store URL Slug</label><input value="walstreet"><div class="hint">Your store: walstreet.payspot.app</div></div>
+                  <div class="field"><label>Support Email</label><input type="email" value="walstreet@example.com"></div>
+                  <div class="settings-foot"><button class="btn btn-ac btn-sm">Save Changes</button></div>
+                </div>
+                <div class="settings-card">
+                  <div class="settings-card-title">Danger Zone</div>
+                  <div style="font-size:13px;color:var(--tx2);margin-bottom:12px">Permanently delete this tenant account and all associated data.</div>
+                  <button class="btn btn-red btn-sm">Delete Account</button>
+                </div>
+              </div>
+              <div id="st-1" class="settings-panel">
+                <div class="settings-card">
+                  <div class="settings-card-title">Paystack Configuration</div>
+                  <div class="field"><label>Public Key</label><div class="key-display"><span>pk_live_a4f92e••••••••••••••••••••••</span><button class="btn btn-muted btn-xs">Copy</button></div></div>
+                  <div class="field"><label>Secret Key</label><div class="key-display"><span>sk_live_••••••••••••••••••••••••••</span><button class="btn btn-muted btn-xs">Reveal</button></div></div>
+                  <div class="field"><label>Webhook URL <span style="color:var(--tx3);font-weight:400">(auto-generated)</span></label><div class="key-display"><span>https://payspot.app/webhook/paystack/walstreet</span><button class="btn btn-muted btn-xs">Copy</button></div></div>
+                  <div class="settings-foot"><button class="btn btn-ac btn-sm">Save Keys</button></div>
+                </div>
+              </div>
+              <div id="st-2" class="settings-panel">
+                <div class="settings-card">
+                  <div class="settings-card-title">Termii SMS</div>
+                  <div class="field"><label>Termii API Key</label><div class="key-display"><span>TLe4f••••••••••••••••••••••••••••</span><button class="btn btn-muted btn-xs">Reveal</button></div></div>
+                  <div class="field"><label>Sender ID</label><input value="PaySpot"><div class="hint">Appears as sender name on SMS</div></div>
+                  <div class="field"><label>SMS Template</label><textarea>Your WalStreet Café WiFi code is {code}. Duration: {plan}. Enjoy!</textarea></div>
+                  <div class="settings-foot"><button class="btn btn-muted btn-sm">Send Test SMS</button><button class="btn btn-ac btn-sm">Save</button></div>
+                </div>
+              </div>
+              <div id="st-3" class="settings-panel">
+                <div class="settings-card">
+                  <div class="settings-card-title">Email Notifications</div>
+                  <div style="display:flex;flex-direction:column;gap:12px">
+                    <label class="toggle"><div class="toggle-track on"></div><span class="toggle-label">Daily revenue summary</span></label>
+                    <label class="toggle"><div class="toggle-track on"></div><span class="toggle-label">Failed payment alerts</span></label>
+                    <label class="toggle"><div class="toggle-track on"></div><span class="toggle-label">Low voucher stock alerts</span></label>
+                    <label class="toggle"><div class="toggle-track"></div><span class="toggle-label">Weekly analytics digest</span></label>
+                  </div>
+                  <div class="settings-foot" style="margin-top:16px"><button class="btn btn-ac btn-sm">Save Preferences</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /dash-content -->
+
+      <div class="mob-menu">
+        <div class="mob-btn on" onclick="dSection('overview',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dash</div>
+        <div class="mob-btn" onclick="dSection('transactions',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Txns</div>
+        <div class="mob-btn" onclick="dSection('vouchers',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/></svg>Vouchers</div>
+        <div class="mob-btn" onclick="dSection('plans',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Plans</div>
+        <div class="mob-btn" onclick="dSection('network',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>Network</div>
+        <div class="mob-btn" onclick="dSection('settings',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>Settings</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PLATFORM ADMIN
+══════════════════════════════════════ -->
+<div id="s-platform" class="screen" data-screen-label="07 Platform Admin">
+  <div class="dash-layout">
+    <aside class="sidebar">
+      <div class="sb-brand">
+        <div style="display:flex;align-items:center;gap:9px">
+          <span class="wifimark" id="wm4" style="width:32px;height:32px;background:var(--s2);border:1px solid var(--bd);border-radius:7px;display:flex;align-items:center;justify-content:center"></span>
+          <div>
+            <div class="sb-name" style="display:flex;align-items:center;gap:6px">PaySpot <span class="plat-tag">SUPER</span></div>
+            <div class="sb-url">admin.payspot.app</div>
+          </div>
+        </div>
+      </div>
+      <nav class="sb-nav">
+        <div class="sb-sec">Platform</div>
+        <div class="sb-item on" onclick="pSection('tenants',this)">Tenants</div>
+        <div class="sb-item" onclick="pSection('ptransactions',this)">Transactions <span class="sb-bdg">8</span></div>
+        <div class="sb-item" onclick="pSection('revenue',this)">Revenue</div>
+        <div class="sb-sec">System</div>
+        <div class="sb-item" onclick="pSection('integrations',this)">Integrations</div>
+        <div class="sb-item" onclick="pSection('audit',this)">Audit Log</div>
+        <div class="sb-item" onclick="pSection('psettings',this)">Settings</div>
+      </nav>
+      <div class="sb-foot">
+        <div class="sb-user"><div class="sb-av">SA</div><div><div class="sb-uname">Super Admin</div><div class="sb-urole">Platform Owner</div></div></div>
+      </div>
+    </aside>
+
+    <div class="dash-main">
+      <div class="dash-topbar">
+        <div class="dash-crumb"><span>Admin</span><span class="dash-crumb-sep">›</span><span id="p-crumb-cur">Tenants</span></div>
+        <div class="dash-topbar-right">
+          <button class="btn btn-muted btn-sm">Export</button>
+          <button class="btn btn-ac btn-sm">+ New Tenant</button>
+        </div>
+      </div>
+
+      <div class="dash-content">
+
+        <!-- TENANTS -->
+        <div id="ps-tenants" class="dash-section on">
+          <div class="dash-header">
+            <div><div class="dash-title">Tenants</div><div class="dash-sub">6 operators · ₦1.24M total</div></div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Platform Revenue</div><div class="kpi-val">₦1.24M</div><div class="kpi-delta up">↑ 18.2% MoM</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Total Transactions</div><div class="kpi-val">7,841</div><div class="kpi-delta up">↑ 11.4% MoM</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Active Tenants</div><div class="kpi-val">6</div><div class="kpi-delta neu">1 pending</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Vouchers Issued</div><div class="kpi-val">12,490</div><div class="kpi-delta up">↑ 9.8%</div></div>
+          </div>
+          <div class="ac">
+            <div class="ac-hdr"><div><div class="ac-title">All Tenants</div><div class="ac-sub">Sorted by revenue</div></div></div>
+            <div class="tbar"><input class="tsearch" placeholder="Search tenants…"><span class="badge badge-g">6 active</span><span class="badge badge-a">1 pending</span></div>
+            <div>
+              <div class="tenant-row"><div class="t-av" style="background:var(--ac)">W</div><div class="t-mid"><div class="t-name">WalStreet Café</div><div class="t-slug">walstreet.payspot.app</div></div><span class="badge badge-g" style="margin-right:12px">Active</span><div><div class="t-rev">₦248,500</div><div class="t-txn">1,284 txns</div></div><div style="display:flex;gap:6px;margin-left:14px"><button class="btn btn-muted btn-sm" onclick="go('dash')">View</button><button class="btn btn-ghost btn-sm">Edit</button></div></div>
+              <div class="tenant-row"><div class="t-av" style="background:#fb923c">S</div><div class="t-mid"><div class="t-name">Sunshine Hotels Ibadan</div><div class="t-slug">sunshine.payspot.app</div></div><span class="badge badge-g" style="margin-right:12px">Active</span><div><div class="t-rev">₦311,800</div><div class="t-txn">2,140 txns</div></div><div style="display:flex;gap:6px;margin-left:14px"><button class="btn btn-muted btn-sm">View</button><button class="btn btn-ghost btn-sm">Edit</button></div></div>
+              <div class="tenant-row"><div class="t-av" style="background:#60a5fa">B</div><div class="t-mid"><div class="t-name">BlueSky Lounge Port Harcourt</div><div class="t-slug">bluesky.payspot.app</div></div><span class="badge badge-g" style="margin-right:12px">Active</span><div><div class="t-rev">₦305,500</div><div class="t-txn">2,508 txns</div></div><div style="display:flex;gap:6px;margin-left:14px"><button class="btn btn-muted btn-sm">View</button><button class="btn btn-ghost btn-sm">Edit</button></div></div>
+              <div class="tenant-row"><div class="t-av" style="background:#a78bfa">L</div><div class="t-mid"><div class="t-name">LagosHub Cowork</div><div class="t-slug">lagoshub.payspot.app</div></div><span class="badge badge-g" style="margin-right:12px">Active</span><div><div class="t-rev">₦196,200</div><div class="t-txn">988 txns</div></div><div style="display:flex;gap:6px;margin-left:14px"><button class="btn btn-muted btn-sm">View</button><button class="btn btn-ghost btn-sm">Edit</button></div></div>
+              <div class="tenant-row"><div class="t-av" style="background:#34d399">T</div><div class="t-mid"><div class="t-name">TechPark Lekki</div><div class="t-slug">techpark.payspot.app</div></div><span class="badge badge-g" style="margin-right:12px">Active</span><div><div class="t-rev">₦178,000</div><div class="t-txn">921 txns</div></div><div style="display:flex;gap:6px;margin-left:14px"><button class="btn btn-muted btn-sm">View</button><button class="btn btn-ghost btn-sm">Edit</button></div></div>
+              <div class="tenant-row"><div class="t-av" style="background:#f87171">N</div><div class="t-mid"><div class="t-name">Nile University Abuja</div><div class="t-slug">nile.payspot.app</div></div><span class="badge badge-a" style="margin-right:12px">Pending</span><div><div class="t-rev">—</div><div class="t-txn">0 txns</div></div><div style="display:flex;gap:6px;margin-left:14px"><button class="btn btn-ac btn-sm">Approve</button><button class="btn btn-ghost btn-sm">Reject</button></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PLATFORM TRANSACTIONS -->
+        <div id="ps-ptransactions" class="dash-section">
+          <div class="dash-header">
+            <div><div class="dash-title">Transactions</div><div class="dash-sub">All tenants · 7,841 total</div></div>
+            <div class="dash-hdr-r"><button class="btn btn-muted btn-sm">Export CSV</button></div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Total Txns</div><div class="kpi-val">7,841</div><div class="kpi-delta up">↑ 11.4%</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Revenue</div><div class="kpi-val">₦1.24M</div><div class="kpi-delta up">↑ 18.2%</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Success Rate</div><div class="kpi-val">95.8%</div><div class="kpi-delta up">↑ 0.8%</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Failed</div><div class="kpi-val">329</div><div class="kpi-delta neu">4.2% rate</div></div>
+          </div>
+          <div class="ac">
+            <div class="tbar">
+              <input class="tsearch" placeholder="Search by customer, tenant…">
+              <select class="tfilter"><option>All tenants</option><option>WalStreet Café</option><option>Sunshine Hotels</option><option>BlueSky Lounge</option></select>
+              <select class="tfilter"><option>All statuses</option><option>Paid</option><option>Pending</option><option>Failed</option></select>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="t">
+                <thead><tr><th>Tenant</th><th>Customer</th><th>Plan</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody>
+                  <tr><td class="td-main">WalStreet Café</td><td>Amaka Obi</td><td>1 Day</td><td class="td-muted">₦1,000</td><td>Card</td><td><span class="badge badge-g">Paid</span></td><td>27 Apr 08:14</td></tr>
+                  <tr><td class="td-main">Sunshine Hotels</td><td>Chidi Okeke</td><td>1 Week</td><td class="td-muted">₦5,000</td><td>Transfer</td><td><span class="badge badge-g">Paid</span></td><td>27 Apr 08:01</td></tr>
+                  <tr><td class="td-main">BlueSky Lounge</td><td>Adaeze Nwosu</td><td>1 Day</td><td class="td-muted">₦1,200</td><td>USSD</td><td><span class="badge badge-g">Paid</span></td><td>27 Apr 07:55</td></tr>
+                  <tr><td class="td-main">LagosHub Cowork</td><td>Tunde Alabi</td><td>1 Month</td><td class="td-muted">₦15,000</td><td>Card</td><td><span class="badge badge-a">Pending</span></td><td>27 Apr 07:43</td></tr>
+                  <tr><td class="td-main">TechPark Lekki</td><td>Ifunanya Eze</td><td>3 Hours</td><td class="td-muted">₦800</td><td>USSD</td><td><span class="badge badge-r">Failed</span></td><td>27 Apr 07:30</td></tr>
+                  <tr><td class="td-main">WalStreet Café</td><td>Kelechi Eze</td><td>3 Hours</td><td class="td-muted">₦500</td><td>USSD</td><td><span class="badge badge-g">Paid</span></td><td>27 Apr 07:20</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="t-pagination"><span>Showing 1–6 of 7,841</span><div style="display:flex;gap:6px"><button class="btn btn-muted btn-xs">← Prev</button><button class="btn btn-muted btn-xs">Next →</button></div></div>
+          </div>
+        </div>
+
+        <!-- REVENUE -->
+        <div id="ps-revenue" class="dash-section">
+          <div class="dash-header">
+            <div><div class="dash-title">Revenue</div><div class="dash-sub">Platform-wide · April 2026</div></div>
+            <div class="dash-hdr-r">
+              <button class="btn btn-muted btn-sm">Today</button>
+              <button class="btn btn-muted btn-sm">Week</button>
+              <button class="btn btn-ac btn-sm">Month</button>
+            </div>
+          </div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Gross Revenue</div><div class="kpi-val">₦1.24M</div><div class="kpi-delta up">↑ 18.2%</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Platform Fee (2%)</div><div class="kpi-val">₦24,800</div><div class="kpi-delta up">↑ 18.2%</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Paystack Fees</div><div class="kpi-val">₦18,600</div><div class="kpi-delta neu">1.5% avg</div></div>
+            <div class="kpi"><div class="kpi-label" style="margin-bottom:8px">Net to Tenants</div><div class="kpi-val">₦1.20M</div><div class="kpi-delta up">↑ 18.1%</div></div>
+          </div>
+          <div class="ac" style="margin-bottom:14px">
+            <div class="ac-hdr"><div class="ac-title">Revenue by Tenant</div><div class="ac-sub">April 2026</div></div>
+            <div style="padding:20px">
+              <div class="rev-bar-row"><div class="rev-bar-label">BlueSky Lounge</div><div class="rev-bar-track"><div class="rev-bar-fill" style="width:100%"></div></div><div class="rev-bar-val">₦311,800</div></div>
+              <div class="rev-bar-row"><div class="rev-bar-label">Sunshine Hotels</div><div class="rev-bar-track"><div class="rev-bar-fill" style="width:90%"></div></div><div class="rev-bar-val">₦305,500</div></div>
+              <div class="rev-bar-row"><div class="rev-bar-label">WalStreet Café</div><div class="rev-bar-track"><div class="rev-bar-fill" style="width:79%"></div></div><div class="rev-bar-val">₦248,500</div></div>
+              <div class="rev-bar-row"><div class="rev-bar-label">LagosHub Cowork</div><div class="rev-bar-track"><div class="rev-bar-fill" style="width:63%;background:var(--amber)"></div></div><div class="rev-bar-val">₦196,200</div></div>
+              <div class="rev-bar-row"><div class="rev-bar-label">TechPark Lekki</div><div class="rev-bar-track"><div class="rev-bar-fill" style="width:57%;background:var(--amber)"></div></div><div class="rev-bar-val">₦178,000</div></div>
+              <div class="rev-bar-row"><div class="rev-bar-label">Nile University</div><div class="rev-bar-track"><div class="rev-bar-fill" style="width:0%"></div></div><div class="rev-bar-val">₦0</div></div>
+            </div>
+          </div>
+          <div class="ac">
+            <div class="ac-hdr"><div class="ac-title">Revenue Breakdown</div></div>
+            <div style="overflow-x:auto">
+              <table class="t">
+                <thead><tr><th>Tenant</th><th>Gross Revenue</th><th>Txns</th><th>Platform Fee (2%)</th><th>Paystack Fees</th><th>Net Payout</th></tr></thead>
+                <tbody>
+                  <tr><td class="td-main">BlueSky Lounge</td><td class="td-muted">₦311,800</td><td class="td-muted">2,508</td><td class="td-muted">₦6,236</td><td class="td-muted">₦4,677</td><td class="td-mono">₦300,887</td></tr>
+                  <tr><td class="td-main">Sunshine Hotels</td><td class="td-muted">₦305,500</td><td class="td-muted">2,140</td><td class="td-muted">₦6,110</td><td class="td-muted">₦4,583</td><td class="td-mono">₦294,807</td></tr>
+                  <tr><td class="td-main">WalStreet Café</td><td class="td-muted">₦248,500</td><td class="td-muted">1,284</td><td class="td-muted">₦4,970</td><td class="td-muted">₦3,728</td><td class="td-mono">₦239,802</td></tr>
+                  <tr><td class="td-main">LagosHub Cowork</td><td class="td-muted">₦196,200</td><td class="td-muted">988</td><td class="td-muted">₦3,924</td><td class="td-muted">₦2,943</td><td class="td-mono">₦189,333</td></tr>
+                  <tr><td class="td-main">TechPark Lekki</td><td class="td-muted">₦178,000</td><td class="td-muted">921</td><td class="td-muted">₦3,560</td><td class="td-muted">₦2,670</td><td class="td-mono">₦171,770</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- INTEGRATIONS -->
+        <div id="ps-integrations" class="dash-section">
+          <div class="dash-header">
+            <div><div class="dash-title">Integrations</div><div class="dash-sub">Platform-wide service connections</div></div>
+          </div>
+          <div class="int-grid">
+            <div class="int-card">
+              <div class="int-card-hd">
+                <div><div class="int-card-name">Paystack</div><div class="int-card-tag">Payment gateway</div></div>
+                <span class="badge badge-g">Connected</span>
+              </div>
+              <div class="int-card-detail">Mode: <strong>Live</strong></div>
+              <div class="int-card-detail">Public key: <strong>pk_live_a4f9••••</strong></div>
+              <div class="int-card-detail">Webhooks: <strong>Active</strong></div>
+              <div style="margin-top:14px"><button class="btn btn-muted btn-sm">Edit Keys</button></div>
+            </div>
+            <div class="int-card">
+              <div class="int-card-hd">
+                <div><div class="int-card-name">Termii</div><div class="int-card-tag">SMS gateway</div></div>
+                <span class="badge badge-g">Connected</span>
+              </div>
+              <div class="int-card-detail">Balance: <strong>₦4,200</strong></div>
+              <div class="int-card-detail">Sender ID: <strong>PaySpot</strong></div>
+              <div class="int-card-detail">SMS sent this month: <strong>7,841</strong></div>
+              <div style="margin-top:14px"><button class="btn btn-muted btn-sm">Edit Config</button></div>
+            </div>
+            <div class="int-card">
+              <div class="int-card-hd">
+                <div><div class="int-card-name">Omada Cloud</div><div class="int-card-tag">Hotspot management</div></div>
+                <span class="badge badge-m">Optional</span>
+              </div>
+              <div class="int-card-detail">Global API base URL</div>
+              <div class="int-card-detail">Per-tenant: tenant configures own credentials</div>
+              <div style="margin-top:14px"><button class="btn btn-muted btn-sm">Set Defaults</button></div>
+            </div>
+            <div class="int-card">
+              <div class="int-card-hd">
+                <div><div class="int-card-name">MikroTik RouterOS</div><div class="int-card-tag">Router integration</div></div>
+                <span class="badge badge-m">Optional</span>
+              </div>
+              <div class="int-card-detail">Default REST port: <strong>443</strong></div>
+              <div class="int-card-detail">Per-tenant: tenant configures own router IP</div>
+              <div style="margin-top:14px"><button class="btn btn-muted btn-sm">Set Defaults</button></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AUDIT LOG -->
+        <div id="ps-audit" class="dash-section">
+          <div class="dash-header">
+            <div><div class="dash-title">Audit Log</div><div class="dash-sub">All platform actions</div></div>
+            <div class="dash-hdr-r"><button class="btn btn-muted btn-sm">Export</button></div>
+          </div>
+          <div class="ac">
+            <div class="tbar">
+              <input class="tsearch" placeholder="Search actions…">
+              <select class="tfilter"><option>All actors</option><option>Super Admin</option><option>WalStreet Admin</option><option>System</option></select>
+              <select class="tfilter"><option>All actions</option><option>Tenant created</option><option>Plan updated</option><option>Vouchers imported</option><option>Settings changed</option></select>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="t">
+                <thead><tr><th>Timestamp</th><th>Actor</th><th>Role</th><th>Action</th><th>Resource</th><th>IP Address</th></tr></thead>
+                <tbody>
+                  <tr><td class="td-mono" style="font-size:11px">2026-04-27 08:14:22</td><td class="td-main">Super Admin</td><td>Platform Owner</td><td>Approved tenant</td><td>BlueSky Lounge</td><td style="font-family:'DM Mono',monospace;font-size:11px">41.58.22.14</td></tr>
+                  <tr><td class="td-mono" style="font-size:11px">2026-04-27 07:52:11</td><td class="td-main">WalStreet Admin</td><td>Tenant Admin</td><td>Imported vouchers</td><td>3 Hours · 200 codes</td><td style="font-family:'DM Mono',monospace;font-size:11px">102.89.46.71</td></tr>
+                  <tr><td class="td-mono" style="font-size:11px">2026-04-27 07:30:05</td><td class="td-main">System</td><td>Webhook</td><td>Payment confirmed</td><td>Txn #TXN-00841</td><td style="font-family:'DM Mono',monospace;font-size:11px">52.31.18.4</td></tr>
+                  <tr><td class="td-mono" style="font-size:11px">2026-04-26 18:05:44</td><td class="td-main">Super Admin</td><td>Platform Owner</td><td>Updated Termii key</td><td>Platform settings</td><td style="font-family:'DM Mono',monospace;font-size:11px">41.58.22.14</td></tr>
+                  <tr><td class="td-mono" style="font-size:11px">2026-04-26 15:33:19</td><td class="td-main">WalStreet Admin</td><td>Tenant Admin</td><td>Updated plan</td><td>1 Week · price changed</td><td style="font-family:'DM Mono',monospace;font-size:11px">102.89.46.71</td></tr>
+                  <tr><td class="td-mono" style="font-size:11px">2026-04-26 14:10:00</td><td class="td-main">Sunshine Admin</td><td>Tenant Admin</td><td>Connected Omada</td><td>Network setup</td><td style="font-family:'DM Mono',monospace;font-size:11px">105.112.8.33</td></tr>
+                  <tr><td class="td-mono" style="font-size:11px">2026-04-26 09:22:55</td><td class="td-main">Super Admin</td><td>Platform Owner</td><td>Created tenant</td><td>Nile University Abuja</td><td style="font-family:'DM Mono',monospace;font-size:11px">41.58.22.14</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="t-pagination"><span>Showing 1–7 of 1,023 entries</span><div style="display:flex;gap:6px"><button class="btn btn-muted btn-xs">← Prev</button><button class="btn btn-muted btn-xs">Next →</button></div></div>
+          </div>
+        </div>
+
+        <!-- PLATFORM SETTINGS -->
+        <div id="ps-psettings" class="dash-section">
+          <div class="dash-header">
+            <div><div class="dash-title">Settings</div><div class="dash-sub">Platform configuration</div></div>
+          </div>
+          <div class="settings-layout">
+            <div class="settings-tabs">
+              <div class="settings-tab on" onclick="setTab('ps',0,this)">Platform</div>
+              <div class="settings-tab" onclick="setTab('ps',1,this)">Billing</div>
+              <div class="settings-tab" onclick="setTab('ps',2,this)">Notifications</div>
+            </div>
+            <div>
+              <div id="ps-0" class="settings-panel on">
+                <div class="settings-card">
+                  <div class="settings-card-title">Platform Identity</div>
+                  <div class="field"><label>Platform Name</label><input value="PaySpot"></div>
+                  <div class="field"><label>Base Domain</label><input value="payspot.app"><div class="hint">Tenant stores: {slug}.payspot.app</div></div>
+                  <div class="field"><label>Support Email</label><input type="email" value="support@payspot.app"></div>
+                  <div class="settings-foot"><button class="btn btn-ac btn-sm">Save</button></div>
+                </div>
+                <div class="settings-card">
+                  <div class="settings-card-title">Tenant Onboarding</div>
+                  <div style="display:flex;flex-direction:column;gap:12px">
+                    <label class="toggle"><div class="toggle-track on"></div><span class="toggle-label">Require manual approval for new tenants</span></label>
+                    <label class="toggle"><div class="toggle-track on"></div><span class="toggle-label">Send welcome email on approval</span></label>
+                  </div>
+                </div>
+              </div>
+              <div id="ps-1" class="settings-panel">
+                <div class="settings-card">
+                  <div class="settings-card-title">Platform Fee</div>
+                  <div class="field"><label>Fee Rate (%)</label><input type="number" value="2.0"><div class="hint">Deducted from tenant gross revenue per transaction</div></div>
+                  <div class="field"><label>Fee Recipient Paystack Account</label><input value="payspot_platform_account"></div>
+                  <div class="settings-foot"><button class="btn btn-ac btn-sm">Save</button></div>
+                </div>
+              </div>
+              <div id="ps-2" class="settings-panel">
+                <div class="settings-card">
+                  <div class="settings-card-title">Admin Notifications</div>
+                  <div style="display:flex;flex-direction:column;gap:12px">
+                    <label class="toggle"><div class="toggle-track on"></div><span class="toggle-label">New tenant sign-up</span></label>
+                    <label class="toggle"><div class="toggle-track on"></div><span class="toggle-label">Payment failures above 10%</span></label>
+                    <label class="toggle"><div class="toggle-track on"></div><span class="toggle-label">Daily platform revenue summary</span></label>
+                    <label class="toggle"><div class="toggle-track"></div><span class="toggle-label">Termii low balance alert</span></label>
+                  </div>
+                  <div class="settings-foot" style="margin-top:16px"><button class="btn btn-ac btn-sm">Save</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /dash-content -->
+
+      <div class="mob-menu">
+        <div class="mob-btn on" onclick="pSection('tenants',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Tenants</div>
+        <div class="mob-btn" onclick="pSection('ptransactions',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Txns</div>
+        <div class="mob-btn" onclick="pSection('revenue',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Revenue</div>
+        <div class="mob-btn" onclick="pSection('integrations',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Integr.</div>
+        <div class="mob-btn" onclick="pSection('audit',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Audit</div>
+        <div class="mob-btn" onclick="pSection('psettings',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>Settings</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     REQUEST ACCESS
+══════════════════════════════════════ -->
+<div id="s-request" class="screen" data-screen-label="06 Request Access">
+  <div class="req-page">
+    <div class="req-inner">
+      <div class="req-brand">
+        <div class="req-brand-logo">
+          <span class="wifimark" id="wm-req"></span>
+          <span class="logo-text">PaySpot</span>
+        </div>
+        <div class="req-kicker">Operator Access</div>
+        <h1 class="req-title">Start selling WiFi in minutes</h1>
+        <p class="req-desc">Tell us about your setup and we'll get you onboarded within 24 hours. No setup fees, no contracts.</p>
+        <div class="req-perks">
+          <div class="req-perk"><div class="req-perk-dot"></div>Branded portal live in under 10 minutes</div>
+          <div class="req-perk"><div class="req-perk-dot"></div>Paystack payments directly to your account</div>
+          <div class="req-perk"><div class="req-perk-dot"></div>Works with Omada, MikroTik, RADIUS or CSV</div>
+          <div class="req-perk"><div class="req-perk-dot"></div>Instant SMS voucher delivery via Termii</div>
+          <div class="req-perk"><div class="req-perk-dot"></div>2% platform fee — no monthly charges</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="req-form-card">
+          <div id="req-form-wrap">
+            <div class="req-form-title">Request access</div>
+            <div class="req-form-sub">We'll review and respond within 24 hours</div>
+            <div class="field-row">
+              <div class="field"><label>First Name</label><input placeholder="Emeka"></div>
+              <div class="field"><label>Last Name</label><input placeholder="Okafor"></div>
+            </div>
+            <div class="field"><label>Business / Venue Name</label><input placeholder="WalStreet Café"></div>
+            <div class="field"><label>Email Address</label><input type="email" placeholder="emeka@walstreet.ng"></div>
+            <div class="field"><label>Phone Number</label><input type="tel" placeholder="0801 234 5678"></div>
+            <div class="field"><label>City / Location</label><input placeholder="Lagos, Nigeria"></div>
+            <div class="field-row">
+              <div class="field"><label>Hotspot Type</label>
+                <select>
+                  <option value="">Select platform…</option>
+                  <option>Omada Cloud</option>
+                  <option>MikroTik RouterOS</option>
+                  <option>RADIUS / FreeRADIUS</option>
+                  <option>CSV voucher pool</option>
+                  <option>Not sure yet</option>
+                </select>
+              </div>
+              <div class="field"><label>Number of Locations</label>
+                <select>
+                  <option>1 location</option>
+                  <option>2–5 locations</option>
+                  <option>6–20 locations</option>
+                  <option>20+ locations</option>
+                </select>
+              </div>
+            </div>
+            <div class="field"><label>Tell us about your setup <span style="color:var(--tx3);font-weight:400">(optional)</span></label>
+              <textarea placeholder="e.g. I run a café with 50 daily customers, currently using MikroTik…" style="height:72px"></textarea>
+            </div>
+            <button class="req-submit" onclick="submitRequest()">Request Operator Access →</button>
+            <div style="text-align:center;font-size:11px;color:var(--tx3);margin-top:10px">We'll never spam you. No credit card required.</div>
+          </div>
+
+          <div class="req-success" id="req-success">
+            <div class="req-success-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ac)"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <h3>Request received!</h3>
+            <p>We'll review your application and get back to you at <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="bedbd3dbd5dffec9dfd2cdcaccdbdbca90d0d9">[email&#160;protected]</a></strong> within 24 hours.</p>
+            <div style="margin-top:20px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+              <button class="btn btn-ac" onclick="go('land')">Back to Home</button>
+              <button class="btn btn-ghost btn-sm" onclick="resetRequest()">Submit another</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div id="s-onboarding" class="screen" data-screen-label="06 Onboarding">
+  <div class="ob-layout">
+
+    <!-- Left step list -->
+    <aside class="ob-sidebar">
+      <div class="ob-logo">
+        <span class="wifimark" id="wm-ob"></span>
+        <span class="logo-text">PaySpot</span>
+      </div>
+      <div class="ob-steps">
+        <div class="ob-step active" id="obs-1">
+          <div class="ob-step-col">
+            <div class="ob-step-dot">1</div>
+            <div class="ob-step-line"></div>
+          </div>
+          <div class="ob-step-info">
+            <div class="ob-step-label">Welcome</div>
+            <div class="ob-step-sub">Name your venue &amp; store</div>
+          </div>
+        </div>
+        <div class="ob-step" id="obs-2">
+          <div class="ob-step-col">
+            <div class="ob-step-dot">2</div>
+            <div class="ob-step-line"></div>
+          </div>
+          <div class="ob-step-info">
+            <div class="ob-step-label">Paystack</div>
+            <div class="ob-step-sub">Connect your payment account</div>
+          </div>
+        </div>
+        <div class="ob-step" id="obs-3">
+          <div class="ob-step-col">
+            <div class="ob-step-dot">3</div>
+            <div class="ob-step-line"></div>
+          </div>
+          <div class="ob-step-info">
+            <div class="ob-step-label">Network</div>
+            <div class="ob-step-sub">Configure your hotspot</div>
+          </div>
+        </div>
+        <div class="ob-step" id="obs-4">
+          <div class="ob-step-col">
+            <div class="ob-step-dot">4</div>
+            <div class="ob-step-line"></div>
+          </div>
+          <div class="ob-step-info">
+            <div class="ob-step-label">First Plan</div>
+            <div class="ob-step-sub">Create your first WiFi plan</div>
+          </div>
+        </div>
+        <div class="ob-step" id="obs-5">
+          <div class="ob-step-col">
+            <div class="ob-step-dot">5</div>
+          </div>
+          <div class="ob-step-info">
+            <div class="ob-step-label">Launch</div>
+            <div class="ob-step-sub">Your store is live</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="ob-main">
+
+      <!-- Mobile top bar -->
+      <div class="ob-mobile-top">
+        <div class="ob-mob-dots">
+          <div class="ob-mob-dot active" id="omd-1"></div>
+          <div class="ob-mob-dot" id="omd-2"></div>
+          <div class="ob-mob-dot" id="omd-3"></div>
+          <div class="ob-mob-dot" id="omd-4"></div>
+          <div class="ob-mob-dot" id="omd-5"></div>
+        </div>
+        <span class="ob-mob-label" id="ob-mob-label">Welcome</span>
+        <span class="ob-mob-count" id="ob-mob-count">1 of 5</span>
+      </div>
+
+      <div class="ob-body">
+
+        <!-- Step 1: Welcome -->
+        <div id="ob-1" class="ob-panel on">
+          <div class="ob-content">
+            <div class="ob-kicker">Step 1 of 5</div>
+            <div class="ob-title">Let's set up your WiFi store</div>
+            <div class="ob-desc">Tell us about your venue. This sets up your branded store URL that customers will use to buy access.</div>
+            <div class="field"><label>Venue Name</label><input id="ob-venue-name" type="text" placeholder="e.g. WalStreet Café" oninput="updateSlug(this.value)"></div>
+            <div class="field">
+              <label>Store URL Slug</label>
+              <div style="display:flex;align-items:center;gap:0">
+                <span style="height:42px;background:var(--s3);border:1px solid var(--bd);border-right:none;border-radius:var(--r) 0 0 var(--r);padding:0 12px;display:flex;align-items:center;font-size:13px;color:var(--tx3);white-space:nowrap;font-family:'DM Mono',monospace">payspot.app/</span>
+                <input id="ob-slug" type="text" placeholder="your-venue" style="border-radius:0 var(--r) var(--r) 0;flex:1">
+              </div>
+              <div class="hint" id="ob-slug-preview">Your store will be: payspot.app/your-venue</div>
+            </div>
+            <div class="field"><label>Support Email</label><input type="email" placeholder="you@example.com"></div>
+            <div class="field"><label>Timezone</label>
+              <select>
+                <option>Africa/Lagos (WAT, UTC+1)</option>
+                <option>Africa/Nairobi (EAT, UTC+3)</option>
+                <option>Africa/Accra (GMT, UTC+0)</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label>Brand Color</label>
+              <div class="color-swatches" id="ob-color-swatches">
+                <div class="color-swatch on" style="background:oklch(0.85 0.22 140);color:oklch(0.85 0.22 140)" onclick="setVenueColor('oklch(0.85 0.22 140)','oklch(0.85 0.22 140/.12)','oklch(0.85 0.22 140/.3)',this)" title="Lime"></div>
+                <div class="color-swatch" style="background:oklch(0.65 0.2 250);color:oklch(0.65 0.2 250)" onclick="setVenueColor('oklch(0.65 0.2 250)','oklch(0.65 0.2 250/.12)','oklch(0.65 0.2 250/.3)',this)" title="Blue"></div>
+                <div class="color-swatch" style="background:oklch(0.75 0.2 50);color:oklch(0.75 0.2 50)" onclick="setVenueColor('oklch(0.75 0.2 50)','oklch(0.75 0.2 50/.12)','oklch(0.75 0.2 50/.3)',this)" title="Orange"></div>
+                <div class="color-swatch" style="background:oklch(0.7 0.2 300);color:oklch(0.7 0.2 300)" onclick="setVenueColor('oklch(0.7 0.2 300)','oklch(0.7 0.2 300/.12)','oklch(0.7 0.2 300/.3)',this)" title="Purple"></div>
+                <div class="color-swatch" style="background:oklch(0.72 0.15 190);color:oklch(0.72 0.15 190)" onclick="setVenueColor('oklch(0.72 0.15 190)','oklch(0.72 0.15 190/.12)','oklch(0.72 0.15 190/.3)',this)" title="Teal"></div>
+                <div class="color-swatch" style="background:oklch(0.7 0.2 10);color:oklch(0.7 0.2 10)" onclick="setVenueColor('oklch(0.7 0.2 10)','oklch(0.7 0.2 10/.12)','oklch(0.7 0.2 10/.3)',this)" title="Rose"></div>
+                <div class="color-swatch" style="background:oklch(0.82 0.2 80);color:oklch(0.82 0.2 80)" onclick="setVenueColor('oklch(0.82 0.2 80)','oklch(0.82 0.2 80/.12)','oklch(0.82 0.2 80/.3)',this)" title="Amber"></div>
+                <div class="color-swatch" style="background:oklch(0.72 0.17 155);color:oklch(0.72 0.17 155)" onclick="setVenueColor('oklch(0.72 0.17 155)','oklch(0.72 0.17 155/.12)','oklch(0.72 0.17 155/.3)',this)" title="Emerald"></div>
+              </div>
+              <div class="hint">Applied to your customer-facing portal</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Paystack -->
+        <div id="ob-2" class="ob-panel">
+          <div class="ob-content">
+            <div class="ob-kicker">Step 2 of 5</div>
+            <div class="ob-title">Connect Paystack</div>
+            <div class="ob-desc">PaySpot uses Paystack to collect payments from your customers. Funds go directly into your Paystack account.</div>
+            <div class="alert-banner info" style="margin-bottom:20px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>Get your API keys from <strong>dashboard.paystack.com → Settings → API Keys</strong></span>
+            </div>
+            <div class="field"><label>Public Key</label><input placeholder="pk_live_…" type="text"></div>
+            <div class="field"><label>Secret Key</label><input placeholder="sk_live_…" type="password"></div>
+            <div class="field" style="margin-bottom:0">
+              <label>Webhook URL <span style="color:var(--tx3);font-weight:400">(copy to Paystack dashboard)</span></label>
+              <div class="key-display">
+                <span>https://payspot.app/webhook/paystack/your-venue</span>
+                <button class="btn btn-muted btn-xs" onclick="this.textContent='Copied!'">Copy</button>
+              </div>
+              <div class="hint">Paste this URL in Paystack → Settings → Webhooks</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Network -->
+        <div id="ob-3" class="ob-panel">
+          <div class="ob-content">
+            <div class="ob-kicker">Step 3 of 5</div>
+            <div class="ob-title">Configure your hotspot</div>
+            <div class="ob-desc">How does your WiFi router generate or accept vouchers? Choose your setup below.</div>
+            <div class="platform-pills" style="margin-bottom:20px">
+              <div class="platform-pill on" onclick="obPlatform('omada',this)">Omada Cloud</div>
+              <div class="platform-pill" onclick="obPlatform('mikrotik',this)">MikroTik</div>
+              <div class="platform-pill" onclick="obPlatform('radius',this)">RADIUS</div>
+              <div class="platform-pill" onclick="obPlatform('csv',this)">CSV Only</div>
+            </div>
+            <div id="ob-net-omada">
+              <div class="field"><label>Omada Cloud ID</label><input placeholder="e.g. f4b2e9c1-3d8a-…"></div>
+              <div class="field"><label>API Key</label><input type="password" placeholder="sk_omada_…"></div>
+              <div class="field-row">
+                <div class="field"><label>Site ID</label><input placeholder="site-name-01"></div>
+                <div class="field"><label>Voucher Group</label><input placeholder="PaySpot-Generated"></div>
+              </div>
+              <button class="btn btn-muted btn-sm">Test Connection</button>
+            </div>
+            <div id="ob-net-mikrotik" style="display:none">
+              <div class="field-row">
+                <div class="field"><label>Router IP</label><input placeholder="192.168.88.1"></div>
+                <div class="field"><label>Port</label><input value="443"></div>
+              </div>
+              <div class="field-row">
+                <div class="field"><label>Username</label><input placeholder="admin"></div>
+                <div class="field"><label>Password</label><input type="password" placeholder="••••••••"></div>
+              </div>
+              <button class="btn btn-muted btn-sm">Test Connection</button>
+            </div>
+            <div id="ob-net-radius" style="display:none">
+              <div class="field-row">
+                <div class="field"><label>RADIUS Host</label><input placeholder="radius.example.com"></div>
+                <div class="field"><label>Auth Port</label><input value="1812"></div>
+              </div>
+              <div class="field"><label>Shared Secret</label><input type="password" placeholder="••••••••"></div>
+              <button class="btn btn-muted btn-sm">Test Connection</button>
+            </div>
+            <div id="ob-net-csv" style="display:none">
+              <div class="ob-desc" style="margin-bottom:16px">You'll upload pre-generated voucher codes via CSV. You can do this after setup — skip for now if you don't have codes ready yet.</div>
+              <div style="border:1px dashed var(--bd2);border-radius:var(--r);padding:28px;text-align:center;color:var(--tx3);font-size:13px">Drop CSV here or <span style="color:var(--ac);cursor:pointer">browse</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: First Plan -->
+        <div id="ob-4" class="ob-panel">
+          <div class="ob-content" style="max-width:700px">
+            <div class="ob-kicker">Step 4 of 5</div>
+            <div class="ob-title" id="ob4-title">Set up your plans</div>
+            <div class="ob-desc" id="ob4-desc">We've added some common starter plans. Edit, remove, or add your own — you can always change these later from the dashboard.</div>
+
+            <div class="ob-multi-plans" style="margin-bottom:12px">
+              <div class="ob-multi-header">
+                <div>Name</div><div>Price (₦)</div><div>Duration</div>
+                <div>Mbps</div><div>Devices</div><div>Data</div><div></div>
+              </div>
+              <div id="ob-multi-tbody"></div>
+            </div>
+            <button class="btn btn-muted btn-sm" onclick="addObPlanRow()" style="width:100%;justify-content:center;margin-bottom:16px">+ Add another plan</button>
+
+            <!-- CSV upload (shown only in CSV mode) -->
+            <div id="ob4-csv-section" style="display:none">
+              <div style="font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-family:'DM Mono',monospace">Upload Voucher CSVs</div>
+              <div id="ob4-csv-uploads"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 5: Launch -->
+        <div id="ob-5" class="ob-panel">
+          <div class="ob-launch">
+            <div class="ob-launch-ring">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ac)">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            </div>
+            <h2>You're all set!</h2>
+            <p>Your PaySpot store is live. Share the link with your customers — they can buy access and receive their voucher code instantly by SMS.</p>
+            <div class="ob-url-box">
+              <span id="ob-final-url">payspot.app/your-venue</span>
+              <button class="btn btn-muted btn-xs" onclick="this.textContent='Copied!'">Copy</button>
+            </div>
+            <div class="ob-checklist">
+              <div class="ob-check"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--green)"><polyline points="20 6 9 17 4 12"/></svg>Venue profile created</div>
+              <div class="ob-check"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--green)"><polyline points="20 6 9 17 4 12"/></svg>Paystack connected</div>
+              <div class="ob-check"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--green)"><polyline points="20 6 9 17 4 12"/></svg>Hotspot configured</div>
+              <div class="ob-check"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--green)"><polyline points="20 6 9 17 4 12"/></svg>First plan live</div>
+            </div>
+            <div class="ob-launch-btns">
+              <button class="btn btn-ac btn-lg" onclick="go('portal')">See My Store →</button>
+              <button class="btn btn-ghost btn-lg" onclick="go('dash')">Go to Dashboard</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /ob-body -->
+
+      <!-- Footer nav -->
+      <div class="ob-footer">
+        <div class="ob-progress-dots">
+          <div class="ob-prog-dot active" id="opd-1"></div>
+          <div class="ob-prog-dot" id="opd-2"></div>
+          <div class="ob-prog-dot" id="opd-3"></div>
+          <div class="ob-prog-dot" id="opd-4"></div>
+          <div class="ob-prog-dot" id="opd-5"></div>
+        </div>
+        <div class="ob-footer-r">
+          <button class="btn btn-ghost btn-sm" id="ob-back-btn" onclick="obNav(-1)" style="display:none">← Back</button>
+          <button class="btn btn-muted btn-sm" id="ob-skip-btn" onclick="obNav(1)">Skip for now</button>
+          <button class="btn btn-ac" id="ob-next-btn" onclick="obNav(1)">Continue →</button>
+        </div>
+      </div>
+
+    </div><!-- /ob-main -->
+  </div><!-- /ob-layout -->
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// Suppress preview env ResizeObserver noise
+if(window.ResizeObserver){const _R=window.ResizeObserver;window.ResizeObserver=class extends _R{constructor(cb){super((e,o)=>requestAnimationFrame(()=>cb(e,o)))}}}
+window.onerror=(m)=>{if(String(m).includes('ResizeObserver'))return true};
+
+// ── Portal plans data
+const PORTAL_PLANS=[
+  {id:'p1',name:'30 Min',abbr:'30M',price:200,per:'flat',speed:3,devices:1,data:'500 MB',cat:'quick'},
+  {id:'p2',name:'1 Hour',abbr:'1H',price:350,per:'flat',speed:5,devices:1,data:'1 GB',cat:'quick'},
+  {id:'p3',name:'2 Hours',abbr:'2H',price:500,per:'flat',speed:5,devices:1,data:'Unlimited',cat:'quick'},
+  {id:'p4',name:'3 Hours',abbr:'3H',price:700,per:'flat',speed:5,devices:1,data:'Unlimited',cat:'quick'},
+  {id:'p5',name:'6 Hours',abbr:'6H',price:900,per:'flat',speed:8,devices:2,data:'Unlimited',cat:'quick'},
+  {id:'p6',name:'1 Day',abbr:'1D',price:1000,per:'day',speed:10,devices:2,data:'Unlimited',cat:'daily',popular:true},
+  {id:'p7',name:'2 Days',abbr:'2D',price:1800,per:'2 days',speed:10,devices:2,data:'Unlimited',cat:'daily'},
+  {id:'p8',name:'3 Days',abbr:'3D',price:2500,per:'3 days',speed:10,devices:3,data:'Unlimited',cat:'daily'},
+  {id:'p9',name:'1 Week',abbr:'1W',price:3500,per:'week',speed:10,devices:3,data:'Unlimited',cat:'weekly'},
+  {id:'p10',name:'2 Weeks',abbr:'2W',price:6000,per:'2 wks',speed:15,devices:3,data:'Unlimited',cat:'weekly'},
+  {id:'p11',name:'1 Month',abbr:'1M',price:10000,per:'month',speed:20,devices:5,data:'Unlimited',cat:'monthly'},
+  {id:'p12',name:'Student',abbr:'STU',price:7500,per:'month',speed:10,devices:2,data:'Unlimited',cat:'monthly'},
+];
+let portalCat='all';
+let portalSelected=null;
+
+function renderPortal(){
+  const list=document.getElementById('portal-plans-list');if(!list)return;
+  const plans=portalCat==='all'?PORTAL_PLANS:PORTAL_PLANS.filter(p=>p.cat===portalCat);
+  if(!plans.length){list.innerHTML='<div class="portal-empty">No plans in this category</div>';return;}
+  list.innerHTML=plans.map(p=>`
+    <div class="plan-card${portalSelected===p.id?' sel':''}${p.popular?' popular':''}"
+         onclick="selectPortalPlan('${p.id}','${p.name}','₦${p.price.toLocaleString()}')">
+      <div class="plan-abbr">${p.abbr}</div>
+      <div style="flex:1">
+        <div class="plan-name">${p.name}</div>
+        <div class="plan-tags">
+          <span class="plan-tag">${p.speed} Mbps</span>
+          <span class="plan-tag">${p.devices} device${p.devices>1?'s':''}</span>
+          <span class="plan-tag">${p.data}</span>
+        </div>
+      </div>
+      <div class="plan-price">
+        <div class="plan-amt">₦${p.price.toLocaleString()}</div>
+        <div class="plan-per">${p.per}</div>
+      </div>
+    </div>`).join('');
+}
+
+function setPortalTab(cat,el){
+  portalCat=cat;
+  document.querySelectorAll('.portal-tab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  renderPortal();
+}
+
+function selectPortalPlan(id,name,price){
+  portalSelected=id;
+  renderPortal();
+  const cta=document.getElementById('portal-cta');
+  if(cta)cta.textContent=`Continue with ${name} — ${price} →`;
+}
+
+// ── Venue color system
+function setVenueColor(vc,vcdim,vcbd,swatchEl){
+  const portal=document.getElementById('s-portal');
+  if(portal){
+    portal.style.setProperty('--vc',vc);
+    portal.style.setProperty('--vc-dim',vcdim);
+    portal.style.setProperty('--vc-bd',vcbd);
+  }
+  document.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('on'));
+  if(swatchEl)swatchEl.classList.add('on');
+  window._venueColor={vc,vcdim,vcbd};
+}
+
+// ── Request page
+function submitRequest(){
+  document.getElementById('req-form-wrap').style.display='none';
+  document.getElementById('req-success').style.display='block';
+}
+function resetRequest(){
+  document.getElementById('req-form-wrap').style.display='block';
+  document.getElementById('req-success').style.display='none';
+}
+
+// ── Updated onboarding step 4 (unified multi-plan, pre-filled)
+const OB_STARTER_PLANS=[
+  {name:'3 Hours',price:500,dur:'3 hours',speed:5,devices:1,data:'Unlimited'},
+  {name:'1 Day',price:1000,dur:'1 day',speed:10,devices:2,data:'Unlimited'},
+  {name:'1 Week',price:3500,dur:'1 week',speed:10,devices:3,data:'Unlimited'},
+  {name:'1 Month',price:10000,dur:'1 month',speed:20,devices:5,data:'Unlimited'},
+];
+
+function obEnterStep4(){
+  const isCSV=window._obPlatform==='csv';
+  const tbody=document.getElementById('ob-multi-tbody');
+  const csvSection=document.getElementById('ob4-csv-section');
+  if(tbody&&tbody.children.length===0){
+    OB_STARTER_PLANS.forEach(p=>{_obPlanRowId++;addObPlanRowWithData(_obPlanRowId,p);});
+  }
+  if(csvSection)csvSection.style.display=isCSV?'block':'none';
+  const desc=document.getElementById('ob4-desc');
+  if(desc)desc.textContent=isCSV
+    ?'We\'ve pre-filled common starter plans. Edit them, then upload a voucher CSV for each plan.'
+    :'We\'ve pre-filled common starter plans. Edit them to match your pricing — you can always change these later.';
+}
+
+function addObPlanRowWithData(rid,data){
+  const tbody=document.getElementById('ob-multi-tbody');if(!tbody)return;
+  const dur=data&&data.dur||'1 day';
+  const durOpts=['1 hour','3 hours','1 day','1 week','1 month'].map(o=>`<option${o===dur?' selected':''}>${o}</option>`).join('');
+  const dataOpts=['Unlimited','500 MB','1 GB','3 GB','5 GB','10 GB'].map(o=>`<option${o===(data&&data.data||'Unlimited')?' selected':''}>${o}</option>`).join('');
+  const row=document.createElement('div');
+  row.className='ob-plan-row';row.id='obpr-'+rid;
+  row.innerHTML=`
+    <input placeholder="Plan name" value="${data&&data.name||''}">
+    <input type="number" placeholder="1000" value="${data&&data.price||1000}">
+    <select>${durOpts}</select>
+    <input type="number" value="${data&&data.speed||10}">
+    <input type="number" value="${data&&data.devices||2}">
+    <select>${dataOpts}</select>
+    <div class="ob-plan-row-del" onclick="removeObPlanRow(${rid})" title="Remove">×</div>`;
+  tbody.appendChild(row);
+  // also add CSV upload slot if CSV mode
+  if(window._obPlatform==='csv'){
+    const csvUploads=document.getElementById('ob4-csv-uploads');
+    if(csvUploads){
+      const cu=document.createElement('div');
+      cu.id='obpcr-'+rid;cu.className='ob-plan-csv-row';
+      cu.innerHTML=`<div class="ob-csv-drop"><span style="font-size:11px;color:var(--tx3);width:90px;flex-shrink:0;font-family:'DM Mono',monospace">Plan ${rid}</span><div class="ob-csv-drop-zone" onclick="this.textContent='vouchers.csv ✓';this.style.color='var(--green)';this.style.borderColor='oklch(0.72 0.17 155/.3)'">Drop voucher CSV or click to upload</div><span class="badge badge-m">0 codes</span></div>`;
+      csvUploads.appendChild(cu);
+    }
+  }
+}
+
+// Override addObPlanRow to use new function
+let _obPlanRowId=0;
+function addObPlanRow(){_obPlanRowId++;addObPlanRowWithData(_obPlanRowId,null);}
+
+// ── Portal render on init
+document.addEventListener('DOMContentLoaded',()=>{renderPortal();});
+const PLANS_DATA=[
+  {id:1,name:'30 Min',price:200,dur:'30 min',speed:3,devices:1,data:'500 MB',txns:180,rev:36000,active:true},
+  {id:2,name:'1 Hour',price:350,dur:'1 hr',speed:5,devices:1,data:'1 GB',txns:290,rev:101500,active:true},
+  {id:3,name:'2 Hours',price:500,dur:'2 hr',speed:5,devices:1,data:'2 GB',txns:210,rev:105000,active:true},
+  {id:4,name:'3 Hours',price:700,dur:'3 hr',speed:5,devices:1,data:'Unlimited',txns:270,rev:189000,active:true},
+  {id:5,name:'6 Hours',price:900,dur:'6 hr',speed:8,devices:2,data:'Unlimited',txns:140,rev:126000,active:true},
+  {id:6,name:'1 Day',price:1000,dur:'1 day',speed:10,devices:2,data:'Unlimited',txns:796,rev:796000,active:true,popular:true},
+  {id:7,name:'2 Days',price:1800,dur:'2 days',speed:10,devices:2,data:'Unlimited',txns:95,rev:171000,active:true},
+  {id:8,name:'3 Days',price:2500,dur:'3 days',speed:10,devices:3,data:'Unlimited',txns:62,rev:155000,active:true},
+  {id:9,name:'1 Week',price:3500,dur:'1 week',speed:10,devices:3,data:'Unlimited',txns:141,rev:493500,active:true},
+  {id:10,name:'2 Weeks',price:6000,dur:'2 weeks',speed:15,devices:3,data:'Unlimited',txns:38,rev:228000,active:true},
+  {id:11,name:'1 Month',price:10000,dur:'1 month',speed:20,devices:5,data:'Unlimited',txns:77,rev:770000,active:true},
+  {id:12,name:'Student Month',price:7500,dur:'1 month',speed:10,devices:2,data:'Unlimited',txns:44,rev:330000,active:false},
+];
+let plansView='list';
+let plansFilter='';
+let plansStatusFilter='all';
+
+function renderPlans(){
+  const filtered=PLANS_DATA.filter(p=>{
+    const matchText=p.name.toLowerCase().includes(plansFilter.toLowerCase());
+    const matchStatus=plansStatusFilter==='all'||(plansStatusFilter==='active'&&p.active)||(plansStatusFilter==='inactive'&&!p.active);
+    return matchText&&matchStatus;
+  });
+  const sub=document.getElementById('plans-count-sub');
+  if(sub)sub.textContent=filtered.length+' plan'+(filtered.length!==1?'s':'')+' · '+filtered.filter(p=>p.active).length+' active';
+
+  if(plansView==='list'){
+    const tbody=document.getElementById('plans-tbody');
+    if(!tbody)return;
+    tbody.innerHTML=filtered.map(p=>`
+      <tr data-id="${p.id}" class="${!p.active?'opacity-50':''}">
+        <td class="td-name">${p.name}${p.popular?` <span class="badge badge-ac" style="font-size:9px;padding:1px 6px;vertical-align:middle">Popular</span>`:''}${!p.active?` <span class="badge badge-m" style="font-size:9px;padding:1px 6px;vertical-align:middle">Inactive</span>`:''}</td>
+        <td class="td-price">₦${p.price.toLocaleString()}</td>
+        <td class="td-spec">${p.dur}</td>
+        <td class="td-spec">${p.speed} Mbps · ${p.devices} dev · ${p.data}</td>
+        <td class="td-stats">${p.txns.toLocaleString()}</td>
+        <td class="td-stats">₦${p.rev.toLocaleString()}</td>
+        <td><label class="toggle" onclick="togglePlan(${p.id},this)"><div class="toggle-track${p.active?' on':''}"></div></label></td>
+        <td><div class="plans-acts"><button class="btn btn-muted btn-xs">Edit</button><button class="btn btn-red btn-xs" onclick="deletePlan(${p.id})">Del</button></div></td>
+      </tr>`).join('');
+  } else {
+    const grid=document.getElementById('plans-grid-view');
+    if(!grid)return;
+    grid.innerHTML=filtered.map(p=>`
+      <div class="plan-grid-card${!p.active?' inactive':''}">
+        <div class="pgc-top">
+          <div>
+            <div class="pgc-name">${p.name}</div>
+            ${p.popular?`<span class="badge badge-ac" style="font-size:9px;margin-top:4px;display:inline-flex">Popular</span>`:''}
+          </div>
+          <label class="toggle" onclick="togglePlan(${p.id},this)"><div class="toggle-track${p.active?' on':''}"></div></label>
+        </div>
+        <div class="pgc-price">₦${p.price.toLocaleString()}<span style="font-size:11px;color:var(--tx3);font-family:'DM Sans',sans-serif;font-weight:400"> /${p.dur}</span></div>
+        <div class="pgc-specs" style="margin-top:6px">
+          <span class="pgc-spec">${p.speed} Mbps</span>
+          <span class="pgc-spec">${p.devices} device${p.devices>1?'s':''}</span>
+          <span class="pgc-spec">${p.data}</span>
+        </div>
+        <div class="pgc-stats">
+          <div><div class="pgc-stat-v">${p.txns}</div><div class="pgc-stat-l">txns/mo</div></div>
+          <div><div class="pgc-stat-v">₦${(p.rev/1000).toFixed(0)}k</div><div class="pgc-stat-l">revenue</div></div>
+        </div>
+        <div class="pgc-foot">
+          <button class="btn btn-muted btn-xs" style="flex:1">Edit</button>
+          <button class="btn btn-red btn-xs" onclick="deletePlan(${p.id})">Del</button>
+        </div>
+      </div>`).join('');
+  }
+}
+
+function setPlansView(v,el){
+  plansView=v;
+  document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('plans-list-view').style.display=v==='list'?'':'none';
+  document.getElementById('plans-grid-view').style.display=v==='grid'?'':'none';
+  renderPlans();
+}
+
+function filterPlans(val){plansFilter=val;renderPlans();}
+function filterPlanStatus(val){plansStatusFilter=val;renderPlans();}
+
+function togglePlan(id,el){
+  const p=PLANS_DATA.find(x=>x.id===id);if(!p)return;
+  p.active=!p.active;
+  el.querySelector('.toggle-track').classList.toggle('on',p.active);
+  renderPlans();
+}
+
+function deletePlan(id){
+  const idx=PLANS_DATA.findIndex(x=>x.id===id);
+  if(idx>-1){PLANS_DATA.splice(idx,1);renderPlans();}
+}
+
+function addPlanRow(){
+  const newId=Math.max(...PLANS_DATA.map(p=>p.id))+1;
+  PLANS_DATA.push({id:newId,name:'New Plan',price:1000,dur:'1 day',speed:10,devices:2,data:'Unlimited',txns:0,rev:0,active:true});
+  renderPlans();
+}
+
+// Init plans when section opens — safe override
+const _dSection=window.dSection||function(){};
+function dSection(id,el){
+  // call sidebar/section logic directly (not recursive)
+  document.querySelectorAll('#s-dash .dash-section').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('#s-dash .sb-item').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('#s-dash .mob-btn').forEach(s=>s.classList.remove('on'));
+  const sec=document.getElementById('ds-'+id);if(sec)sec.classList.add('on');
+  if(el)el.classList.add('on');
+  const labels={overview:'Dashboard',transactions:'Transactions',vouchers:'Vouchers',plans:'Plans',network:'Network Setup',settings:'Settings'};
+  const crumb=document.getElementById('d-crumb-cur');if(crumb)crumb.textContent=labels[id]||id;
+  if(id==='plans')renderPlans();
+}
+
+// WiFi SVG mark
+function injectWifi(id,sz=18){
+  const el=document.getElementById(id);if(!el)return;
+  el.innerHTML=`<svg width="${sz}" height="${Math.round(sz*.8)}" viewBox="0 0 20 16" fill="none"><circle cx="10" cy="14.5" r="1.5" fill="currentColor"/><path d="M6.5 10.5a5 5 0 0 1 7 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M3 7a10 10 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+}
+['wm1','wm2','wm3'].forEach(id=>injectWifi(id));
+injectWifi('wm4',14);
+injectWifi('wm-ob');
+injectWifi('wm-req');
+
+// Screen navigation
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('.pnav button:not(.font-btn)').forEach(b=>b.classList.remove('on'));
+  const s=document.getElementById('s-'+id);if(s)s.classList.add('on');
+  const map={land:0,portal:1,checkout:2,voucher:3,login:4,request:5,onboarding:6,dash:7,platform:8};
+  const btns=document.querySelectorAll('.pnav button:not(.font-btn)');
+  if(map[id]!==undefined&&btns[map[id]])btns[map[id]].classList.add('on');
+  if(id==='onboarding')initOnboarding();
+  window.scrollTo(0,0);
+}
+
+// Tenant dashboard sections
+// Platform admin sections
+function pSection(id,el){
+  document.querySelectorAll('#s-platform .dash-section').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('#s-platform .sb-item').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('#s-platform .mob-btn').forEach(s=>s.classList.remove('on'));
+  const sec=document.getElementById('ps-'+id);if(sec)sec.classList.add('on');
+  if(el){el.classList.add('on')}
+  const labels={tenants:'Tenants',ptransactions:'Transactions',revenue:'Revenue',integrations:'Integrations',audit:'Audit Log',psettings:'Settings'};
+  const crumb=document.getElementById('p-crumb-cur');if(crumb)crumb.textContent=labels[id]||id;
+}
+
+// Font switching
+function setFont(n,btn){
+  document.body.className=n===1?'':('f'+n);
+  document.querySelectorAll('.font-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+// Plan selection (portal)
+function selectPlan(card,name,price){
+  document.querySelectorAll('.plan-card').forEach(c=>c.classList.remove('sel'));
+  card.classList.add('sel');
+  const cta=document.getElementById('portal-cta');
+  if(cta)cta.textContent=`Continue with ${name} — ${price} →`;
+}
+
+// Network platform switcher
+function setPlatform(platform,el){
+  document.querySelectorAll('.platform-pill').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');
+  ['omada','mikrotik','radius','csv'].forEach(p=>{
+    const el=document.getElementById('net-'+p);
+    if(el)el.style.display=p===platform?'block':'none';
+  });
+}
+
+// Settings tabs
+function setTab(prefix,idx,el){
+  const panel=el.closest('.settings-layout');
+  panel.querySelectorAll('.settings-tab').forEach(t=>t.classList.remove('on'));
+  panel.querySelectorAll('.settings-panel').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');
+  const target=document.getElementById(prefix+'-'+idx);
+  if(target)target.classList.add('on');
+}
+
+// Onboarding step state
+let obCurrent=1;
+const OB_TOTAL=5;
+const OB_LABELS=['Welcome','Paystack','Network','First Plan','Launch'];
+const OB_SKIP=[false,true,true,false,false]; // which steps can be skipped
+
+function obNav(dir){
+  const next=obCurrent+dir;
+  if(next<1||next>OB_TOTAL)return;
+  // mark current as done if going forward
+  if(dir>0){
+    const dot=document.getElementById('obs-'+obCurrent);
+    if(dot){dot.classList.remove('active');dot.classList.add('done');
+      dot.querySelector('.ob-step-dot').innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';}
+    const mpd=document.getElementById('omd-'+obCurrent);
+    if(mpd){mpd.classList.remove('active');mpd.classList.add('done')}
+    const pd=document.getElementById('opd-'+obCurrent);
+    if(pd){pd.classList.remove('active');pd.classList.add('done')}
+  }
+  obCurrent=next;
+  if(obCurrent===4)obEnterStep4();
+  obRender();
+}
+
+function obRender(){
+  // panels
+  for(let i=1;i<=OB_TOTAL;i++){
+    const p=document.getElementById('ob-'+i);if(p)p.classList.toggle('on',i===obCurrent);
+  }
+  // sidebar steps
+  for(let i=1;i<=OB_TOTAL;i++){
+    const s=document.getElementById('obs-'+i);
+    if(!s)continue;
+    s.classList.toggle('active',i===obCurrent);
+    if(i>obCurrent&&!s.classList.contains('done'))s.classList.remove('active');
+  }
+  // mobile dots & label
+  for(let i=1;i<=OB_TOTAL;i++){
+    const d=document.getElementById('omd-'+i);
+    if(d){d.classList.toggle('active',i===obCurrent)}
+    const pd=document.getElementById('opd-'+i);
+    if(pd){pd.classList.toggle('active',i===obCurrent)}
+  }
+  const lbl=document.getElementById('ob-mob-label');if(lbl)lbl.textContent=OB_LABELS[obCurrent-1];
+  const cnt=document.getElementById('ob-mob-count');if(cnt)cnt.textContent=obCurrent+' of '+OB_TOTAL;
+  // footer buttons
+  const backBtn=document.getElementById('ob-back-btn');
+  const skipBtn=document.getElementById('ob-skip-btn');
+  const nextBtn=document.getElementById('ob-next-btn');
+  if(backBtn)backBtn.style.display=obCurrent>1?'':'none';
+  if(skipBtn)skipBtn.style.display=OB_SKIP[obCurrent-1]?'':'none';
+  if(nextBtn){
+    nextBtn.textContent=obCurrent===OB_TOTAL-1?'Finish Setup →':'Continue →';
+    nextBtn.style.display=obCurrent===OB_TOTAL?'none':'';
+  }
+}
+
+function updateSlug(val){
+  const slug=val.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  const slugEl=document.getElementById('ob-slug');if(slugEl)slugEl.value=slug;
+  const preview=document.getElementById('ob-slug-preview');
+  if(preview)preview.textContent='Your store will be: payspot.app/'+(slug||'your-venue');
+  const finalUrl=document.getElementById('ob-final-url');
+  if(finalUrl)finalUrl.textContent='payspot.app/'+(slug||'your-venue');
+}
+
+function obPlatform(p,el){
+  document.querySelectorAll('#ob-3 .platform-pill').forEach(x=>x.classList.remove('on'));
+  el.classList.add('on');
+  ['omada','mikrotik','radius','csv'].forEach(k=>{
+    const d=document.getElementById('ob-net-'+k);if(d)d.style.display=k===p?'block':'none';
+  });
+  // store selection so step 4 knows
+  window._obPlatform=p;
+}
+
+// called when entering step 4
+function removeObPlanRow(rid){
+  document.getElementById('obpr-'+rid)?.remove();
+  document.getElementById('obpcr-'+rid)?.remove();
+}
+
+function updatePlanPreview(){
+  const name=document.getElementById('ob-plan-name')?.value||'';
+  const price=document.getElementById('ob-plan-price')?.value||'0';
+  const speed=document.getElementById('ob-plan-speed')?.value||'0';
+  const dev=document.getElementById('ob-plan-dev')?.value||'1';
+  const data=document.getElementById('ob-plan-data')?.value||'Unlimited';
+  const dur=document.getElementById('ob-plan-dur')?.value||'';
+  const durMap={'1 hour':'/ hr','3 hours':'flat','1 day':'/ day','1 week':'/ week','1 month':'/ month'};
+  document.getElementById('pp-name').textContent=name;
+  document.getElementById('pp-price').textContent='₦'+Number(price).toLocaleString();
+  document.getElementById('pp-speed').textContent=speed+' Mbps';
+  document.getElementById('pp-dev').textContent=dev+' device'+(dev>1?'s':'');
+  document.getElementById('pp-data').textContent=data;
+  document.getElementById('pp-dur').textContent=durMap[dur]||'';
+}
+
+// init onboarding on arrival
+document.getElementById('s-onboarding')?.addEventListener('transitionend',()=>{});
+function initOnboarding(){obCurrent=1;
+  for(let i=1;i<=OB_TOTAL;i++){
+    const s=document.getElementById('obs-'+i);
+    if(s){s.classList.remove('done','active');if(i===1)s.classList.add('active');
+      if(i!==1){const d=s.querySelector('.ob-step-dot');if(d)d.textContent=i;}}
+    const omd=document.getElementById('omd-'+i);
+    if(omd){omd.classList.remove('done','active');if(i===1)omd.classList.add('active');}
+    const opd=document.getElementById('opd-'+i);
+    if(opd){opd.classList.remove('done','active');if(i===1)opd.classList.add('active');}
+  }
+  obRender();
+}
+</script>
+</body>
+</html>

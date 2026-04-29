@@ -110,6 +110,8 @@ async function initSchema() {
       status TEXT NOT NULL,
       paystack_secret_enc TEXT,
       paystack_secret_last4 TEXT,
+      paystack_public_key TEXT,
+      paystack_public_key_last4 TEXT,
       admin_api_key_hash TEXT,
       voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv',
       portal_auth_mode TEXT NOT NULL DEFAULT 'omada_builtin',
@@ -361,6 +363,10 @@ async function initSchema() {
   `);
 
   await p.query(`
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS paystack_public_key TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS paystack_public_key_last4 TEXT;
     ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv';
     ALTER TABLE tenants

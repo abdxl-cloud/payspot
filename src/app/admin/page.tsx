@@ -1,8 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminTenantsPanel } from "@/components/admin-tenants-panel";
-import { LogoutButton } from "@/components/logout-button";
-import { AppTopbar } from "@/components/app-topbar";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
 import { getSessionUser } from "@/lib/store";
 
@@ -20,18 +18,5 @@ export default async function AdminPage() {
     redirect("/login");
   }
 
-  return (
-    <div className="app-shell">
-      <div className="app-container">
-        <AppTopbar
-          breadcrumb="Admin / Tenants"
-          environment="Production"
-          accountLabel="Platform Admin"
-          action={<LogoutButton />}
-        />
-
-        <AdminTenantsPanel />
-      </div>
-    </div>
-  );
+  return <AdminTenantsPanel />;
 }

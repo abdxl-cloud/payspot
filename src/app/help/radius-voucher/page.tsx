@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { AppTopbar } from "@/components/app-topbar";
+import { PrototypeDocsShell } from "@/components/prototype-docs-shell";
 
 const prerequisites = [
   "A PaySpot tenant configured with Access mode = voucher_access and Voucher source = radius_voucher.",
@@ -41,19 +40,7 @@ const validation = [
 
 export default function RadiusVoucherHelpPage() {
   return (
-    <div className="app-shell">
-      <div className="app-container">
-        <AppTopbar
-          breadcrumb="RADIUS voucher setup"
-          environment="Docs"
-          accountLabel="Self-serve"
-          action={
-            <Link href="/" className="hero-chip">
-              Back to PaySpot
-            </Link>
-          }
-        />
-
+    <PrototypeDocsShell title="RADIUS voucher setup">
         <main className="mt-6 grid gap-4">
           <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5">
             <p className="section-kicker">Voucher + RADIUS</p>
@@ -116,7 +103,6 @@ export default function RadiusVoucherHelpPage() {
             </ul>
           </section>
         </main>
-      </div>
-    </div>
+    </PrototypeDocsShell>
   );
 }

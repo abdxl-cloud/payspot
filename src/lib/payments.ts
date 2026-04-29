@@ -8,7 +8,10 @@ import {
   completeTransaction,
   activateSubscriberAccessForTransaction,
   getPackageById,
+  getTenantAppearance,
+  getTenantEmailNotifications,
   getTenantById,
+  getPackageVoucherStock,
   getTransaction,
   getTransactionByVoucherCode,
   getVoucherPoolEntryByCode,
@@ -20,7 +23,7 @@ import {
   updateTransactionNotificationDelivery,
 } from "@/lib/store";
 import { sendVoucherSms } from "@/lib/termii";
-import { sendVoucherEmail } from "@/lib/mailer";
+import { sendMail, sendVoucherEmail } from "@/lib/mailer";
 import { verifyTransaction } from "@/lib/paystack";
 import { buildLegacyGeneratedVoucherCode, buildRadiusVoucherCode } from "@/lib/voucher-codes";
 
@@ -40,6 +43,7 @@ async function sendVoucherNotifications(params: {
   if (!pkg) {
     return { smsSent, emailSent };
   }
+  const tenant = await getTenantById(params.tenantId);
 
   const message = [
     "Payment confirmed!",
@@ -65,6 +69,10 @@ async function sendVoucherNotifications(params: {
       voucherCode: params.voucherCode,
       packageName: pkg.name,
       reference: params.transaction.reference,
+      tenantName: tenant?.name,
+      tenantSlug: tenant?.slug,
+      amountNgn: pkg.price_ngn,
+      primaryColor: tenant ? (await getTenantAppearance(tenant.id)).storePrimaryColor : undefined,
     });
     emailSent = true;
   } catch (error) {
@@ -72,6 +80,44 @@ async function sendVoucherNotifications(params: {
   }
 
   return { smsSent, emailSent };
+}
+
+async function sendLowVoucherStockAlertIfNeeded(params: {
+  tenantId: string;
+  packageId: string;
+}) {
+  const tenant = await getTenantById(params.tenantId);
+  if (!tenant || normalizeVoucherSourceMode(tenant.voucher_source_mode) !== "import_csv") return;
+
+  const notifications = await getTenantEmailNotifications(params.tenantId);
+  if (!notifications.lowVoucherStockAlerts) return;
+
+  const stock = await getPackageVoucherStock({
+    tenantId: params.tenantId,
+    packageId: params.packageId,
+  });
+  if (!stock || stock.total <= 0) return;
+
+  const lowByPercent = stock.unused / stock.total <= 0.2;
+  const lowByCount = stock.unused <= 5;
+  if (!lowByPercent && !lowByCount) return;
+
+  try {
+    await sendMail({
+      to: tenant.admin_email,
+      subject: `Low voucher stock: ${stock.name}`,
+      text: [
+        `${tenant.name} is running low on voucher stock for ${stock.name}.`,
+        "",
+        `Unused vouchers: ${stock.unused}`,
+        `Total vouchers: ${stock.total}`,
+        "",
+        "Open the tenant dashboard and import more voucher CSV stock for this plan.",
+      ].join("\n"),
+    });
+  } catch (error) {
+    console.error("Low voucher stock email failed", error);
+  }
 }
 
 const GENERATED_VOUCHER_CODE_ATTEMPTS = 8;
@@ -301,6 +347,10 @@ export async function handleSuccessfulPayment(params: {
       tenantId: params.tenantId,
       transaction,
       voucherCode,
+    });
+    await sendLowVoucherStockAlertIfNeeded({
+      tenantId: params.tenantId,
+      packageId: transaction.package_id,
     });
     await updateTransactionNotificationDelivery({
       tenantId: params.tenantId,

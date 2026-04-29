@@ -1,6 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
-import { AppTopbar } from "@/components/app-topbar";
+import { PrototypeDocsShell } from "@/components/prototype-docs-shell";
 
 const prerequisites = [
   "Omada Controller v6+ with captive portal enabled on your target SSID.",
@@ -93,19 +92,7 @@ const officialRefs = [
 
 export default function ExternalRadiusHelpPage() {
   return (
-    <div className="app-shell">
-      <div className="app-container">
-        <AppTopbar
-          breadcrumb="External RADIUS setup"
-          environment="Docs"
-          accountLabel="Self-serve"
-          action={
-            <Link href="/" className="hero-chip">
-              Back to PaySpot
-            </Link>
-          }
-        />
-
+    <PrototypeDocsShell title="External RADIUS setup">
         <main className="mt-6 grid gap-4">
           <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5">
             <p className="section-kicker">New Portal Setup</p>
@@ -237,7 +224,6 @@ export default function ExternalRadiusHelpPage() {
             </ul>
           </section>
         </main>
-      </div>
-    </div>
+    </PrototypeDocsShell>
   );
 }

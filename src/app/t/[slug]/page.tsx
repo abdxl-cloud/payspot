@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
+import type { CSSProperties } from "react";
 import { Checkout } from "@/components/checkout";
-import { AppTopbar } from "@/components/app-topbar";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { getCaptivePortalContextFromSearchParams } from "@/lib/captive-portal";
-import { getPackagesWithAvailability, getTenantBySlug } from "@/lib/store";
+import { getPackagesWithAvailability, getTenantAppearance, getTenantBySlug } from "@/lib/store";
 
 function normalizeAccessMode(
   value: string | null | undefined,
@@ -26,6 +27,13 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
   const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
   const portalContext = getCaptivePortalContextFromSearchParams(resolvedSearchParams);
+  const appearance = await getTenantAppearance(tenant.id);
+  const shellStyle = {
+    "--ac": appearance.storePrimaryColor,
+    "--ac-dim": `${appearance.storePrimaryColor}1a`,
+    "--ac-soft": `${appearance.storePrimaryColor}2b`,
+    "--ac-bd": `${appearance.storePrimaryColor}55`,
+  } as CSSProperties;
   const autoProvisionVoucherMode =
     tenant.voucher_source_mode === "omada_openapi" ||
     tenant.voucher_source_mode === "mikrotik_rest" ||
@@ -33,13 +41,9 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
 
   if (tenant.status !== "active") {
     return (
-      <div className="app-shell">
-        <div className="app-container max-w-3xl py-20 sm:py-24">
-          <AppTopbar
-            breadcrumb="Purchase portal"
-            environment="Live"
-            accountLabel={tenant.name}
-          />
+      <div className="portal-public-shell">
+        <div className="portal-public-container" style={shellStyle}>
+          <PortalHeader tenantName={tenant.name} tenantSlug={tenant.slug} />
           <div className="status-card">
             <h1 className="status-title">Portal setup in progress</h1>
             <p className="status-copy">
@@ -78,13 +82,9 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
 
   if (packages.length === 0) {
     return (
-      <div className="app-shell">
-        <div className="app-container max-w-3xl py-20 sm:py-24">
-          <AppTopbar
-            breadcrumb="Purchase portal"
-            environment="Live"
-            accountLabel={tenant.name}
-          />
+      <div className="portal-public-shell">
+        <div className="portal-public-container" style={shellStyle}>
+          <PortalHeader tenantName={tenant.name} tenantSlug={tenant.slug} />
           <div className="status-card">
             <h1 className="status-title">Plans are coming soon</h1>
             <p className="status-copy">
@@ -97,15 +97,17 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
   }
 
   return (
-    <div className="app-shell">
-      <div className="app-container">
-        <AppTopbar
-          breadcrumb={`Purchase / ${tenant.slug}`}
-          environment="Live"
-          accountLabel={tenant.name}
-        />
+    <div className="portal-public-shell">
+      <div className="portal-public-container" style={shellStyle}>
+        <PortalHeader tenantName={tenant.name} tenantSlug={tenant.slug} />
 
-        <div className="mx-auto grid w-full max-w-5xl gap-4 sm:gap-5">
+        <section className="portal-public-hero">
+          <p className="section-kicker">Captive portal storefront</p>
+          <h1>{tenant.name} Wi-Fi access</h1>
+          <p>Choose a plan, pay securely, and receive your access details instantly.</p>
+        </section>
+
+        <div className="portal-checkout-frame">
           <Checkout
             tenantSlug={tenant.slug}
             packages={packages}
@@ -116,5 +118,30 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
         </div>
       </div>
     </div>
+  );
+}
+
+function PortalHeader({ tenantName, tenantSlug }: { tenantName: string; tenantSlug: string }) {
+  const initials = tenantName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "PS";
+
+  return (
+    <header className="portal-public-head">
+      <div className="portal-venue">
+        <div className="portal-venue-mark">{initials}</div>
+        <div>
+          <p className="portal-venue-name">{tenantName}</p>
+          <p className="portal-venue-sub">{tenantSlug}.payspot.app</p>
+        </div>
+      </div>
+      <div className="portal-head-actions">
+        <ThemeToggle />
+        <p className="powered-by">Powered by <strong>PaySpot</strong></p>
+      </div>
+    </header>
   );
 }

@@ -3,6 +3,7 @@ import { getSessionUserFromRequest } from "@/lib/auth";
 import {
   type AccessMode,
   type TenantDashboardVisibility,
+  type TenantEmailNotificationSettings,
   getTenantArchitecture,
   getTenantBySlug,
   setTenantArchitecture,
@@ -37,6 +38,20 @@ const schema = z.object({
       architectureSettings: z.boolean().optional(),
       planManagement: z.boolean().optional(),
       voucherOperations: z.boolean().optional(),
+    })
+    .optional(),
+  appearance: z
+    .object({
+      storePrimaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+      dashboardPrimaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    })
+    .optional(),
+  notifications: z
+    .object({
+      dailyRevenueSummary: z.boolean().optional(),
+      failedPaymentAlerts: z.boolean().optional(),
+      lowVoucherStockAlerts: z.boolean().optional(),
+      weeklyAnalyticsDigest: z.boolean().optional(),
     })
     .optional(),
   omada: z
@@ -147,6 +162,8 @@ export async function PATCH(request: Request, { params }: Props) {
       voucherSourceMode: parsed.data.voucherSourceMode as VoucherSourceMode | undefined,
       portalAuthMode: parsed.data.portalAuthMode as PortalAuthMode | undefined,
       dashboardVisibility: parsed.data.dashboardVisibility as Partial<TenantDashboardVisibility> | undefined,
+      appearance: parsed.data.appearance,
+      notifications: parsed.data.notifications as Partial<TenantEmailNotificationSettings> | undefined,
       omada: omadaPatch,
       mikrotik: mikrotikPatch,
       radius: radiusPatch,

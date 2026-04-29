@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { getDb } from "@/lib/db";
 import type { TenantMikrotikConfig } from "@/lib/mikrotik";
-import { isPaystackSecretKey } from "@/lib/paystack-key";
+import { isPaystackPublicKey, isPaystackSecretKey } from "@/lib/paystack-key";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { decryptSecret, encryptSecret } from "@/lib/secrets";
 import { generateToken, hashToken } from "@/lib/tokens";
@@ -14,6 +14,8 @@ export type TenantRow = {
   status: string;
   paystack_secret_enc: string | null;
   paystack_secret_last4: string | null;
+  paystack_public_key: string | null;
+  paystack_public_key_last4: string | null;
   admin_api_key_hash: string | null;
   voucher_source_mode: string | null;
   portal_auth_mode: string | null;
@@ -48,6 +50,9 @@ export type TenantArchitecture = {
   accessMode: AccessMode;
   voucherSourceMode: VoucherSourceMode;
   dashboardVisibility: TenantDashboardVisibility;
+  appearance: TenantAppearance;
+  payment: TenantPaymentSettings;
+  notifications: TenantEmailNotificationSettings;
   omada: {
     apiBaseUrl: string;
     omadacId: string;
@@ -80,6 +85,23 @@ export type TenantDashboardSection =
   | "voucherOperations";
 
 export type TenantDashboardVisibility = Record<TenantDashboardSection, boolean>;
+
+export type TenantAppearance = {
+  storePrimaryColor: string;
+  dashboardPrimaryColor: string;
+};
+
+export type TenantPaymentSettings = {
+  hasPublicKey: boolean;
+  publicKeyLast4: string;
+};
+
+export type TenantEmailNotificationSettings = {
+  dailyRevenueSummary: boolean;
+  failedPaymentAlerts: boolean;
+  lowVoucherStockAlerts: boolean;
+  weeklyAnalyticsDigest: boolean;
+};
 
 export type TenantOmadaOpenApiConfig = {
   apiBaseUrl: string;
@@ -351,25 +373,106 @@ function defaultTenantDashboardVisibility(): TenantDashboardVisibility {
   };
 }
 
-function normalizeTenantDashboardVisibility(
-  value: string | null | undefined,
-): TenantDashboardVisibility {
-  const defaults = defaultTenantDashboardVisibility();
+function defaultTenantAppearance(): TenantAppearance {
+  return {
+    storePrimaryColor: "#72f064",
+    dashboardPrimaryColor: "#72f064",
+  };
+}
+
+function defaultTenantEmailNotifications(voucherSourceMode?: string | null): TenantEmailNotificationSettings {
+  return {
+    dailyRevenueSummary: false,
+    failedPaymentAlerts: false,
+    lowVoucherStockAlerts: normalizeVoucherSourceMode(voucherSourceMode) === "import_csv",
+    weeklyAnalyticsDigest: false,
+  };
+}
+
+function isHexColor(value: unknown) {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim());
+}
+
+function normalizeTenantUiConfig(value: string | null | undefined) {
+  const defaults = {
+    dashboardVisibility: defaultTenantDashboardVisibility(),
+    appearance: defaultTenantAppearance(),
+    notifications: defaultTenantEmailNotifications(),
+  };
   if (!value) return defaults;
 
   try {
-    const parsed = JSON.parse(value) as Partial<Record<TenantDashboardSection, unknown>>;
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const rawVisibility =
+      typeof parsed.dashboardVisibility === "object" && parsed.dashboardVisibility !== null
+        ? parsed.dashboardVisibility as Partial<Record<TenantDashboardSection, unknown>>
+        : parsed as Partial<Record<TenantDashboardSection, unknown>>;
+    const rawAppearance =
+      typeof parsed.appearance === "object" && parsed.appearance !== null
+        ? parsed.appearance as Partial<Record<keyof TenantAppearance, unknown>>
+        : {};
+    const rawNotifications =
+      typeof parsed.notifications === "object" && parsed.notifications !== null
+        ? parsed.notifications as Partial<Record<keyof TenantEmailNotificationSettings, unknown>>
+        : {};
+
     return {
-      overview: parsed.overview !== false,
-      inventorySnapshot: parsed.inventorySnapshot !== false,
-      subscriberMonitoring: parsed.subscriberMonitoring !== false,
-      architectureSettings: parsed.architectureSettings !== false,
-      planManagement: parsed.planManagement !== false,
-      voucherOperations: parsed.voucherOperations !== false,
+      dashboardVisibility: {
+        overview: rawVisibility.overview !== false,
+        inventorySnapshot: rawVisibility.inventorySnapshot !== false,
+        subscriberMonitoring: rawVisibility.subscriberMonitoring !== false,
+        architectureSettings: rawVisibility.architectureSettings !== false,
+        planManagement: rawVisibility.planManagement !== false,
+        voucherOperations: rawVisibility.voucherOperations !== false,
+      },
+      appearance: {
+        storePrimaryColor: isHexColor(rawAppearance.storePrimaryColor)
+          ? String(rawAppearance.storePrimaryColor)
+          : defaults.appearance.storePrimaryColor,
+        dashboardPrimaryColor: isHexColor(rawAppearance.dashboardPrimaryColor)
+          ? String(rawAppearance.dashboardPrimaryColor)
+          : defaults.appearance.dashboardPrimaryColor,
+      },
+      notifications: {
+        dailyRevenueSummary: rawNotifications.dailyRevenueSummary === true,
+        failedPaymentAlerts: rawNotifications.failedPaymentAlerts === true,
+        lowVoucherStockAlerts:
+          rawNotifications.lowVoucherStockAlerts === undefined
+            ? defaults.notifications.lowVoucherStockAlerts
+            : rawNotifications.lowVoucherStockAlerts === true,
+        weeklyAnalyticsDigest: rawNotifications.weeklyAnalyticsDigest === true,
+      },
     };
   } catch {
     return defaults;
   }
+}
+
+function normalizeTenantEmailNotifications(
+  value: string | null | undefined,
+  voucherSourceMode?: string | null,
+): TenantEmailNotificationSettings {
+  const defaults = defaultTenantEmailNotifications(voucherSourceMode);
+  const parsed = normalizeTenantUiConfig(value).notifications;
+  if (!value) return defaults;
+  return {
+    dailyRevenueSummary: parsed.dailyRevenueSummary,
+    failedPaymentAlerts: parsed.failedPaymentAlerts,
+    lowVoucherStockAlerts: parsed.lowVoucherStockAlerts,
+    weeklyAnalyticsDigest: parsed.weeklyAnalyticsDigest,
+  };
+}
+
+function normalizeTenantDashboardVisibility(
+  value: string | null | undefined,
+): TenantDashboardVisibility {
+  return normalizeTenantUiConfig(value).dashboardVisibility;
+}
+
+export function normalizeTenantAppearance(
+  value: string | null | undefined,
+): TenantAppearance {
+  return normalizeTenantUiConfig(value).appearance;
 }
 
 function normalizePhoneForLookup(phone: string) {
@@ -1774,6 +1877,165 @@ export async function createTenantRequest(params: {
   return { id, reviewToken: token };
 }
 
+export async function listTenantRequests(params?: {
+  status?: string;
+  limit?: number;
+}) {
+  const db = getDb();
+  const limit = Math.min(Math.max(params?.limit ?? 50, 1), 200);
+  if (params?.status && params.status !== "all") {
+    return await db
+      .prepare(
+        `
+        SELECT *
+        FROM tenant_requests
+        WHERE status = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `,
+      )
+      .all(params.status, limit) as TenantRequestRow[];
+  }
+
+  return await db
+    .prepare(
+      `
+      SELECT *
+      FROM tenant_requests
+      ORDER BY created_at DESC
+      LIMIT ?
+    `,
+    )
+    .all(limit) as TenantRequestRow[];
+}
+
+export async function denyTenantRequestById(requestId: string) {
+  const db = getDb();
+  const now = nowIso();
+
+  const result = await db
+    .prepare(
+      `
+      UPDATE tenant_requests
+      SET status = 'denied', reviewed_at = ?
+      WHERE id = ? AND status = 'pending'
+    `,
+    )
+    .run(now, requestId);
+
+  const request = await db
+    .prepare("SELECT * FROM tenant_requests WHERE id = ?")
+    .get(requestId) as TenantRequestRow | undefined;
+
+  if (result.changes === 0) {
+    return { status: "missing_or_reviewed" as const, request };
+  }
+
+  return { status: "denied" as const, request };
+}
+
+export async function approveTenantRequestById(requestId: string) {
+  const db = getDb();
+
+  const run = db.transaction(async () => {
+    const request = await db
+      .prepare("SELECT * FROM tenant_requests WHERE id = ?")
+      .get(requestId) as TenantRequestRow | undefined;
+
+    if (!request) {
+      return { status: "missing" as const };
+    }
+    if (request.status !== "pending") {
+      return { status: "already_reviewed" as const, request };
+    }
+
+    const tenantExists = await db
+      .prepare("SELECT 1 FROM tenants WHERE slug = ?")
+      .get(request.requested_slug);
+    if (tenantExists) {
+      await db.prepare(
+        `
+          UPDATE tenant_requests
+          SET status = 'denied', reviewed_at = ?
+          WHERE id = ?
+        `,
+      ).run(nowIso(), request.id);
+      return { status: "slug_taken" as const, request };
+    }
+
+    const normalizedUsername = normalizeUsername(request.requested_slug);
+    const normalizedEmail = normalizeEmail(request.requested_email);
+
+    const userConflict = await db
+      .prepare("SELECT 1 FROM users WHERE username = ? OR email = ?")
+      .get(normalizedUsername, normalizedEmail);
+    if (userConflict) {
+      await db.prepare(
+        `
+          UPDATE tenant_requests
+          SET status = 'denied', reviewed_at = ?
+          WHERE id = ?
+        `,
+      ).run(nowIso(), request.id);
+      return { status: "user_conflict" as const, request };
+    }
+
+    const tenantId = randomUUID();
+    const now = nowIso();
+    await db.prepare(
+      `
+        INSERT INTO tenants (
+          id, slug, name, admin_email, status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+    ).run(
+      tenantId,
+      request.requested_slug,
+      request.requested_name,
+      request.requested_email,
+      "pending_setup",
+      now,
+      now,
+    );
+
+    const temporaryPassword = `Temp-${generateToken(9)}`;
+    const created = await createUser({
+      email: normalizedEmail,
+      username: normalizedUsername,
+      role: "tenant",
+      tenantId,
+      password: temporaryPassword,
+      mustChangePassword: true,
+    });
+
+    if (created.status !== "created") {
+      return { status: "user_conflict" as const, request };
+    }
+
+    await db.prepare(
+      `
+        UPDATE tenant_requests
+        SET status = 'approved', reviewed_at = ?, tenant_id = ?
+        WHERE id = ?
+      `,
+    ).run(now, tenantId, request.id);
+
+    const tenant = await db
+      .prepare("SELECT * FROM tenants WHERE id = ?")
+      .get(tenantId) as TenantRow;
+
+    return {
+      status: "approved" as const,
+      tenant,
+      email: created.user.email,
+      temporaryPassword,
+      request,
+    };
+  });
+
+  return run();
+}
+
 export async function denyTenantRequest(reviewToken: string) {
   const db = getDb();
   const tokenHash = hashToken(reviewToken);
@@ -1943,6 +2205,31 @@ export async function setTenantPaystackSecret(params: {
   return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
 }
 
+export async function setTenantPaystackPublicKey(params: {
+  tenantId: string;
+  paystackPublicKey: string | null;
+}) {
+  const db = getDb();
+  const tenant = await getTenantById(params.tenantId);
+  if (!tenant) return { status: "missing" as const };
+
+  const key = params.paystackPublicKey?.trim() ?? "";
+  if (key && !isPaystackPublicKey(key)) {
+    return { status: "invalid_public_key" as const };
+  }
+
+  const now = nowIso();
+  await db.prepare(
+    `
+      UPDATE tenants
+      SET paystack_public_key = ?, paystack_public_key_last4 = ?, updated_at = ?
+      WHERE id = ?
+    `,
+  ).run(key || null, key ? key.slice(-4) : null, now, params.tenantId);
+
+  return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
+}
+
 export async function getTenantArchitecture(tenantId: string) {
   const tenant = await getTenantById(tenantId);
   if (!tenant) return null;
@@ -1958,6 +2245,12 @@ export async function getTenantArchitecture(tenantId: string) {
     accessMode,
     voucherSourceMode,
     dashboardVisibility: normalizeTenantDashboardVisibility(tenant.ui_config_json),
+    appearance: normalizeTenantAppearance(tenant.ui_config_json),
+    payment: {
+      hasPublicKey: !!tenant.paystack_public_key,
+      publicKeyLast4: tenant.paystack_public_key_last4 ?? "",
+    },
+    notifications: normalizeTenantEmailNotifications(tenant.ui_config_json, tenant.voucher_source_mode),
     omada: {
       apiBaseUrl: tenant.omada_api_base_url ?? "",
       omadacId: tenant.omada_omadac_id ?? "",
@@ -1982,12 +2275,54 @@ export async function getTenantArchitecture(tenantId: string) {
   } satisfies TenantArchitecture;
 }
 
+export async function getTenantAppearance(tenantId: string) {
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) return defaultTenantAppearance();
+  return normalizeTenantAppearance(tenant.ui_config_json);
+}
+
+export async function getTenantEmailNotifications(tenantId: string) {
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) return defaultTenantEmailNotifications();
+  return normalizeTenantEmailNotifications(tenant.ui_config_json, tenant.voucher_source_mode);
+}
+
+export async function getPackageVoucherStock(params: {
+  tenantId: string;
+  packageId: string;
+}) {
+  const db = getDb();
+  const row = await db.prepare(
+    `
+      SELECT
+        p.name,
+        COUNT(v.id) as total,
+        SUM(CASE WHEN v.status = 'UNUSED' THEN 1 ELSE 0 END) as unused
+      FROM voucher_packages p
+      LEFT JOIN voucher_pool v
+        ON v.tenant_id = p.tenant_id AND v.package_id = p.id
+      WHERE p.tenant_id = ? AND p.id = ?
+      GROUP BY p.id, p.name
+    `,
+  ).get(params.tenantId, params.packageId) as
+    | { name: string; total: number | null; unused: number | null }
+    | undefined;
+  if (!row) return null;
+  return {
+    name: row.name,
+    total: Number(row.total ?? 0),
+    unused: Number(row.unused ?? 0),
+  };
+}
+
 export async function setTenantArchitecture(params: {
   tenantId: string;
   accessMode?: AccessMode;
   voucherSourceMode?: VoucherSourceMode;
   portalAuthMode?: PortalAuthMode;
   dashboardVisibility?: Partial<TenantDashboardVisibility>;
+  appearance?: Partial<TenantAppearance>;
+  notifications?: Partial<TenantEmailNotificationSettings>;
   omada?: {
     apiBaseUrl?: string;
     omadacId?: string;
@@ -2070,10 +2405,20 @@ export async function setTenantArchitecture(params: {
   const mikrotikVerifyTls = params.mikrotik?.verifyTls !== undefined
     ? params.mikrotik.verifyTls
     : tenant.mikrotik_verify_tls !== 0;
+  const currentUiConfig = normalizeTenantUiConfig(tenant.ui_config_json);
   const dashboardVisibility = {
-    ...normalizeTenantDashboardVisibility(tenant.ui_config_json),
+    ...currentUiConfig.dashboardVisibility,
     ...(params.dashboardVisibility ?? {}),
   } satisfies TenantDashboardVisibility;
+  const appearance = {
+    ...currentUiConfig.appearance,
+    ...(isHexColor(params.appearance?.storePrimaryColor) ? { storePrimaryColor: params.appearance?.storePrimaryColor } : {}),
+    ...(isHexColor(params.appearance?.dashboardPrimaryColor) ? { dashboardPrimaryColor: params.appearance?.dashboardPrimaryColor } : {}),
+  } satisfies TenantAppearance;
+  const notifications = {
+    ...normalizeTenantEmailNotifications(tenant.ui_config_json, tenant.voucher_source_mode),
+    ...(params.notifications ?? {}),
+  } satisfies TenantEmailNotificationSettings;
 
   let omadaClientSecretEnc = tenant.omada_client_secret_enc;
   if (params.omada && "clientSecret" in params.omada) {
@@ -2197,7 +2542,7 @@ export async function setTenantArchitecture(params: {
       mikrotikVerifyTls ? 1 : 0,
       radiusAdapterSecretEnc,
       radiusAdapterSecretLast4,
-      JSON.stringify(dashboardVisibility),
+      JSON.stringify({ dashboardVisibility, appearance, notifications }),
       now,
       params.tenantId,
     );
@@ -2641,6 +2986,25 @@ export async function markTransactionFailed(params: {
     `,
     )
     .run(params.status, params.tenantId, params.reference);
+  return result.changes;
+}
+
+export async function cancelPendingTransaction(params: {
+  tenantId: string;
+  reference: string;
+}) {
+  const db = getDb();
+  const result = await db
+    .prepare(
+      `
+      UPDATE transactions
+      SET payment_status = 'cancelled'
+      WHERE tenant_id = ?
+        AND reference = ?
+        AND payment_status IN ('pending', 'processing')
+    `,
+    )
+    .run(params.tenantId, params.reference);
   return result.changes;
 }
 

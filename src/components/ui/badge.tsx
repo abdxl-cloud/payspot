@@ -9,23 +9,23 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
+        default: "border-[var(--ac-bd)] bg-[var(--ac-dim)] text-primary [a&]:hover:bg-[var(--ac-soft)]",
         secondary:
-          "bg-slate-100 text-slate-700 [a&]:hover:bg-slate-200",
+          "border-border bg-secondary text-muted-foreground [a&]:hover:bg-[var(--s3)]",
         destructive:
-          "bg-destructive text-white [a&]:hover:bg-destructive/90",
+          "border-[color-mix(in_oklch,var(--red),transparent_72%)] bg-[color-mix(in_oklch,var(--red),transparent_86%)] text-[var(--red)] [a&]:hover:bg-[color-mix(in_oklch,var(--red),transparent_76%)]",
         outline:
-          "border-slate-300/90 bg-white/90 text-slate-700 [a&]:hover:bg-slate-100",
-        ghost: "text-slate-700 [a&]:hover:bg-slate-100",
+          "border-border bg-secondary text-muted-foreground [a&]:hover:bg-[var(--s3)]",
+        ghost: "text-muted-foreground [a&]:hover:bg-secondary",
         link: "text-primary underline-offset-4 [a&]:hover:underline",
         success:
-          "border-emerald-200/80 bg-emerald-100 text-emerald-800 [a&]:hover:bg-emerald-200",
+          "border-[color-mix(in_oklch,var(--green),transparent_70%)] bg-[color-mix(in_oklch,var(--green),transparent_88%)] text-[var(--green)] [a&]:hover:bg-[color-mix(in_oklch,var(--green),transparent_80%)]",
         warning:
-          "border-amber-200/80 bg-amber-100 text-amber-800 [a&]:hover:bg-amber-200",
+          "border-[color-mix(in_oklch,var(--amber),transparent_70%)] bg-[color-mix(in_oklch,var(--amber),transparent_88%)] text-[var(--amber)] [a&]:hover:bg-[color-mix(in_oklch,var(--amber),transparent_80%)]",
         info:
-          "border-sky-200/80 bg-sky-100 text-sky-800 [a&]:hover:bg-sky-200",
+          "border-[var(--ac-bd)] bg-[var(--ac-dim)] text-primary [a&]:hover:bg-[var(--ac-soft)]",
         muted:
-          "border-slate-200/80 bg-slate-100 text-slate-600 [a&]:hover:bg-slate-200",
+          "border-border bg-secondary text-muted-foreground [a&]:hover:bg-[var(--s3)]",
       },
     },
     defaultVariants: {

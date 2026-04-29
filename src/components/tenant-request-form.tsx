@@ -2,30 +2,37 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Building2, Mail, ShieldCheck, Wifi } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { readJsonResponse } from "@/lib/http";
 
+const initialForm = {
+  businessName: "",
+  email: "",
+  location: "",
+  hotspotType: "",
+  locationsCount: "1 location",
+  notes: "",
+};
+
 export function TenantRequestForm() {
-  const [businessName, setBusinessName] = useState("");
-  const [email, setEmail] = useState("");
+  const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [successEmail, setSuccessEmail] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => {
-    return businessName.trim().length >= 2 && email.includes("@");
-  }, [businessName, email]);
+    return form.businessName.trim().length >= 2 && form.email.includes("@") && !loading;
+  }, [form.businessName, form.email, loading]);
+
+  function updateField(field: keyof typeof initialForm, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!canSubmit || loading) return;
+    if (!canSubmit) return;
+
     setError(null);
-    setSuccess(null);
+    setSuccessEmail(null);
     setLoading(true);
 
     try {
@@ -33,17 +40,20 @@ export function TenantRequestForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: businessName.trim(),
-          email: email.trim(),
+          name: form.businessName.trim(),
+          email: form.email.trim(),
+          location: form.location.trim(),
+          hotspotType: form.hotspotType,
+          locationsCount: form.locationsCount,
+          notes: form.notes.trim(),
         }),
       });
       const data = await readJsonResponse<{ error?: string }>(response);
       if (!response.ok) {
         throw new Error(data?.error || "Unable to submit request.");
       }
-      setSuccess("Request submitted. We will email onboarding approval details shortly.");
-      setBusinessName("");
-      setEmail("");
+      setSuccessEmail(form.email.trim());
+      setForm(initialForm);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -51,74 +61,87 @@ export function TenantRequestForm() {
     }
   }
 
-  return (
-    <Card className="border-slate-200/85 bg-white/92">
-      <CardHeader className="space-y-2">
-        <p className="section-kicker">Operator onboarding</p>
-        <CardTitle className="section-title">Request your PaySpot tenant</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="grid gap-2.5 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 to-sky-50/50 p-3.5 text-xs text-indigo-900/80">
-          <p className="inline-flex items-center gap-2"><Building2 className="size-3.5 shrink-0 text-indigo-500" /> Submit business and admin email.</p>
-          <p className="inline-flex items-center gap-2"><Wifi className="size-3.5 shrink-0 text-indigo-500" /> Configure slug and voucher source after approval.</p>
-          <p className="inline-flex items-center gap-2"><ShieldCheck className="size-3.5 shrink-0 text-indigo-500" /> Activate payments and start selling vouchers.</p>
+  if (successEmail) {
+    return (
+      <div className="req-success req-success-live">
+        <div className="req-success-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
         </div>
-
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Request failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        {success ? (
-          <Alert variant="success">
-            <AlertTitle>Submitted</AlertTitle>
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="businessName">Business or venue name</Label>
-            <Input
-              id="businessName"
-              className="h-11"
-              placeholder="Walstreet Lounge"
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="email">Admin email</Label>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                id="email"
-                type="email"
-                className="h-11 pl-9"
-                placeholder="ops@venue.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <Button type="submit" className="h-12" disabled={!canSubmit || loading}>
-            {loading ? "Submitting..." : "Start onboarding"}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-slate-600">
-          Already have an account?{" "}
-          <Link href="/login" className="font-semibold underline underline-offset-4">
-            Login instead
-          </Link>
+        <h3>Request received!</h3>
+        <p>
+          We&apos;ll review your application and get back to you at <strong>{successEmail}</strong> within 24 hours.
         </p>
-      </CardContent>
-    </Card>
+        <div className="req-success-actions">
+          <Link className="btn btn-ac" href="/">Back to Home</Link>
+          <button className="btn btn-ghost btn-sm" type="button" onClick={() => setSuccessEmail(null)}>
+            Submit another
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form id="req-form-wrap" onSubmit={handleSubmit}>
+      <div className="req-form-title">Request access</div>
+      <div className="req-form-sub">We&apos;ll review and respond within 24 hours</div>
+
+      {error ? <div className="req-error">{error}</div> : null}
+
+      <div className="field">
+        <label htmlFor="requestBusiness">Business / Venue Name</label>
+        <input id="requestBusiness" required value={form.businessName} onChange={(event) => updateField("businessName", event.target.value)} placeholder="WalStreet Cafe" />
+      </div>
+      <div className="field">
+        <label htmlFor="requestEmail">Email Address</label>
+        <input id="requestEmail" required type="email" value={form.email} onChange={(event) => updateField("email", event.target.value)} placeholder="emeka@walstreet.ng" />
+      </div>
+      <div className="field">
+        <label htmlFor="requestLocation">City / Location</label>
+        <input id="requestLocation" value={form.location} onChange={(event) => updateField("location", event.target.value)} placeholder="Lagos, Nigeria" />
+      </div>
+
+      <div className="field-row">
+        <div className="field">
+          <label htmlFor="requestHotspotType">Hotspot Type</label>
+          <select id="requestHotspotType" value={form.hotspotType} onChange={(event) => updateField("hotspotType", event.target.value)}>
+            <option value="">Select platform...</option>
+            <option>Omada Cloud</option>
+            <option>MikroTik RouterOS</option>
+            <option>RADIUS / FreeRADIUS</option>
+            <option>CSV voucher pool</option>
+            <option>Not sure yet</option>
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="requestLocations">Number of Locations</label>
+          <select id="requestLocations" value={form.locationsCount} onChange={(event) => updateField("locationsCount", event.target.value)}>
+            <option>1 location</option>
+            <option>2-5 locations</option>
+            <option>6-20 locations</option>
+            <option>20+ locations</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="field">
+        <label htmlFor="requestNotes">
+          Tell us about your setup <span>(optional)</span>
+        </label>
+        <textarea
+          id="requestNotes"
+          value={form.notes}
+          onChange={(event) => updateField("notes", event.target.value)}
+          placeholder="e.g. I run a cafe with 50 daily customers, currently using MikroTik..."
+        />
+      </div>
+
+      <button className="req-submit" type="submit" disabled={!canSubmit}>
+        {loading ? "Submitting..." : "Request Operator Access ->"}
+      </button>
+      <div className="req-footnote">We&apos;ll never spam you. No credit card required.</div>
+    </form>
   );
 }

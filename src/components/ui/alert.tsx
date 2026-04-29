@@ -8,15 +8,15 @@ const alertVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-slate-50/85 text-card-foreground border-slate-200/80",
+        default: "bg-secondary text-card-foreground border-border",
         destructive:
-          "text-destructive bg-rose-50/80 border-rose-200/80 [&>svg]:text-current *:data-[slot=alert-description]:text-destructive/90",
+          "text-[var(--red)] bg-[color-mix(in_oklch,var(--red),transparent_90%)] border-[color-mix(in_oklch,var(--red),transparent_72%)] [&>svg]:text-current *:data-[slot=alert-description]:text-[var(--red)]",
         success:
-          "bg-emerald-50/80 text-emerald-900 border-emerald-200/80 [&>svg]:text-emerald-600 *:data-[slot=alert-description]:text-emerald-800",
+          "bg-[color-mix(in_oklch,var(--green),transparent_90%)] text-[var(--green)] border-[color-mix(in_oklch,var(--green),transparent_72%)] [&>svg]:text-current *:data-[slot=alert-description]:text-[var(--green)]",
         warning:
-          "bg-amber-50/80 text-amber-900 border-amber-200/80 [&>svg]:text-amber-600 *:data-[slot=alert-description]:text-amber-800",
+          "bg-[color-mix(in_oklch,var(--amber),transparent_90%)] text-[var(--amber)] border-[color-mix(in_oklch,var(--amber),transparent_72%)] [&>svg]:text-current *:data-[slot=alert-description]:text-[var(--amber)]",
         info:
-          "bg-sky-50/80 text-sky-900 border-sky-200/80 [&>svg]:text-sky-600 *:data-[slot=alert-description]:text-sky-800",
+          "bg-[var(--ac-dim)] text-primary border-[var(--ac-bd)] [&>svg]:text-current *:data-[slot=alert-description]:text-primary",
       },
     },
     defaultVariants: {

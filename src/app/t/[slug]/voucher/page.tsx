@@ -9,7 +9,7 @@ import {
   TimerReset,
   Wifi,
 } from "lucide-react";
-import { AppTopbar } from "@/components/app-topbar";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   getPackageById,
   getRadiusVoucherAccessState,
@@ -282,19 +282,20 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
     : null;
 
   return (
-    <div className="app-shell">
-      <div className="app-container">
-        <AppTopbar
-          breadcrumb={`Voucher accounting / ${tenant.slug}`}
-          environment="Live"
-          accountLabel={tenant.name}
-          action={
-            <Link href={`/t/${slug}`} className="hero-chip">
+    <div className="voucher-prototype-shell">
+      <div className="voucher-prototype-container">
+        <header className="prototype-nav">
+          <Link href={`/t/${slug}`} className="prototype-brand">
+            <Wifi className="size-4" />
+            {tenant.name}
+          </Link>
+          <div className="prototype-actions">
+            <ThemeToggle />
+            <Link href={`/t/${slug}`} className="prototype-nav-button">
               Buy a plan <ArrowRight className="size-3.5" />
             </Link>
-          }
-        />
-
+          </div>
+        </header>
         <div className="mx-auto grid w-full max-w-5xl gap-4 sm:gap-5">
           <section className="panel-surface overflow-hidden">
             <div className="grid gap-5 lg:grid-cols-[1.2fr_0.9fr]">

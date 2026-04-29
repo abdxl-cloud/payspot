@@ -1,37 +1,49 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
-  ArchiveRestore,
+  Bell,
+  Check,
   ChevronLeft,
   ChevronRight,
-  CircleHelp,
-  Plus,
-  RefreshCw,
-  Save,
+  CreditCard,
+  Gift,
+  Grid2X2,
+  LayoutDashboard,
+  List,
+  Loader2,
   Settings,
-  Trash2,
-  X,
+  Wifi,
 } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { readJsonResponse } from "@/lib/http";
+import { ThemeToggle } from "@/components/theme-toggle";
 
-type VoucherStat = {
-  code: string;
-  name: string;
-  total: number;
-  unused: number;
-  assigned: number;
-  percentageRemaining: number;
+type Props = {
+  tenantSlug: string;
+  tenantName?: string;
 };
 
-type AdminStats = {
-  voucherPool: VoucherStat[];
+type View = "overview" | "transactions" | "vouchers" | "plans" | "network" | "settings";
+type PlanView = "list" | "grid";
+type SettingsTab = "general" | "appearance" | "payments" | "sms" | "notifications";
+type NetworkPlatform = "omada" | "mikrotik" | "radius" | "csv";
+
+type Stats = {
+  voucherPool: Array<{
+    code: string;
+    name: string;
+    total: number;
+    unused: number;
+    assigned: number;
+    percentageRemaining: number;
+  }>;
+  packages: Array<{
+    id: string;
+    code: string;
+    name: string;
+    durationMinutes: number | null;
+    priceNgn: number;
+    active: number;
+  }>;
   transactions: {
     total: number;
     success: number;
@@ -42,7 +54,7 @@ type AdminStats = {
   };
 };
 
-type PlanRow = {
+type Plan = {
   id: string;
   code: string;
   name: string;
@@ -51,23 +63,44 @@ type PlanRow = {
   maxDevices: number | null;
   bandwidthProfile: string | null;
   dataLimitMb: number | null;
-  availableFrom: string | null;
-  availableTo: string | null;
   active: number;
-  totalCount: number;
+  description: string | null;
   unusedCount: number;
   assignedCount: number;
-  radiusVoucherCodePrefix: string | null;
-  radiusVoucherCodeLength: number | null;
-  radiusVoucherCharacterSet: "alnum" | "letters" | "numbers" | null;
+  totalCount: number;
 };
 
-type PlanVoucherCharacterSet = "legacy" | "alnum" | "letters" | "numbers";
+type PlanFormState = {
+  code: string;
+  name: string;
+  priceNgn: string;
+  durationMinutes: string;
+  maxDevices: string;
+  bandwidthProfile: string;
+  dataLimitMb: string;
+  description: string;
+  active: boolean;
+};
 
-type VoucherRow = {
+type Transaction = {
+  id: string;
+  reference: string;
+  email: string;
+  phone: string;
+  amountNgn: number;
+  voucherCode: string | null;
+  deliveryMode: string;
+  paymentStatus: string;
+  createdAt: string;
+  paidAt: string | null;
+  packageCode: string | null;
+  packageName: string | null;
+};
+
+type Voucher = {
   id: string;
   voucherCode: string;
-  status: "UNUSED" | "ASSIGNED";
+  status: string;
   packageId: string;
   packageCode: string;
   packageName: string;
@@ -77,16 +110,29 @@ type VoucherRow = {
   assignedToPhone: string | null;
 };
 
-type ArchitectureConfig = {
+type Pagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+type Architecture = {
   accessMode: "voucher_access" | "account_access";
   voucherSourceMode: "import_csv" | "omada_openapi" | "mikrotik_rest" | "radius_voucher";
-  dashboardVisibility: {
-    overview: boolean;
-    inventorySnapshot: boolean;
-    subscriberMonitoring: boolean;
-    architectureSettings: boolean;
-    planManagement: boolean;
-    voucherOperations: boolean;
+  appearance: {
+    storePrimaryColor: string;
+    dashboardPrimaryColor: string;
+  };
+  payment: {
+    hasPublicKey: boolean;
+    publicKeyLast4: string;
+  };
+  notifications: {
+    dailyRevenueSummary: boolean;
+    failedPaymentAlerts: boolean;
+    lowVoucherStockAlerts: boolean;
+    weeklyAnalyticsDigest: boolean;
   };
   omada: {
     apiBaseUrl: string;
@@ -111,2891 +157,1603 @@ type ArchitectureConfig = {
   };
 };
 
-const DASHBOARD_VISIBILITY_OPTIONS = [
-  {
-    key: "overview",
-    label: "Overview header",
-    description: "Hero summary, KPI cards, and quick actions.",
-  },
-  {
-    key: "inventorySnapshot",
-    label: "Inventory snapshot",
-    description: "Top-level voucher pool health cards.",
-  },
-  {
-    key: "subscriberMonitoring",
-    label: "Subscriber monitoring",
-    description: "Active subscribers and entitlement cards.",
-  },
-  {
-    key: "architectureSettings",
-    label: "Architecture settings",
-    description: "Advanced infrastructure and adapter config section.",
-  },
-  {
-    key: "planManagement",
-    label: "Plan management",
-    description: "Plan editor cards and desktop plan table.",
-  },
-  {
-    key: "voucherOperations",
-    label: "Voucher operations",
-    description: "Voucher tools, filters, and voucher tables.",
-  },
-] as const;
+const navItems: Array<{ key: View; label: string; short: string; icon: typeof LayoutDashboard }> = [
+  { key: "overview", label: "Dashboard", short: "Dash", icon: LayoutDashboard },
+  { key: "transactions", label: "Transactions", short: "Txns", icon: CreditCard },
+  { key: "vouchers", label: "Vouchers", short: "Vouchers", icon: Gift },
+  { key: "plans", label: "Plans", short: "Plans", icon: List },
+  { key: "network", label: "Network Setup", short: "Network", icon: Wifi },
+  { key: "settings", label: "Settings", short: "Settings", icon: Settings },
+];
 
-type SubscriberOverviewRow = {
-  subscriberId: string;
-  email: string;
-  phone: string | null;
-  fullName: string | null;
-  status: string;
-  activeSessions: number;
-  entitlement: null | {
-    id: string;
-    status: string;
-    startsAt: string | null;
-    endsAt: string | null;
-    maxDevices: number | null;
-    bandwidthProfile: string | null;
-    dataLimitMb: number | null;
-    planName: string | null;
-    planCode: string | null;
-  };
-};
+const settingsTabs: SettingsTab[] = ["general", "appearance", "payments", "sms", "notifications"];
+const planViews: PlanView[] = ["list", "grid"];
+const emptyPagination = { page: 1, pageSize: 20, total: 0, totalPages: 1 };
 
-type OmadaSiteOption = {
-  siteId: string;
-  name: string;
-};
-
-type Props = {
-  tenantSlug: string;
-};
-
-const PAGE_SIZE = 20;
-const PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH = 6;
-const PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH = 24;
-
-function money(value: number) {
-  return `NGN ${Math.round(value || 0).toLocaleString()}`;
+function replaceQueryParams(updates: Record<string, string | null>) {
+  const url = new URL(window.location.href);
+  for (const [key, value] of Object.entries(updates)) {
+    if (value) {
+      url.searchParams.set(key, value);
+    } else {
+      url.searchParams.delete(key);
+    }
+  }
+  const query = url.searchParams.toString();
+  window.history.replaceState(null, "", `${url.pathname}${query ? `?${query}` : ""}${url.hash}`);
 }
 
-function dt(value: string | null) {
+const tenantDashboardCriticalCss = `
+#s-dash{min-height:100vh;background:var(--bg);color:var(--tx)}
+#s-dash *{box-sizing:border-box}
+#s-dash button,#s-dash input,#s-dash select,#s-dash textarea{font:inherit}
+#s-dash .dash-layout{display:flex!important;min-height:100vh;background:var(--bg)}
+#s-dash .sidebar{position:sticky;top:0;width:216px;height:100vh;overflow-y:auto;display:flex!important;flex-direction:column;flex-shrink:0;background:var(--s1);border-right:1px solid var(--bd)}
+#s-dash .sb-brand{display:flex;align-items:center;gap:9px;padding:14px 12px;border-bottom:1px solid var(--bd)}
+#s-dash .sb-mark,#s-dash .sb-av{display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--s2);border:1px solid var(--bd);color:var(--ac);font-family:var(--font-heading),sans-serif;font-weight:800}
+#s-dash .sb-mark{width:32px;height:32px;border-radius:7px;font-size:13px}
+#s-dash .sb-av{width:30px;height:30px;border-radius:50%;font-size:12px}
+#s-dash .sb-name{font-size:13px;font-weight:600;color:var(--tx)}
+#s-dash .sb-url,#s-dash .sb-urole{font-family:var(--font-mono),monospace;color:var(--tx3);font-size:10px}
+#s-dash .sb-nav{flex:1;padding:8px 6px}
+#s-dash .sb-sec{padding:12px 8px 6px;color:var(--tx3);font-family:var(--font-mono),monospace;font-size:9px;letter-spacing:.09em;text-transform:uppercase}
+#s-dash .sb-item{position:relative;width:100%;display:flex!important;align-items:center;gap:8px;margin-bottom:1px;padding:7px 9px;border:0;border-radius:5px;background:transparent;color:var(--tx2);font-size:13px;font-weight:500;text-align:left;cursor:pointer;text-decoration:none}
+#s-dash .sb-item:hover,#s-dash .sb-item.on{color:var(--tx);background:var(--s2)}
+#s-dash .sb-item.on:after{content:"";position:absolute;left:0;top:50%;width:2px;height:16px;border-radius:0 2px 2px 0;background:var(--ac);transform:translateY(-50%)}
+#s-dash .sb-bdg{margin-left:auto;border:1px solid var(--ac-bd);border-radius:999px;background:var(--ac-dim);color:var(--ac);padding:1px 6px;font-family:var(--font-mono),monospace;font-size:10px}
+#s-dash .sb-foot{padding:10px;border-top:1px solid var(--bd)}
+#s-dash .sb-user{display:flex;align-items:center;gap:9px;padding:8px;border-radius:var(--r)}
+#s-dash .sb-uname{font-size:12px;font-weight:600;color:var(--tx)}
+#s-dash .dash-main{min-width:0;flex:1;display:flex!important;flex-direction:column;overflow:hidden}
+#s-dash .dash-topbar{height:52px;display:flex!important;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;padding:0 20px;background:var(--s1);border-bottom:1px solid var(--bd)}
+#s-dash .dash-crumb{display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden;color:var(--tx3);font-family:var(--font-mono),monospace;font-size:12px;white-space:nowrap}
+#s-dash .dash-crumb span:last-child{color:var(--tx)}
+#s-dash .dash-crumb-sep{color:var(--bd2)}
+#s-dash .dash-topbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+#s-dash .dash-content{flex:1;overflow-y:auto;padding:clamp(14px,2.5vw,24px)}
+#s-dash .dash-header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+#s-dash .dash-title{font-family:var(--font-heading),sans-serif;font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--tx)}
+#s-dash .dash-sub{margin-top:3px;color:var(--tx3);font-family:var(--font-mono),monospace;font-size:12px}
+#s-dash .dash-hdr-r{display:flex;flex-wrap:wrap;gap:8px}
+#s-dash .dash-section{display:none!important}
+#s-dash .dash-section.on{display:block!important}
+#s-dash .btn{display:inline-flex!important;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border-radius:var(--r);font-size:13px;font-weight:600;line-height:1;white-space:nowrap;cursor:pointer;text-decoration:none;transition:all .15s}
+#s-dash .btn:disabled{opacity:.55;cursor:not-allowed}
+#s-dash .btn-ac{background:var(--ac);color:#0d0d0d;border:1px solid transparent}
+#s-dash .btn-muted{background:var(--s2);color:var(--tx2);border:1px solid var(--bd)}
+#s-dash .btn-ghost{background:transparent;color:var(--tx2);border:1px solid var(--bd2)}
+#s-dash .btn-red{background:oklch(0.65 0.18 25/.15);color:var(--red);border:1px solid oklch(0.65 0.18 25/.25)}
+#s-dash .btn-sm{padding:6px 12px;font-size:12px}
+#s-dash .btn-xs{padding:4px 9px;font-size:11px}
+#s-dash .btn-icon{width:34px;height:34px;padding:0}
+#s-dash .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+#s-dash .kpi,#s-dash .ac,#s-dash .widget,#s-dash .settings-card,#s-dash .netform,#s-dash .plans-table-wrap,#s-dash .plan-grid-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r2)}
+#s-dash .kpi{padding:16px}
+#s-dash .kpi-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+#s-dash .kpi-label{font-family:var(--font-mono),monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3)}
+#s-dash .kpi-val{margin-bottom:4px;color:var(--tx);font-family:var(--font-mono),monospace;font-size:clamp(18px,2.5vw,24px);font-variant-numeric:tabular-nums}
+#s-dash .kpi-delta{font-family:var(--font-mono),monospace;font-size:11px}
+#s-dash .kpi-delta.up{color:var(--green)}#s-dash .kpi-delta.warn,#s-dash .warn-text{color:var(--amber)}#s-dash .kpi-delta.neu{color:var(--tx3)}
+#s-dash .dash-grid{display:grid;grid-template-columns:1fr 300px;gap:14px}
+#s-dash .ac{overflow:hidden;margin-bottom:14px}
+#s-dash .ac-hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:13px 16px;border-bottom:1px solid var(--bd)}
+#s-dash .ac-title{font-size:13px;font-weight:600;color:var(--tx)}
+#s-dash .ac-sub{font-family:var(--font-mono),monospace;font-size:11px;color:var(--tx3)}
+#s-dash .tbar,#s-dash .plans-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 16px;border-bottom:1px solid var(--bd)}
+#s-dash .plans-toolbar{margin-bottom:14px;padding-inline:0;border-bottom:0}
+#s-dash .tsearch,#s-dash .tfilter,#s-dash .field input,#s-dash .field select,#s-dash .field textarea{border:1px solid var(--bd)!important;border-radius:var(--r)!important;background:var(--s2)!important;color:var(--tx)!important;outline:none}
+#s-dash .tsearch{width:200px;height:32px;padding:0 12px;font-family:var(--font-mono),monospace;font-size:12px}
+#s-dash .tfilter{height:32px;padding:0 10px;font-family:var(--font-mono),monospace;font-size:12px;color:var(--tx2)!important}
+#s-dash .table-scroll{overflow-x:auto}
+#s-dash table.t,#s-dash table.plans-t{width:100%;border-collapse:collapse}
+#s-dash table.t th,#s-dash table.plans-t th{padding:8px 14px;border-bottom:1px solid var(--bd);background:var(--s2)!important;color:var(--tx3);font-family:var(--font-mono),monospace;font-size:10px;font-weight:500;letter-spacing:.06em;text-align:left;text-transform:uppercase;white-space:nowrap}
+#s-dash table.t td,#s-dash table.plans-t td{padding:11px 14px;border-bottom:1px solid var(--bd);color:var(--tx2);font-size:12px;vertical-align:middle}
+#s-dash .td-main,#s-dash table.plans-t .td-name{color:var(--tx);font-weight:600}
+#s-dash .td-mono{color:var(--ac);font-family:var(--font-mono),monospace}
+#s-dash .td-muted,#s-dash table.plans-t .td-stats,#s-dash table.plans-t .td-spec{color:var(--tx2);font-family:var(--font-mono),monospace;font-size:12px}
+#s-dash table.plans-t .td-price{color:var(--tx);font-family:var(--font-mono),monospace}
+#s-dash .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-family:var(--font-mono),monospace;font-size:11px;font-weight:600;white-space:nowrap}
+#s-dash .badge:before{content:"";width:5px;height:5px;border-radius:50%;flex-shrink:0}
+#s-dash .badge-g{background:oklch(0.72 0.17 155/.12);color:var(--green);border:1px solid oklch(0.72 0.17 155/.2)}#s-dash .badge-g:before{background:var(--green)}
+#s-dash .badge-a{background:oklch(0.78 0.18 80/.12);color:var(--amber);border:1px solid oklch(0.78 0.18 80/.2)}#s-dash .badge-a:before{background:var(--amber)}
+#s-dash .badge-r{background:oklch(0.65 0.18 25/.12);color:var(--red);border:1px solid oklch(0.65 0.18 25/.2)}#s-dash .badge-r:before{background:var(--red)}
+#s-dash .badge-m{background:var(--s2);color:var(--tx3);border:1px solid var(--bd)}#s-dash .badge-m:before{background:var(--tx3)}
+#s-dash .t-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid var(--bd);color:var(--tx3);font-family:var(--font-mono),monospace;font-size:12px}
+#s-dash .pager-actions,#s-dash .plans-acts,#s-dash .plans-toolbar-r{display:flex;gap:6px}
+#s-dash .plans-toolbar-r{margin-left:auto}
+#s-dash .widget{padding:16px;margin-bottom:10px}
+#s-dash .widget-title{margin-bottom:14px;color:var(--tx);font-size:12px;font-weight:600}
+#s-dash .bar-row{margin-bottom:10px}
+#s-dash .bar-meta,#s-dash .mini-row{display:flex;justify-content:space-between;gap:10px;margin-bottom:4px}
+#s-dash .bar-name,#s-dash .mini-row span:first-child{color:var(--tx2);font-size:12px}
+#s-dash .bar-val,#s-dash .mini-row span:last-child{color:var(--tx);font-family:var(--font-mono),monospace;font-size:12px}
+#s-dash .bar-track{height:3px;border-radius:999px;background:var(--s2)}
+#s-dash .bar-fill{height:3px;border-radius:999px;background:var(--ac)}
+#s-dash .mini-stack{display:flex;flex-direction:column;gap:8px}
+#s-dash .view-toggle{display:flex;overflow:hidden;border:1px solid var(--bd);border-radius:var(--r)}
+#s-dash .view-btn{display:flex;align-items:center;gap:5px;padding:6px 10px;border:0;background:transparent;color:var(--tx3);font-size:12px;cursor:pointer}
+#s-dash .view-btn.on,#s-dash .view-btn:hover{color:var(--tx);background:var(--s2)}
+#s-dash .plans-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+#s-dash .plan-grid-card{padding:14px}
+#s-dash .plan-grid-card.inactive{opacity:.55}
+#s-dash .pgc-top,#s-dash .pgc-stats{display:flex;justify-content:space-between;gap:10px}
+#s-dash .pgc-name{font-size:13px;font-weight:600;color:var(--tx)}
+#s-dash .pgc-price{font-family:var(--font-mono),monospace;font-size:16px;color:var(--ac)}
+#s-dash .pgc-specs,#s-dash .pgc-foot{display:flex;flex-wrap:wrap;gap:8px}
+#s-dash .pgc-spec,#s-dash .pgc-stat-l{font-size:11px;color:var(--tx3)}
+#s-dash .pgc-stats,#s-dash .pgc-foot{margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
+#s-dash .pgc-stat-v{font-family:var(--font-mono),monospace;font-size:12px;color:var(--tx)}
+#s-dash .field label{display:block;margin-bottom:5px;color:var(--tx2);font-size:12px;font-weight:600}
+#s-dash .field input,#s-dash .field select{height:42px;padding:0 13px}
+#s-dash .field textarea{height:80px;padding:10px 13px;resize:vertical}
+#s-dash .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#s-dash .settings-card,#s-dash .netform{padding:20px;margin-bottom:16px}
+#s-dash .settings-card-title,#s-dash .netform-title{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--bd);font-family:var(--font-mono),monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx)}
+#s-dash .platform-pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+#s-dash .platform-pill{padding:8px 16px;border:1px solid var(--bd);border-radius:var(--r);background:var(--s2);color:var(--tx2);font-size:13px;font-weight:500;cursor:pointer}
+#s-dash .platform-pill.on,#s-dash .platform-pill:hover{border-color:var(--ac-bd);color:var(--ac);background:var(--ac-dim)}
+#s-dash .net-status,#s-dash .alert-banner{display:flex;align-items:center;gap:8px;margin-top:16px;padding:10px 14px;border-radius:var(--r);font-size:13px;font-weight:500}
+#s-dash .net-status.ok,#s-dash .alert-banner.info{color:var(--green);background:oklch(0.72 0.17 155/.08);border:1px solid oklch(0.72 0.17 155/.15)}
+#s-dash .net-status.warn,#s-dash .alert-banner.warn{color:var(--amber);background:oklch(0.78 0.18 80/.08);border:1px solid oklch(0.78 0.18 80/.2)}
+#s-dash .settings-layout{display:grid;grid-template-columns:180px 1fr;gap:16px;align-items:start}
+#s-dash .settings-tabs{overflow:hidden;border:1px solid var(--bd);border-radius:var(--r2);background:var(--s1)}
+#s-dash .settings-tab{width:100%;padding:10px 14px;border:0;border-bottom:1px solid var(--bd);background:transparent;color:var(--tx2);font-size:13px;font-weight:500;text-align:left}
+#s-dash .settings-tab.on,#s-dash .settings-tab:hover{color:var(--ac);background:var(--ac-dim)}
+#s-dash .settings-panel{display:none!important}
+#s-dash .settings-panel.on{display:block!important}
+#s-dash .settings-foot{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:8px}
+#s-dash .key-display{display:flex;align-items:center;gap:8px;padding:10px 13px;border:1px solid var(--bd);border-radius:var(--r);background:var(--s2)}
+#s-dash .key-display span{min-width:0;flex:1;overflow:hidden;color:var(--tx2);font-family:var(--font-mono),monospace;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+#s-dash .toggle-list{display:flex;flex-direction:column;gap:12px}
+#s-dash .toggle{display:flex;align-items:center;gap:8px}
+#s-dash .toggle-track{position:relative;width:36px;height:20px;border:1px solid var(--bd2);border-radius:999px;background:var(--s3)}
+#s-dash .toggle-track:after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+#s-dash .toggle-track.on{background:var(--ac);border-color:var(--ac)}
+#s-dash .toggle-track.on:after{transform:translateX(16px)}
+#s-dash .toggle-label{font-size:13px;color:var(--tx2)}
+#s-dash .csv-drop{padding:28px;border:1px dashed var(--bd2);border-radius:var(--r);color:var(--tx3);font-size:13px;text-align:center}
+#s-dash .mob-menu{display:none;position:fixed;left:0;right:0;bottom:0;z-index:50;gap:4px;padding:8px 16px;border-top:1px solid var(--bd);background:var(--s1)}
+#s-dash .mob-btn{display:flex;flex:1;flex-direction:column;align-items:center;gap:3px;padding:6px 10px;border:0;border-radius:var(--r);background:transparent;color:var(--tx3);font-size:10px;cursor:pointer}
+#s-dash .mob-btn.on,#s-dash .mob-btn:hover{color:var(--tx);background:var(--s2)}
+#s-dash .spin{animation:payspot-spin .8s linear infinite}@keyframes payspot-spin{to{transform:rotate(360deg)}}
+@media(max-width:1080px){#s-dash .dash-grid{grid-template-columns:1fr}}
+@media(max-width:900px){#s-dash .sidebar{display:none!important}#s-dash .dash-layout{display:block!important}#s-dash .dash-main{min-height:100vh}#s-dash .dash-topbar{height:auto;min-height:52px;align-items:flex-start;flex-wrap:wrap;padding:10px 14px}#s-dash .dash-crumb,#s-dash .dash-topbar-right{width:100%}#s-dash .dash-topbar-right{overflow-x:auto}#s-dash .dash-content{padding:16px 14px 90px}#s-dash .mob-menu{display:flex!important;justify-content:flex-start;overflow-x:auto;padding:8px 10px}#s-dash .mob-btn{min-width:72px;flex:0 0 auto}#s-dash table.t,#s-dash table.plans-t{min-width:720px}}
+@media(max-width:700px){#s-dash .field-row,#s-dash .settings-layout{grid-template-columns:1fr}#s-dash .kpi-row{grid-template-columns:repeat(2,minmax(0,1fr))}#s-dash .dash-hdr-r,#s-dash .tbar{width:100%;align-items:stretch}#s-dash .dash-hdr-r{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}#s-dash .dash-hdr-r .btn,#s-dash .tbar>*,#s-dash .tsearch,#s-dash .tfilter{width:100%!important}#s-dash .t-pagination{align-items:stretch;flex-direction:column}#s-dash .plans-toolbar-r{width:100%;margin-left:0}#s-dash .view-toggle,#s-dash .view-btn{width:100%}#s-dash .view-btn{justify-content:center}#s-dash .plans-grid{grid-template-columns:1fr}#s-dash .settings-tabs{display:flex;overflow-x:auto}#s-dash .settings-tab{flex:0 0 auto;width:auto;border-right:1px solid var(--bd);border-bottom:0;white-space:nowrap}#s-dash .key-display{align-items:stretch;flex-direction:column}#s-dash .key-display span{overflow:visible;text-overflow:clip;white-space:normal;word-break:break-all}#s-dash .settings-card{padding:16px}}
+`;
+
+async function readJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(typeof payload.error === "string" ? payload.error : "Request failed");
+  }
+  return payload as T;
+}
+
+function money(value: number | null | undefined) {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    maximumFractionDigits: 0,
+  }).format(value ?? 0);
+}
+
+function compact(value: number | null | undefined) {
+  return new Intl.NumberFormat("en-NG").format(value ?? 0);
+}
+
+function duration(minutes: number | null | undefined) {
+  if (!minutes) return "Flexible";
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 1440) return `${Math.round(minutes / 60)} hr`;
+  const days = Math.round(minutes / 1440);
+  return days === 1 ? "1 day" : `${days} days`;
+}
+
+function dateTime(value: string | null | undefined) {
   if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleString();
+  return new Intl.DateTimeFormat("en-NG", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
-function parseDurationToMinutes(input: string): number | undefined {
-  const raw = input.trim().toLowerCase();
-  if (!raw) return undefined;
-
-  const matched = raw.match(/^([0-9]+(?:\.[0-9]+)?)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)?$/i);
-  if (!matched) return Number.NaN;
-
-  const value = Number.parseFloat(matched[1]);
-  if (!Number.isFinite(value) || value <= 0) return Number.NaN;
-
-  const unit = (matched[2] || "m").toLowerCase();
-  const factor =
-    unit === "w" || unit === "week" || unit === "weeks"
-      ? 7 * 24 * 60
-      : unit === "d" || unit === "day" || unit === "days"
-        ? 24 * 60
-        : unit === "h" || unit === "hr" || unit === "hrs" || unit === "hour" || unit === "hours"
-          ? 60
-          : 1;
-  return Math.round(value * factor);
+function todayLabel() {
+  return new Intl.DateTimeFormat("en-NG", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date());
 }
 
-function parsePriceToNgn(input: string): number | undefined {
-  const raw = input.trim().toLowerCase();
-  if (!raw) return undefined;
-
-  const cleaned = raw.replace(/[\s,₦]/g, "").replace(/^ngn/, "");
-  const matched = cleaned.match(/^([0-9]+(?:\.[0-9]+)?)(k|m|b)?$/i);
-  if (!matched) return Number.NaN;
-
-  const value = Number.parseFloat(matched[1]);
-  if (!Number.isFinite(value) || value < 0) return Number.NaN;
-
-  const suffix = (matched[2] || "").toLowerCase();
-  const factor = suffix === "b" ? 1_000_000_000 : suffix === "m" ? 1_000_000 : suffix === "k" ? 1_000 : 1;
-  return Math.round(value * factor);
+function initials(value: string) {
+  return value
+    .replace(/[^a-z0-9 ]/gi, " ")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "P";
 }
 
-function parseDataLimitToMb(input: string): number | undefined {
-  const raw = input.trim().toLowerCase();
-  if (!raw) return undefined;
-
-  const matched = raw.match(/^([0-9]+(?:\.[0-9]+)?)\s*(mb|m|gb|g|tb|t)?$/i);
-  if (!matched) return Number.NaN;
-
-  const value = Number.parseFloat(matched[1]);
-  if (!Number.isFinite(value) || value <= 0) return Number.NaN;
-
-  const unit = (matched[2] || "mb").toLowerCase();
-  const factor =
-    unit === "tb" || unit === "t"
-      ? 1024 * 1024
-      : unit === "gb" || unit === "g"
-        ? 1024
-        : 1;
-
-  return Math.round(value * factor);
+function statusBadge(status: string) {
+  if (status === "success") return { label: "Paid", className: "badge badge-g" };
+  if (status === "pending" || status === "processing") return { label: "Pending", className: "badge badge-a" };
+  if (status === "cancelled") return { label: "Cancelled", className: "badge badge-m" };
+  return { label: "Failed", className: "badge badge-r" };
 }
 
-function formatDurationPreview(minutes: number) {
-  if (minutes % (7 * 24 * 60) === 0) return `${minutes / (7 * 24 * 60)} week(s)`;
-  if (minutes % (24 * 60) === 0) return `${minutes / (24 * 60)} day(s)`;
-  if (minutes % 60 === 0) return `${minutes / 60} hour(s)`;
-  return `${minutes} minute(s)`;
+function voucherBadge(plan: { totalCount?: number; unusedCount?: number; total?: number; unused?: number }) {
+  const total = plan.totalCount ?? plan.total ?? 0;
+  const unused = plan.unusedCount ?? plan.unused ?? 0;
+  const low = total > 0 && unused / total <= 0.2;
+  return low
+    ? { label: "Low", className: "badge badge-a" }
+    : { label: "Good", className: "badge badge-g" };
 }
 
-function formatDataLimitPreviewMb(mb: number) {
-  if (mb >= 1024 * 1024) return `${(mb / (1024 * 1024)).toFixed(2).replace(/\.00$/, "")} TB`;
-  if (mb >= 1024) return `${(mb / 1024).toFixed(2).replace(/\.00$/, "")} GB`;
-  return `${mb} MB`;
+function planSpec(plan: Plan) {
+  const bits = [
+    duration(plan.durationMinutes),
+    plan.bandwidthProfile || null,
+    plan.maxDevices ? `${plan.maxDevices} devices` : null,
+    plan.dataLimitMb ? `${Math.round(plan.dataLimitMb / 1024)}GB` : null,
+  ].filter(Boolean);
+  return bits.join(" / ") || "No limits";
 }
 
-function isoToLocalInput(value: string | null | undefined) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+function planToForm(plan: Plan): PlanFormState {
+  return {
+    code: plan.code,
+    name: plan.name,
+    priceNgn: String(plan.priceNgn),
+    durationMinutes: plan.durationMinutes ? String(plan.durationMinutes) : "",
+    maxDevices: plan.maxDevices ? String(plan.maxDevices) : "",
+    bandwidthProfile: plan.bandwidthProfile ?? "",
+    dataLimitMb: plan.dataLimitMb ? String(plan.dataLimitMb) : "",
+    description: plan.description ?? "",
+    active: !!plan.active,
+  };
 }
 
-function localInputToIso(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const date = new Date(trimmed);
-  if (Number.isNaN(date.getTime())) return undefined;
-  return date.toISOString();
+function planFormPayload(form: PlanFormState) {
+  return {
+    code: form.code.trim(),
+    name: form.name.trim(),
+    priceNgn: Number(form.priceNgn),
+    durationMinutes: form.durationMinutes ? Number(form.durationMinutes) : null,
+    maxDevices: form.maxDevices ? Number(form.maxDevices) : null,
+    bandwidthProfile: form.bandwidthProfile.trim() || null,
+    dataLimitMb: form.dataLimitMb ? Number(form.dataLimitMb) : null,
+    description: form.description.trim(),
+    active: form.active,
+  };
 }
 
-function normalizeRadiusVoucherPrefixInput(value: string) {
-  return value.trim().toUpperCase();
-}
-
-function validateRadiusVoucherPrefixInput(value: string) {
-  const normalized = normalizeRadiusVoucherPrefixInput(value);
-  if (!normalized) return { ok: true as const, value: "" };
-  if (normalized.length > 16) {
-    return { ok: false as const, error: "Paid voucher prefix must be 16 characters or fewer." };
-  }
-  if (!/^[A-Z0-9_-]+$/.test(normalized)) {
-    return { ok: false as const, error: "Paid voucher prefix may only contain A-Z, 0-9, underscore, or dash." };
-  }
-  return { ok: true as const, value: normalized };
-}
-
-function parseRadiusVoucherCodeLengthInput(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const parsed = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(parsed)) return Number.NaN;
-  return parsed;
-}
-
-export function TenantAdminPanel({ tenantSlug }: Props) {
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [statsError, setStatsError] = useState<string | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
-
-  const [plans, setPlans] = useState<PlanRow[]>([]);
-  const [plansError, setPlansError] = useState<string | null>(null);
-  const [plansLoading, setPlansLoading] = useState(false);
-  const [planNotice, setPlanNotice] = useState<string | null>(null);
-
-  const [architecture, setArchitecture] = useState<ArchitectureConfig | null>(null);
-  const [architectureError, setArchitectureError] = useState<string | null>(null);
-  const [architectureLoading, setArchitectureLoading] = useState(false);
-  const [architectureSaving, setArchitectureSaving] = useState(false);
-  const [architectureNotice, setArchitectureNotice] = useState<string | null>(null);
-  const [omadaTestLoading, setOmadaTestLoading] = useState(false);
-  const [omadaTestNotice, setOmadaTestNotice] = useState<string | null>(null);
-  const [omadaTestError, setOmadaTestError] = useState<string | null>(null);
-  const [omadaSitesLoading, setOmadaSitesLoading] = useState(false);
-  const [omadaSitesError, setOmadaSitesError] = useState<string | null>(null);
-  const [omadaSitesNotice, setOmadaSitesNotice] = useState<string | null>(null);
-  const [omadaSiteOptions, setOmadaSiteOptions] = useState<OmadaSiteOption[]>([]);
-  const [omadaClientSecret, setOmadaClientSecret] = useState("");
-  const [omadaHotspotOperatorPassword, setOmadaHotspotOperatorPassword] = useState("");
-  const [mikrotikTestLoading, setMikrotikTestLoading] = useState(false);
-  const [mikrotikTestNotice, setMikrotikTestNotice] = useState<string | null>(null);
-  const [mikrotikTestError, setMikrotikTestError] = useState<string | null>(null);
-  const [mikrotikPassword, setMikrotikPassword] = useState("");
-
-  const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
-  const [vouchersError, setVouchersError] = useState<string | null>(null);
-  const [vouchersLoading, setVouchersLoading] = useState(false);
-  const [voucherNotice, setVoucherNotice] = useState<string | null>(null);
+export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
+  const name = tenantName || tenantSlug;
+  const [view, setView] = useState<View>("overview");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
+  const [networkPlatform, setNetworkPlatform] = useState<NetworkPlatform>("omada");
+  const [planView, setPlanView] = useState<PlanView>("list");
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionPagination, setTransactionPagination] = useState<Pagination>(emptyPagination);
+  const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [voucherPagination, setVoucherPagination] = useState<Pagination>(emptyPagination);
+  const [architecture, setArchitecture] = useState<Architecture | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [transactionQuery, setTransactionQuery] = useState("");
+  const [transactionStatus, setTransactionStatus] = useState("all");
+  const [transactionPlan, setTransactionPlan] = useState("all");
+  const [transactionPage, setTransactionPage] = useState(1);
   const [voucherQuery, setVoucherQuery] = useState("");
   const [voucherStatus, setVoucherStatus] = useState("all");
   const [voucherPlan, setVoucherPlan] = useState("all");
   const [voucherPage, setVoucherPage] = useState(1);
-  const [voucherTotal, setVoucherTotal] = useState(0);
-  const [voucherTotalPages, setVoucherTotalPages] = useState(1);
-  const [selectedVoucherIds, setSelectedVoucherIds] = useState<string[]>([]);
-
-  const [newPlanName, setNewPlanName] = useState("");
-  const [newPlanDuration, setNewPlanDuration] = useState("");
-  const [newPlanPrice, setNewPlanPrice] = useState("");
-  const [newPlanMaxDevices, setNewPlanMaxDevices] = useState("");
-  const [newPlanBandwidthProfile, setNewPlanBandwidthProfile] = useState("");
-  const [newPlanDataLimitMb, setNewPlanDataLimitMb] = useState("");
-  const [newPlanAvailableFrom, setNewPlanAvailableFrom] = useState("");
-  const [newPlanAvailableTo, setNewPlanAvailableTo] = useState("");
-  const [newPlanRadiusVoucherCodePrefix, setNewPlanRadiusVoucherCodePrefix] = useState("PS");
-  const [newPlanRadiusVoucherCodeLength, setNewPlanRadiusVoucherCodeLength] = useState("8");
-  const [newPlanRadiusVoucherCharacterSet, setNewPlanRadiusVoucherCharacterSet] = useState<PlanVoucherCharacterSet>("legacy");
+  const [planQuery, setPlanQuery] = useState("");
+  const [planStatus, setPlanStatus] = useState("all");
+  const [showPlanForm, setShowPlanForm] = useState(false);
   const [creatingPlan, setCreatingPlan] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [editPlan, setEditPlan] = useState<PlanFormState | null>(null);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [voucherActionOpen, setVoucherActionOpen] = useState(false);
+  const [creatingVouchers, setCreatingVouchers] = useState(false);
+  const [savingArchitecture, setSavingArchitecture] = useState(false);
+  const [savingAppearance, setSavingAppearance] = useState(false);
+  const [savingPayments, setSavingPayments] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [origin, setOrigin] = useState("");
+  const restoredUrlState = useRef(false);
+  const skipNextUrlWrite = useRef(true);
+  const importInput = useRef<HTMLInputElement | null>(null);
 
-  const [planDrafts, setPlanDrafts] = useState<
-    Record<string, {
-      name: string;
-      code: string;
-      duration: string;
-      price: string;
-      maxDevices: string;
-      bandwidthProfile: string;
-      dataLimitMb: string;
-      availableFrom: string;
-      availableTo: string;
-      radiusVoucherCodePrefix: string;
-      radiusVoucherCodeLength: string;
-      radiusVoucherCharacterSet: PlanVoucherCharacterSet;
-      active: boolean;
-    }>
-  >({});
-  const [savingPlanIds, setSavingPlanIds] = useState<Record<string, boolean>>({});
-  const [deletingPlanIds, setDeletingPlanIds] = useState<Record<string, boolean>>({});
+  const [newPlan, setNewPlan] = useState({
+    name: "",
+    priceNgn: "1000",
+    durationMinutes: "1440",
+    maxDevices: "1",
+    bandwidthProfile: "",
+    dataLimitMb: "",
+    description: "",
+  });
+  const [voucherForm, setVoucherForm] = useState({
+    packageId: "",
+    voucherCode: "",
+    generateCount: "25",
+    prefix: "",
+    codeLength: "10",
+  });
+  const [appearanceForm, setAppearanceForm] = useState({
+    storePrimaryColor: "#72f064",
+    dashboardPrimaryColor: "#72f064",
+  });
+  const [paymentForm, setPaymentForm] = useState({
+    paystackPublicKey: "",
+    paystackSecretKey: "",
+  });
+  const [notificationForm, setNotificationForm] = useState({
+    dailyRevenueSummary: false,
+    failedPaymentAlerts: false,
+    lowVoucherStockAlerts: true,
+    weeklyAnalyticsDigest: false,
+  });
 
-  const [newVoucherCode, setNewVoucherCode] = useState("");
-  const [newVoucherPackageId, setNewVoucherPackageId] = useState("");
-  const [creatingVoucher, setCreatingVoucher] = useState(false);
-  const [generateCount, setGenerateCount] = useState("20");
-  const [generatePrefix, setGeneratePrefix] = useState("");
-  const [generateCodeLength, setGenerateCodeLength] = useState("10");
-  const [generateCharacterSet, setGenerateCharacterSet] = useState("alnum");
-  const [generatingVouchers, setGeneratingVouchers] = useState(false);
+  async function refreshStats() {
+    const payload = await readJson<{ stats: Stats }>(`/api/t/${tenantSlug}/admin/stats`);
+    setStats(payload.stats);
+  }
 
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [importPackageCode, setImportPackageCode] = useState("");
-  const [importLoading, setImportLoading] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importNotice, setImportNotice] = useState<string | null>(null);
-  const [showArchitectureModal, setShowArchitectureModal] = useState(false);
-  const [showCreatePlanModal, setShowCreatePlanModal] = useState(false);
-  const [showCreateVoucherModal, setShowCreateVoucherModal] = useState(false);
-  const [showGenerateVoucherModal, setShowGenerateVoucherModal] = useState(false);
-  const [showImportVoucherModal, setShowImportVoucherModal] = useState(false);
-  const [showQuickActionsModal, setShowQuickActionsModal] = useState(false);
-  const [subscribers, setSubscribers] = useState<SubscriberOverviewRow[]>([]);
-  const [subscribersLoading, setSubscribersLoading] = useState(false);
-  const [subscribersError, setSubscribersError] = useState<string | null>(null);
-  const parsedNewPlanDuration = useMemo(
-    () => parseDurationToMinutes(newPlanDuration),
-    [newPlanDuration],
-  );
-  const parsedNewPlanPrice = useMemo(
-    () => parsePriceToNgn(newPlanPrice),
-    [newPlanPrice],
-  );
-  const parsedNewPlanDataLimit = useMemo(
-    () => parseDataLimitToMb(newPlanDataLimitMb),
-    [newPlanDataLimitMb],
-  );
+  async function refreshPlans() {
+    const payload = await readJson<{ plans: Plan[] }>(`/api/t/${tenantSlug}/admin/plans`);
+    setPlans(payload.plans);
+    setVoucherForm((prev) => ({
+      ...prev,
+      packageId: prev.packageId || payload.plans[0]?.id || "",
+    }));
+  }
 
-  const loadStats = useCallback(async () => {
-    setStatsError(null);
-    setStatsLoading(true);
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/stats`);
-      const data = await readJsonResponse<{ error?: string; stats?: AdminStats }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to load stats.");
-      setStats(data?.stats ?? null);
-    } catch (error) {
-      setStats(null);
-      setStatsError(error instanceof Error ? error.message : "Unable to load stats.");
-    } finally {
-      setStatsLoading(false);
-    }
-  }, [tenantSlug]);
-
-  const loadPlans = useCallback(async () => {
-    setPlansError(null);
-    setPlansLoading(true);
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/plans`);
-      const data = await readJsonResponse<{ error?: string; plans?: PlanRow[] }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to load plans.");
-      setPlans(data?.plans ?? []);
-    } catch (error) {
-      setPlans([]);
-      setPlansError(error instanceof Error ? error.message : "Unable to load plans.");
-    } finally {
-      setPlansLoading(false);
-    }
-  }, [tenantSlug]);
-
-  const loadArchitecture = useCallback(async () => {
-    setArchitectureError(null);
-    setArchitectureLoading(true);
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/architecture`);
-      const data = await readJsonResponse<{ error?: string; architecture?: ArchitectureConfig }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to load architecture settings.");
-      setArchitecture(data?.architecture ?? null);
-    } catch (error) {
-      setArchitecture(null);
-      setArchitectureError(
-        error instanceof Error ? error.message : "Unable to load architecture settings.",
-      );
-    } finally {
-      setArchitectureLoading(false);
-    }
-  }, [tenantSlug]);
-
-  const loadSubscribers = useCallback(async () => {
-    setSubscribersError(null);
-    setSubscribersLoading(true);
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/subscribers`);
-      const data = await readJsonResponse<{ error?: string; subscribers?: SubscriberOverviewRow[] }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to load subscribers.");
-      setSubscribers(data?.subscribers ?? []);
-    } catch (error) {
-      setSubscribers([]);
-      setSubscribersError(error instanceof Error ? error.message : "Unable to load subscribers.");
-    } finally {
-      setSubscribersLoading(false);
-    }
-  }, [tenantSlug]);
-
-  const loadVouchers = useCallback(async () => {
-    setVouchersError(null);
-    setVouchersLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: String(voucherPage),
-        pageSize: String(PAGE_SIZE),
-      });
-      if (voucherQuery.trim()) params.set("q", voucherQuery.trim());
-      if (voucherStatus !== "all") params.set("status", voucherStatus);
-      if (voucherPlan !== "all") params.set("packageId", voucherPlan);
-
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers?${params.toString()}`);
-      const data = await readJsonResponse<{
-        error?: string;
-        vouchers?: VoucherRow[];
-        pagination?: { total: number; totalPages: number };
-      }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to load vouchers.");
-      setVouchers(data?.vouchers ?? []);
-      setVoucherTotal(data?.pagination?.total ?? 0);
-      setVoucherTotalPages(data?.pagination?.totalPages ?? 1);
-      setSelectedVoucherIds([]);
-    } catch (error) {
-      setVouchers([]);
-      setVouchersError(error instanceof Error ? error.message : "Unable to load vouchers.");
-    } finally {
-      setVouchersLoading(false);
-    }
-  }, [tenantSlug, voucherPage, voucherPlan, voucherQuery, voucherStatus]);
-
-  useEffect(() => {
-    void loadStats();
-    void loadPlans();
-    void loadArchitecture();
-    void loadSubscribers();
-  }, [loadArchitecture, loadPlans, loadStats, loadSubscribers]);
-
-  useEffect(() => {
-    void loadVouchers();
-  }, [loadVouchers]);
-
-  useEffect(() => {
-    setVoucherPage(1);
-  }, [voucherQuery, voucherStatus, voucherPlan]);
-
-  useEffect(() => {
-    const drafts: Record<string, {
-      name: string;
-      code: string;
-      duration: string;
-      price: string;
-      maxDevices: string;
-      bandwidthProfile: string;
-      dataLimitMb: string;
-      availableFrom: string;
-      availableTo: string;
-      radiusVoucherCodePrefix: string;
-      radiusVoucherCodeLength: string;
-      radiusVoucherCharacterSet: PlanVoucherCharacterSet;
-      active: boolean;
-    }> = {};
-    for (const plan of plans) {
-      drafts[plan.id] = {
-        name: plan.name,
-        code: plan.code,
-        duration: plan.durationMinutes === null ? "" : String(plan.durationMinutes),
-        price: String(plan.priceNgn),
-        maxDevices: plan.maxDevices === null ? "" : String(plan.maxDevices),
-        bandwidthProfile: plan.bandwidthProfile ?? "",
-        dataLimitMb: plan.dataLimitMb ? String(plan.dataLimitMb) : "",
-        availableFrom: isoToLocalInput(plan.availableFrom),
-        availableTo: isoToLocalInput(plan.availableTo),
-        radiusVoucherCodePrefix: plan.radiusVoucherCodePrefix ?? "PS",
-        radiusVoucherCodeLength: plan.radiusVoucherCodeLength ? String(plan.radiusVoucherCodeLength) : "8",
-        radiusVoucherCharacterSet: plan.radiusVoucherCharacterSet ?? "legacy",
-        active: plan.active === 1,
-      };
-    }
-    setPlanDrafts(drafts);
-    if (!newVoucherPackageId && plans.length > 0) setNewVoucherPackageId(plans[0].id);
-  }, [plans, newVoucherPackageId]);
-
-  const voucherTotals = useMemo(() => {
-    return (stats?.voucherPool ?? []).reduce(
-      (acc, item) => {
-        acc.total += item.total;
-        acc.unused += item.unused;
-        acc.assigned += item.assigned;
-        return acc;
-      },
-      { total: 0, unused: 0, assigned: 0 },
+  async function refreshTransactions(page = transactionPage) {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: "12",
+      q: transactionQuery,
+      status: transactionStatus,
+    });
+    if (transactionPlan !== "all") params.set("packageId", transactionPlan);
+    const payload = await readJson<{ transactions: Transaction[]; pagination: Pagination }>(
+      `/api/t/${tenantSlug}/admin/transactions?${params}`,
     );
-  }, [stats]);
+    setTransactions(payload.transactions);
+    setTransactionPagination(payload.pagination);
+  }
 
-  const voucherSourceMode = architecture?.voucherSourceMode ?? null;
-  const isCsvMode = voucherSourceMode === "import_csv";
-  const isOmadaMode = voucherSourceMode === "omada_openapi";
-  const isMikrotikMode = voucherSourceMode === "mikrotik_rest";
-  const isRadiusVoucherMode = voucherSourceMode === "radius_voucher";
-  const isApiAutomationMode = isOmadaMode || isMikrotikMode;
-  const isExternalAccessMode = architecture?.accessMode === "account_access";
-  const hasArchitectureConfigured = !!architecture;
-  const hasPlans = plans.length > 0;
-  const canManuallyCreateVouchers = (isCsvMode || isRadiusVoucherMode) && !isExternalAccessMode;
-  const canBatchGenerateVouchers = (isCsvMode || isRadiusVoucherMode) && hasPlans && !isExternalAccessMode;
-  const canImportCsvVouchers = isCsvMode && !isExternalAccessMode;
-  const canDeleteVouchers = (isCsvMode || isRadiusVoucherMode) && !isExternalAccessMode;
-  const canReclaimVouchers = isCsvMode && !isExternalAccessMode;
-  const dashboardVisibility = architecture?.dashboardVisibility ?? {
-    overview: true,
-    inventorySnapshot: true,
-    subscriberMonitoring: true,
-    architectureSettings: true,
-    planManagement: true,
-    voucherOperations: true,
-  };
-  const canShowQuickActions =
-    dashboardVisibility.planManagement ||
-    dashboardVisibility.voucherOperations ||
-    dashboardVisibility.architectureSettings;
-  const overviewModeLabel = !hasArchitectureConfigured
-    ? "Architecture pending"
-    : isExternalAccessMode
-      ? "Account access"
-      : "Voucher access";
-  const overviewFlowLabel = !hasArchitectureConfigured
-    ? "Choose a voucher source"
-    : isExternalAccessMode
-      ? "External RADIUS flow"
-      : isCsvMode
-        ? "CSV inventory"
-        : isOmadaMode
-          ? "Omada automation"
-          : isMikrotikMode
-            ? "MikroTik automation"
-            : "RADIUS voucher mode";
-  const overviewPlanLabel = hasPlans ? `${plans.length} plan${plans.length === 1 ? "" : "s"} ready` : "No plans yet";
-  const overviewSubscriberLabel = subscribersLoading
-    ? "Refreshing subscribers"
-    : `${subscribers.length} subscriber${subscribers.length === 1 ? "" : "s"} visible`;
+  async function refreshVouchers(page = voucherPage) {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: "12",
+      q: voucherQuery,
+      status: voucherStatus,
+    });
+    if (voucherPlan !== "all") params.set("packageId", voucherPlan);
+    const payload = await readJson<{ vouchers: Voucher[]; pagination: Pagination }>(
+      `/api/t/${tenantSlug}/admin/vouchers?${params}`,
+    );
+    setVouchers(payload.vouchers);
+    setVoucherPagination(payload.pagination);
+  }
+
+  async function refreshArchitecture() {
+    const payload = await readJson<{ architecture: Architecture }>(`/api/t/${tenantSlug}/admin/architecture`);
+    setArchitecture(payload.architecture);
+    setAppearanceForm({
+      storePrimaryColor: payload.architecture.appearance.storePrimaryColor,
+      dashboardPrimaryColor: payload.architecture.appearance.dashboardPrimaryColor,
+    });
+    setPaymentForm({ paystackPublicKey: "", paystackSecretKey: "" });
+    setNotificationForm(payload.architecture.notifications);
+    const source = payload.architecture.voucherSourceMode;
+    setNetworkPlatform(
+      source === "omada_openapi"
+        ? "omada"
+        : source === "mikrotik_rest"
+          ? "mikrotik"
+          : source === "radius_voucher"
+            ? "radius"
+            : "csv",
+    );
+  }
 
   async function refreshAll() {
-    await Promise.all([loadStats(), loadPlans(), loadVouchers(), loadArchitecture(), loadSubscribers()]);
+    setError("");
+    setLoading(true);
+    try {
+      await Promise.all([
+        refreshStats(),
+        refreshPlans(),
+        refreshTransactions(1),
+        refreshVouchers(1),
+        refreshArchitecture(),
+      ]);
+      setTransactionPage(1);
+      setVoucherPage(1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load tenant dashboard");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function jumpToVoucherTools() {
-    if (!canShowQuickActions) return;
-    setShowQuickActionsModal(true);
+  useEffect(() => {
+    void refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantSlug]);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedView = params.get("tab");
+    const requestedSettingsTab = params.get("settings");
+    const requestedPlanView = params.get("planView");
+
+    if (navItems.some((item) => item.key === requestedView)) {
+      setView(requestedView as View);
+    }
+    if (settingsTabs.includes(requestedSettingsTab as SettingsTab)) {
+      setSettingsTab(requestedSettingsTab as SettingsTab);
+    }
+    if (planViews.includes(requestedPlanView as PlanView)) {
+      setPlanView(requestedPlanView as PlanView);
+    }
+
+    restoredUrlState.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!restoredUrlState.current) return;
+    if (skipNextUrlWrite.current) {
+      skipNextUrlWrite.current = false;
+      return;
+    }
+
+    replaceQueryParams({
+      tab: view === "overview" ? null : view,
+      settings: view === "settings" && settingsTab !== "general" ? settingsTab : null,
+      planView: view === "plans" && planView !== "list" ? planView : null,
+    });
+  }, [planView, settingsTab, view]);
+
+  useEffect(() => {
+    if (!loading) void refreshTransactions(transactionPage).catch((err) => setError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionQuery, transactionStatus, transactionPlan, transactionPage]);
+
+  useEffect(() => {
+    if (!loading) void refreshVouchers(voucherPage).catch((err) => setError(err.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voucherQuery, voucherStatus, voucherPlan, voucherPage]);
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+    window.location.href = "/login";
   }
 
-  async function saveArchitecture(event: React.FormEvent) {
+  async function createPlan(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!architecture) return;
-
-    setArchitectureSaving(true);
-    setArchitectureError(null);
-    setArchitectureNotice(null);
-    setMikrotikTestError(null);
-    setMikrotikTestNotice(null);
-    setOmadaTestError(null);
-    setOmadaTestNotice(null);
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/architecture`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accessMode: architecture.accessMode,
-          voucherSourceMode: architecture.voucherSourceMode,
-          dashboardVisibility: architecture.dashboardVisibility,
-          omada: {
-            apiBaseUrl: architecture.omada.apiBaseUrl.trim(),
-            omadacId: architecture.omada.omadacId.trim(),
-            siteId: architecture.omada.siteId.trim(),
-            clientId: architecture.omada.clientId.trim(),
-            clientSecret: omadaClientSecret || undefined,
-            hotspotOperatorUsername: architecture.omada.hotspotOperatorUsername.trim(),
-            hotspotOperatorPassword: omadaHotspotOperatorPassword || undefined,
-          },
-          mikrotik: {
-            baseUrl: architecture.mikrotik.baseUrl.trim(),
-            username: architecture.mikrotik.username.trim(),
-            password: mikrotikPassword || undefined,
-            hotspotServer: architecture.mikrotik.hotspotServer.trim(),
-            defaultProfile: architecture.mikrotik.defaultProfile.trim(),
-            verifyTls: architecture.mikrotik.verifyTls,
-          },
-        }),
-      });
-      const data = await readJsonResponse<{ error?: string; architecture?: ArchitectureConfig }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to save architecture settings.");
-      setArchitecture(data?.architecture ?? architecture);
-      setArchitectureNotice("Architecture settings saved.");
-      setOmadaClientSecret("");
-      setOmadaHotspotOperatorPassword("");
-      setMikrotikPassword("");
-      setShowArchitectureModal(false);
-    } catch (error) {
-      setArchitectureError(
-        error instanceof Error ? error.message : "Unable to save architecture settings.",
-      );
-    } finally {
-      setArchitectureSaving(false);
-    }
-  }
-
-  async function testOmadaConnection() {
-    if (!architecture) return;
-
-    setOmadaTestLoading(true);
-    setOmadaTestError(null);
-    setOmadaTestNotice(null);
-
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/architecture/test-omada`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          omada: {
-            apiBaseUrl: architecture.omada.apiBaseUrl.trim(),
-            omadacId: architecture.omada.omadacId.trim(),
-            siteId: architecture.omada.siteId.trim(),
-            clientId: architecture.omada.clientId.trim(),
-            clientSecret: omadaClientSecret || undefined,
-          },
-        }),
-      });
-      const data = await readJsonResponse<{ error?: string; message?: string; latencyMs?: number }>(response);
-      if (!response.ok) {
-        const fallback = `Omada test failed (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).`;
-        throw new Error(data?.error || fallback);
-      }
-      const latency = typeof data?.latencyMs === "number" ? ` (${data.latencyMs}ms)` : "";
-      setOmadaTestNotice(`${data?.message || "Omada connection successful."}${latency}`);
-    } catch (error) {
-      setOmadaTestError(error instanceof Error ? error.message : "Omada test failed.");
-    } finally {
-      setOmadaTestLoading(false);
-    }
-  }
-
-  async function testMikrotikConnection() {
-    if (!architecture) return;
-
-    setMikrotikTestLoading(true);
-    setMikrotikTestError(null);
-    setMikrotikTestNotice(null);
-
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/architecture/test-mikrotik`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mikrotik: {
-            baseUrl: architecture.mikrotik.baseUrl.trim(),
-            username: architecture.mikrotik.username.trim(),
-            password: mikrotikPassword || undefined,
-            hotspotServer: architecture.mikrotik.hotspotServer.trim(),
-            defaultProfile: architecture.mikrotik.defaultProfile.trim(),
-            verifyTls: architecture.mikrotik.verifyTls,
-          },
-        }),
-      });
-      const data = await readJsonResponse<{
-        error?: string;
-        message?: string;
-        latencyMs?: number;
-        info?: { version?: string | null; boardName?: string | null; uptime?: string | null };
-      }>(response);
-      if (!response.ok) {
-        const fallback = `MikroTik test failed (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).`;
-        throw new Error(data?.error || fallback);
-      }
-      const latency = typeof data?.latencyMs === "number" ? ` (${data.latencyMs}ms)` : "";
-      const details = [
-        data?.info?.boardName ? `board ${data.info.boardName}` : null,
-        data?.info?.version ? `RouterOS ${data.info.version}` : null,
-        data?.info?.uptime ? `uptime ${data.info.uptime}` : null,
-      ].filter(Boolean).join(" | ");
-      setMikrotikTestNotice(
-        `${data?.message || "MikroTik connection successful."}${latency}${details ? ` | ${details}` : ""}`,
-      );
-    } catch (error) {
-      setMikrotikTestError(error instanceof Error ? error.message : "MikroTik test failed.");
-    } finally {
-      setMikrotikTestLoading(false);
-    }
-  }
-
-  async function discoverOmadaSites() {
-    if (!architecture) return;
-
-    setOmadaSitesLoading(true);
-    setOmadaSitesError(null);
-    setOmadaSitesNotice(null);
-
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/architecture/discover-sites`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          omada: {
-            apiBaseUrl: architecture.omada.apiBaseUrl.trim(),
-            omadacId: architecture.omada.omadacId.trim(),
-            clientId: architecture.omada.clientId.trim(),
-            clientSecret: omadaClientSecret || undefined,
-          },
-        }),
-      });
-
-      const data = await readJsonResponse<{
-        error?: string;
-        sites?: OmadaSiteOption[];
-        omadacId?: string;
-      }>(response);
-      if (!response.ok) {
-        const fallback = `Omada site discovery failed (HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}).`;
-        throw new Error(data?.error || fallback);
-      }
-
-      const sites = (data?.sites ?? []).filter((site) => site?.siteId);
-      setOmadaSiteOptions(sites);
-      if (sites.length === 0) {
-        setOmadaSitesNotice("No sites were returned by Omada for the supplied Omada ID.");
-        return;
-      }
-
-      if (sites.length === 1) {
-        setArchitecture((prev) =>
-          prev
-            ? {
-                ...prev,
-                omada: { ...prev.omada, siteId: sites[0].siteId },
-              }
-            : prev,
-        );
-      }
-
-      setOmadaSitesNotice(
-        sites.length === 1
-          ? `Found 1 site and selected it automatically (${sites[0].siteId}).`
-          : `Found ${sites.length} sites. Select one below to fill Site ID.`,
-      );
-    } catch (error) {
-      setOmadaSitesError(error instanceof Error ? error.message : "Unable to discover Omada sites.");
-    } finally {
-      setOmadaSitesLoading(false);
-    }
-  }
-
-  async function createPlan(event: React.FormEvent) {
-    event.preventDefault();
-    const duration = parseDurationToMinutes(newPlanDuration);
-    const price = parsePriceToNgn(newPlanPrice);
-    const maxDevices = newPlanMaxDevices.trim()
-      ? Number.parseInt(newPlanMaxDevices, 10)
-      : null;
-    const dataLimitMb = parseDataLimitToMb(newPlanDataLimitMb);
-    const availableFrom = localInputToIso(newPlanAvailableFrom);
-    const availableTo = localInputToIso(newPlanAvailableTo);
-    const normalizedDuration = duration ?? null;
-    const normalizedDataLimit = dataLimitMb ?? null;
-    const useConfiguredPaidVoucherCode =
-      architecture?.voucherSourceMode === "radius_voucher" &&
-      newPlanRadiusVoucherCharacterSet !== "legacy";
-    const paidVoucherPrefix = validateRadiusVoucherPrefixInput(newPlanRadiusVoucherCodePrefix);
-    const paidVoucherCodeLength = parseRadiusVoucherCodeLengthInput(newPlanRadiusVoucherCodeLength);
-    const durationRequired =
-      architecture?.accessMode !== "account_access" &&
-      architecture?.voucherSourceMode !== "mikrotik_rest" &&
-      architecture?.voucherSourceMode !== "radius_voucher";
-    if (
-      !newPlanName.trim() ||
-      (normalizedDuration !== null && (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0)) ||
-      price === undefined ||
-      !Number.isFinite(price) ||
-      price < 0 ||
-      (maxDevices !== null && (!Number.isFinite(maxDevices) || maxDevices < 1)) ||
-      (normalizedDataLimit !== null && (!Number.isFinite(normalizedDataLimit) || normalizedDataLimit < 1)) ||
-      availableFrom === undefined ||
-      availableTo === undefined
-    ) {
-      setPlansError("Provide valid plan name, duration (e.g. 1h/2d), and price (e.g. 25k).");
-      return;
-    }
-    if (availableFrom && availableTo && new Date(availableFrom).getTime() > new Date(availableTo).getTime()) {
-      setPlansError("Plan available-from must be before available-to.");
-      return;
-    }
-    if (durationRequired && normalizedDuration === null) {
-      setPlansError("Duration is required unless you are using MikroTik direct mode or RADIUS voucher mode.");
-      return;
-    }
-    if (normalizedDuration === null && normalizedDataLimit === null) {
-      setPlansError("Set at least one limit: duration or data.");
-      return;
-    }
-    if (!paidVoucherPrefix.ok) {
-      setPlansError(paidVoucherPrefix.error);
-      return;
-    }
-    if (
-      useConfiguredPaidVoucherCode &&
-      (paidVoucherCodeLength === undefined ||
-        !Number.isFinite(paidVoucherCodeLength) ||
-        paidVoucherCodeLength < PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH ||
-        paidVoucherCodeLength > PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH)
-    ) {
-      setPlansError(
-        `Paid voucher code length must be between ${PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH} and ${PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH}.`,
-      );
-      return;
-    }
     setCreatingPlan(true);
-    setPlansError(null);
-    setPlanNotice(null);
+    setError("");
     try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/plans`, {
+      await readJson(`/api/t/${tenantSlug}/admin/plans`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newPlanName.trim(),
-          durationMinutes: normalizedDuration,
-          priceNgn: price,
-          maxDevices,
-          bandwidthProfile: newPlanBandwidthProfile.trim() || undefined,
-          dataLimitMb: normalizedDataLimit,
-          availableFrom,
-          availableTo,
-          radiusVoucherCodePrefix:
-            architecture?.voucherSourceMode === "radius_voucher" && newPlanRadiusVoucherCharacterSet !== "legacy"
-              ? paidVoucherPrefix.value || null
-              : null,
-          radiusVoucherCodeLength:
-            architecture?.voucherSourceMode === "radius_voucher" && newPlanRadiusVoucherCharacterSet !== "legacy"
-              ? paidVoucherCodeLength ?? 8
-              : null,
-          radiusVoucherCharacterSet:
-            architecture?.voucherSourceMode === "radius_voucher" && newPlanRadiusVoucherCharacterSet !== "legacy"
-              ? newPlanRadiusVoucherCharacterSet
-              : null,
+          name: newPlan.name,
+          priceNgn: Number(newPlan.priceNgn),
+          durationMinutes: newPlan.durationMinutes ? Number(newPlan.durationMinutes) : null,
+          maxDevices: newPlan.maxDevices ? Number(newPlan.maxDevices) : null,
+          bandwidthProfile: newPlan.bandwidthProfile || null,
+          dataLimitMb: newPlan.dataLimitMb ? Number(newPlan.dataLimitMb) : null,
+          description: newPlan.description,
+          active: true,
         }),
       });
-      const data = await readJsonResponse<{ error?: string }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to create plan.");
-      setPlanNotice("Plan created.");
-      setNewPlanName("");
-      setNewPlanDuration("");
-      setNewPlanPrice("");
-      setNewPlanMaxDevices("");
-      setNewPlanBandwidthProfile("");
-      setNewPlanDataLimitMb("");
-      setNewPlanAvailableFrom("");
-      setNewPlanAvailableTo("");
-      setNewPlanRadiusVoucherCodePrefix("PS");
-      setNewPlanRadiusVoucherCodeLength("8");
-      setNewPlanRadiusVoucherCharacterSet("legacy");
-      setShowCreatePlanModal(false);
-      await Promise.all([loadPlans(), loadStats()]);
-    } catch (error) {
-      setPlansError(error instanceof Error ? error.message : "Unable to create plan.");
+      setNotice("Plan created.");
+      setShowPlanForm(false);
+      setNewPlan({
+        name: "",
+        priceNgn: "1000",
+        durationMinutes: "1440",
+        maxDevices: "1",
+        bandwidthProfile: "",
+        dataLimitMb: "",
+        description: "",
+      });
+      await Promise.all([refreshPlans(), refreshStats()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create plan");
     } finally {
       setCreatingPlan(false);
     }
   }
 
-  async function savePlan(plan: PlanRow) {
-    const draft = planDrafts[plan.id];
-    if (!draft) return;
-    const duration = parseDurationToMinutes(draft.duration);
-    const price = parsePriceToNgn(draft.price);
-    const maxDevices = draft.maxDevices.trim()
-      ? Number.parseInt(draft.maxDevices, 10)
-      : null;
-    const parsedDataLimit = parseDataLimitToMb(draft.dataLimitMb);
-    const dataLimitMb = draft.dataLimitMb.trim() ? parsedDataLimit : null;
-    const availableFrom = localInputToIso(draft.availableFrom);
-    const availableTo = localInputToIso(draft.availableTo);
-    const normalizedDuration = draft.duration.trim() ? duration ?? null : null;
-    const useConfiguredPaidVoucherCode =
-      architecture?.voucherSourceMode === "radius_voucher" &&
-      draft.radiusVoucherCharacterSet !== "legacy";
-    const paidVoucherPrefix = validateRadiusVoucherPrefixInput(draft.radiusVoucherCodePrefix);
-    const paidVoucherCodeLength = parseRadiusVoucherCodeLengthInput(draft.radiusVoucherCodeLength);
-    const durationRequired =
-      architecture?.accessMode !== "account_access" &&
-      architecture?.voucherSourceMode !== "mikrotik_rest" &&
-      architecture?.voucherSourceMode !== "radius_voucher";
-    if (
-      !draft.name.trim() ||
-      !draft.code.trim() ||
-      (normalizedDuration !== null && (!Number.isFinite(normalizedDuration) || normalizedDuration <= 0)) ||
-      price === undefined ||
-      !Number.isFinite(price) ||
-      price < 0 ||
-      (maxDevices !== null && (!Number.isFinite(maxDevices) || maxDevices < 1)) ||
-      (dataLimitMb != null && (!Number.isFinite(dataLimitMb) || dataLimitMb < 1)) ||
-      availableFrom === undefined ||
-      availableTo === undefined
-    ) {
-      setPlansError(`Invalid values for ${plan.name}.`);
-      return;
-    }
-    if (availableFrom && availableTo && new Date(availableFrom).getTime() > new Date(availableTo).getTime()) {
-      setPlansError(`Availability window is invalid for ${plan.name}.`);
-      return;
-    }
-    if (durationRequired && normalizedDuration === null) {
-      setPlansError("Duration is required unless you are using MikroTik direct mode or RADIUS voucher mode.");
-      return;
-    }
-    if (normalizedDuration === null && dataLimitMb === null) {
-      setPlansError("Set at least one limit: duration or data.");
-      return;
-    }
-    if (!paidVoucherPrefix.ok) {
-      setPlansError(paidVoucherPrefix.error);
-      return;
-    }
-    if (
-      useConfiguredPaidVoucherCode &&
-      (paidVoucherCodeLength === undefined ||
-        !Number.isFinite(paidVoucherCodeLength) ||
-        paidVoucherCodeLength < PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH ||
-        paidVoucherCodeLength > PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH)
-    ) {
-      setPlansError(
-        `Paid voucher code length must be between ${PAID_RADIUS_VOUCHER_MIN_CODE_LENGTH} and ${PAID_RADIUS_VOUCHER_MAX_CODE_LENGTH}.`,
-      );
-      return;
-    }
-    setSavingPlanIds((prev) => ({ ...prev, [plan.id]: true }));
-    setPlansError(null);
-    setPlanNotice(null);
+  async function togglePlan(plan: Plan) {
+    setError("");
     try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/plans`, {
+      await readJson(`/api/t/${tenantSlug}/admin/plans`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          planId: plan.id,
-          name: draft.name.trim(),
-          code: draft.code.trim(),
-          durationMinutes: normalizedDuration,
-          priceNgn: price,
-          maxDevices,
-          bandwidthProfile: draft.bandwidthProfile.trim() || null,
-          dataLimitMb,
-          availableFrom,
-          availableTo,
-          radiusVoucherCodePrefix:
-            architecture?.voucherSourceMode === "radius_voucher" && draft.radiusVoucherCharacterSet !== "legacy"
-              ? paidVoucherPrefix.value || null
-              : null,
-          radiusVoucherCodeLength:
-            architecture?.voucherSourceMode === "radius_voucher" && draft.radiusVoucherCharacterSet !== "legacy"
-              ? paidVoucherCodeLength ?? 8
-              : null,
-          radiusVoucherCharacterSet:
-            architecture?.voucherSourceMode === "radius_voucher" && draft.radiusVoucherCharacterSet !== "legacy"
-              ? draft.radiusVoucherCharacterSet
-              : null,
-          active: draft.active,
-        }),
+        body: JSON.stringify({ planId: plan.id, active: !plan.active }),
       });
-      const data = await readJsonResponse<{ error?: string }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to save plan.");
-      setPlanNotice(`Saved ${draft.name}.`);
-      await Promise.all([loadPlans(), loadStats(), loadVouchers()]);
-    } catch (error) {
-      setPlansError(error instanceof Error ? error.message : "Unable to save plan.");
-    } finally {
-      setSavingPlanIds((prev) => ({ ...prev, [plan.id]: false }));
+      await Promise.all([refreshPlans(), refreshStats()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update plan");
     }
   }
 
-  async function deletePlan(plan: PlanRow) {
-    const ok = window.confirm(`Delete plan "${plan.name}" and all its vouchers?`);
-    if (!ok) return;
+  function openEditPlan(plan: Plan) {
+    setShowPlanForm(false);
+    setEditingPlanId(plan.id);
+    setEditPlan(planToForm(plan));
+    setNotice("");
+    setError("");
+  }
 
-    setDeletingPlanIds((prev) => ({ ...prev, [plan.id]: true }));
-    setPlansError(null);
-    setPlanNotice(null);
+  function closeEditPlan() {
+    setEditingPlanId(null);
+    setEditPlan(null);
+  }
+
+  async function updatePlan(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingPlanId || !editPlan) return;
+    setSavingPlan(true);
+    setError("");
     try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/plans`, {
+      await readJson(`/api/t/${tenantSlug}/admin/plans`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planId: editingPlanId,
+          ...planFormPayload(editPlan),
+        }),
+      });
+      setNotice("Plan updated.");
+      closeEditPlan();
+      await Promise.all([refreshPlans(), refreshStats()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update plan");
+    } finally {
+      setSavingPlan(false);
+    }
+  }
+
+  async function deletePlan(plan: Plan) {
+    if (!window.confirm(`Delete ${plan.name}? This removes related vouchers and transactions.`)) return;
+    setError("");
+    try {
+      await readJson(`/api/t/${tenantSlug}/admin/plans`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ planId: plan.id }),
       });
-      const data = await readJsonResponse<{ error?: string }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to delete plan.");
-      setPlanNotice(`Deleted ${plan.name}.`);
-      await Promise.all([loadPlans(), loadStats(), loadVouchers()]);
-    } catch (error) {
-      setPlansError(error instanceof Error ? error.message : "Unable to delete plan.");
-    } finally {
-      setDeletingPlanIds((prev) => ({ ...prev, [plan.id]: false }));
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete plan");
     }
   }
 
-  async function createVoucher(event: React.FormEvent) {
+  async function createVouchers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!newVoucherCode.trim() || !newVoucherPackageId) {
-      setVouchersError("Voucher code and plan are required.");
-      return;
-    }
-    setCreatingVoucher(true);
-    setVouchersError(null);
-    setVoucherNotice(null);
+    setCreatingVouchers(true);
+    setError("");
     try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
+      await readJson(`/api/t/${tenantSlug}/admin/vouchers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          voucherCode: newVoucherCode.trim(),
-          packageId: newVoucherPackageId,
+          packageId: voucherForm.packageId,
+          voucherCode: voucherForm.voucherCode.trim() || undefined,
+          generateCount: voucherForm.voucherCode.trim() ? undefined : Number(voucherForm.generateCount),
+          prefix: voucherForm.prefix || undefined,
+          codeLength: voucherForm.codeLength ? Number(voucherForm.codeLength) : undefined,
+          characterSet: "alnum",
         }),
       });
-      const data = await readJsonResponse<{ error?: string }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to create voucher.");
-      setVoucherNotice("Voucher created.");
-      setNewVoucherCode("");
-      setShowCreateVoucherModal(false);
-      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
-    } catch (error) {
-      setVouchersError(error instanceof Error ? error.message : "Unable to create voucher.");
+      setNotice("Voucher stock updated.");
+      setVoucherActionOpen(false);
+      setVoucherForm((prev) => ({ ...prev, voucherCode: "", generateCount: "25", prefix: "" }));
+      await Promise.all([refreshVouchers(1), refreshPlans(), refreshStats()]);
+      setVoucherPage(1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create vouchers");
     } finally {
-      setCreatingVoucher(false);
+      setCreatingVouchers(false);
     }
   }
 
-  async function generateVouchers(event: React.FormEvent) {
-    event.preventDefault();
-    if (!newVoucherPackageId) {
-      setVouchersError("Plan is required.");
-      return;
-    }
-
-    const count = Number.parseInt(generateCount, 10);
-    if (!Number.isFinite(count) || count <= 0) {
-      setVouchersError("Provide a valid quantity.");
-      return;
-    }
-
-    const codeLength = Number.parseInt(generateCodeLength, 10);
-    if (!Number.isFinite(codeLength) || codeLength <= 0) {
-      setVouchersError("Provide a valid code length.");
-      return;
-    }
-
-    setGeneratingVouchers(true);
-    setVouchersError(null);
-    setVoucherNotice(null);
+  async function importCsv(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    if (!file || !voucherForm.packageId) return;
+    setCreatingVouchers(true);
+    setError("");
     try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          packageId: newVoucherPackageId,
-          generateCount: count,
-          prefix: generatePrefix.trim() || undefined,
-          codeLength,
-          characterSet: generateCharacterSet,
-        }),
-      });
-      const data = await readJsonResponse<{ error?: string; created?: number }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to auto-generate vouchers.");
-      setVoucherNotice(`Generated ${data?.created ?? 0} voucher(s).`);
-      setShowGenerateVoucherModal(false);
-      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
-    } catch (error) {
-      setVouchersError(error instanceof Error ? error.message : "Unable to auto-generate vouchers.");
+      const body = new FormData();
+      const selectedPlan = plans.find((plan) => plan.id === voucherForm.packageId);
+      if (selectedPlan?.code) body.set("packageCode", selectedPlan.code);
+      body.set("file", file);
+      await readJson(`/api/t/${tenantSlug}/admin/vouchers/import`, { method: "POST", body });
+      setNotice("CSV imported.");
+      await Promise.all([refreshVouchers(1), refreshPlans(), refreshStats()]);
+      setVoucherPage(1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to import CSV");
     } finally {
-      setGeneratingVouchers(false);
+      setCreatingVouchers(false);
+      event.currentTarget.value = "";
     }
   }
 
-  async function reclaimSelected() {
-    if (selectedVoucherIds.length === 0) return;
+  async function saveArchitecture(nextPlatform = networkPlatform) {
+    setSavingArchitecture(true);
+    setError("");
+    const voucherSourceMode =
+      nextPlatform === "omada"
+        ? "omada_openapi"
+        : nextPlatform === "mikrotik"
+          ? "mikrotik_rest"
+          : nextPlatform === "radius"
+            ? "radius_voucher"
+            : "import_csv";
     try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
+      const payload = await readJson<{ architecture: Architecture }>(`/api/t/${tenantSlug}/admin/architecture`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voucherIds: selectedVoucherIds, status: "UNUSED" }),
+        body: JSON.stringify({ voucherSourceMode }),
       });
-      const data = await readJsonResponse<{ error?: string; updated?: number }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to reclaim vouchers.");
-      setVoucherNotice(`Reclaimed ${data?.updated ?? 0} voucher(s).`);
-      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
-    } catch (error) {
-      setVouchersError(error instanceof Error ? error.message : "Unable to reclaim vouchers.");
-    }
-  }
-
-  async function deleteSelected() {
-    if (selectedVoucherIds.length === 0) return;
-    const ok = window.confirm(`Delete ${selectedVoucherIds.length} selected voucher(s)?`);
-    if (!ok) return;
-    try {
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voucherIds: selectedVoucherIds }),
-      });
-      const data = await readJsonResponse<{ error?: string; deleted?: number }>(response);
-      if (!response.ok) throw new Error(data?.error || "Unable to delete vouchers.");
-      setVoucherNotice(`Deleted ${data?.deleted ?? 0} voucher(s).`);
-      await Promise.all([loadVouchers(), loadStats(), loadPlans()]);
-    } catch (error) {
-      setVouchersError(error instanceof Error ? error.message : "Unable to delete vouchers.");
-    }
-  }
-
-  async function importCsv(event: React.FormEvent) {
-    event.preventDefault();
-    if (!csvFile) {
-      setImportError("Choose a CSV file.");
-      return;
-    }
-    setImportLoading(true);
-    setImportError(null);
-    setImportNotice(null);
-    try {
-      const form = new FormData();
-      form.append("file", csvFile);
-      if (importPackageCode.trim()) form.append("packageCode", importPackageCode.trim());
-      const response = await fetch(`/api/t/${tenantSlug}/admin/vouchers/import`, {
-        method: "POST",
-        body: form,
-      });
-      const data = await readJsonResponse<{
-        error?: string;
-        imported?: number;
-        duplicates?: number;
-        skipped?: number;
-        packagesCreated?: number;
-      }>(response);
-      if (!response.ok) throw new Error(data?.error || "Import failed.");
-      setImportNotice(
-        `Imported ${data?.imported ?? 0} | Duplicates ${data?.duplicates ?? 0} | Skipped ${data?.skipped ?? 0} | Plans created ${data?.packagesCreated ?? 0}`,
-      );
-      setCsvFile(null);
-      setImportPackageCode("");
-      setShowImportVoucherModal(false);
-      await refreshAll();
-    } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Import failed.");
+      setArchitecture(payload.architecture);
+      setNotice("Network source saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save network source");
     } finally {
-      setImportLoading(false);
+      setSavingArchitecture(false);
     }
   }
+
+  async function saveAppearance(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingAppearance(true);
+    setError("");
+    try {
+      const payload = await readJson<{ architecture: Architecture }>(`/api/t/${tenantSlug}/admin/architecture`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appearance: appearanceForm }),
+      });
+      setArchitecture(payload.architecture);
+      setAppearanceForm(payload.architecture.appearance);
+      setNotice("Brand colors saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save brand colors");
+    } finally {
+      setSavingAppearance(false);
+    }
+  }
+
+  async function savePayments(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingPayments(true);
+    setError("");
+    try {
+      const payload = await readJson<{ architecture: Architecture }>(`/api/t/${tenantSlug}/admin/payments`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paystackPublicKey: paymentForm.paystackPublicKey.trim() || undefined,
+          paystackSecretKey: paymentForm.paystackSecretKey.trim() || undefined,
+        }),
+      });
+      setArchitecture(payload.architecture);
+      setPaymentForm({ paystackPublicKey: "", paystackSecretKey: "" });
+      setNotice("Payment settings saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save payment settings");
+    } finally {
+      setSavingPayments(false);
+    }
+  }
+
+  async function saveNotifications(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingNotifications(true);
+    setError("");
+    try {
+      const payload = await readJson<{ architecture: Architecture }>(`/api/t/${tenantSlug}/admin/architecture`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notifications: notificationForm }),
+      });
+      setArchitecture(payload.architecture);
+      setNotificationForm(payload.architecture.notifications);
+      setNotice("Email notification settings saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save email notification settings");
+    } finally {
+      setSavingNotifications(false);
+    }
+  }
+
+  async function cancelTransaction(reference: string) {
+    if (!window.confirm("Cancel this pending payment? The poller will stop checking it.")) return;
+    setError("");
+    try {
+      await readJson(`/api/t/${tenantSlug}/admin/transactions/${encodeURIComponent(reference)}/cancel`, {
+        method: "POST",
+      });
+      setNotice("Pending payment cancelled.");
+      await Promise.all([refreshTransactions(transactionPage), refreshStats()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to cancel payment");
+    }
+  }
+
+  const activePlans = plans.filter((plan) => !!plan.active);
+  const totalVouchers = plans.reduce((sum, plan) => sum + Number(plan.totalCount ?? 0), 0);
+  const availableVouchers = plans.reduce((sum, plan) => sum + Number(plan.unusedCount ?? 0), 0);
+  const usedVouchers = plans.reduce((sum, plan) => sum + Number(plan.assignedCount ?? 0), 0);
+  const lowStockPlans = plans.filter((plan) => plan.totalCount > 0 && plan.unusedCount / plan.totalCount <= 0.2);
+  const successRate = stats?.transactions.total
+    ? Math.round((stats.transactions.success / stats.transactions.total) * 1000) / 10
+    : 0;
+  const dashboardPrimaryColor =
+    architecture?.appearance.dashboardPrimaryColor || appearanceForm.dashboardPrimaryColor || "#72f064";
+  const dashboardStyle = {
+    "--ac": dashboardPrimaryColor,
+    "--ac-dim": `${dashboardPrimaryColor}1a`,
+    "--ac-soft": `${dashboardPrimaryColor}2b`,
+    "--ac-bd": `${dashboardPrimaryColor}55`,
+  } as CSSProperties;
+  const filteredPlans = plans.filter((plan) => {
+    const matchesQuery =
+      !planQuery ||
+      plan.name.toLowerCase().includes(planQuery.toLowerCase()) ||
+      plan.code.toLowerCase().includes(planQuery.toLowerCase());
+    const matchesStatus =
+      planStatus === "all" ||
+      (planStatus === "active" && plan.active) ||
+      (planStatus === "inactive" && !plan.active);
+    return matchesQuery && matchesStatus;
+  });
+  const maxPlanTotal = Math.max(1, ...plans.map((plan) => plan.assignedCount));
+  const currentLabel = navItems.find((item) => item.key === view)?.label || "Dashboard";
 
   return (
     <>
-      <div className="grid gap-5 lg:gap-6 min-w-0">
-        {dashboardVisibility.overview ? (
-        <section className="panel-surface bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,251,255,0.96)_100%)]">
-          <div className="flex min-w-0 flex-col gap-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
-            <div className="min-w-0 max-w-3xl">
-              <p className="section-kicker">Overview</p>
-              <h1 className="mt-2 font-display text-[clamp(2rem,3vw,3rem)] font-semibold tracking-tight text-slate-950">
-                Operations dashboard
-              </h1>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
-                Track voucher inventory, monitor subscribers, and manage plan availability from one desktop workspace.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-                  Mode: <span className="font-semibold text-slate-950">{overviewModeLabel}</span>
-                </span>
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-                  Flow: <span className="font-semibold text-slate-950">{overviewFlowLabel}</span>
-                </span>
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-                  Plans: <span className="font-semibold text-slate-950">{overviewPlanLabel}</span>
-                </span>
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-                  Subscribers: <span className="font-semibold text-slate-950">{overviewSubscriberLabel}</span>
-                </span>
-              </div>
+    <style suppressHydrationWarning>{tenantDashboardCriticalCss}</style>
+    <div id="s-dash" className="screen on" data-screen-label="06 Tenant Dashboard" style={dashboardStyle}>
+      <div className="dash-layout">
+        <aside className="sidebar">
+          <div className="sb-brand">
+            <div className="sb-mark">{initials(name).slice(0, 1)}</div>
+            <div>
+              <div className="sb-name">{name}</div>
+              <div className="sb-url">{tenantSlug}.payspot.app</div>
             </div>
-            <div className="flex w-full flex-wrap items-center gap-2 rounded-[22px] border border-slate-200/90 bg-white/90 p-2 shadow-[var(--shadow-sm)] 2xl:ml-auto 2xl:w-auto">
-              <Button
+          </div>
+
+          <nav className="sb-nav">
+            <div className="sb-sec">Operations</div>
+            {navItems.slice(0, 3).map((item) => (
+              <button
+                key={item.key}
                 type="button"
-                variant="outline"
-                size="sm"
-                onClick={refreshAll}
-                disabled={statsLoading || plansLoading || vouchersLoading}
-                className="max-w-full"
+                className={`sb-item ${view === item.key ? "on" : ""}`}
+                onClick={() => setView(item.key)}
               >
-                <RefreshCw className={["size-3.5", statsLoading || plansLoading || vouchersLoading ? "animate-spin" : ""].join(" ")} />
-                Refresh dashboard
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={jumpToVoucherTools} className="max-w-full" disabled={!canShowQuickActions}>
-                <Plus className="size-3.5" />
-                Quick actions
-              </Button>
+                {item.label}
+                {item.key === "transactions" && stats?.transactions.pending ? (
+                  <span className="sb-bdg">{stats.transactions.pending + stats.transactions.processing}</span>
+                ) : null}
+              </button>
+            ))}
+            <div className="sb-sec">Configuration</div>
+            {navItems.slice(3).map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={`sb-item ${view === item.key ? "on" : ""}`}
+                onClick={() => setView(item.key)}
+              >
+                {item.label}
+              </button>
+            ))}
+            <div className="sb-sec">Links</div>
+            <a className="sb-item" href={`/t/${tenantSlug}`}>
+              My Store ↗
+            </a>
+          </nav>
+
+          <div className="sb-foot">
+            <div className="sb-user">
+              <div className="sb-av">{initials(name).slice(0, 1)}</div>
+              <div>
+                <div className="sb-uname">{name} Admin</div>
+                <div className="sb-urole">Tenant Admin</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <div className="dash-main">
+          <div className="dash-topbar">
+            <div className="dash-crumb">
+              <span>PaySpot</span>
+              <span className="dash-crumb-sep">›</span>
+              <span>{tenantSlug}</span>
+              <span className="dash-crumb-sep">›</span>
+              <span>{currentLabel}</span>
+            </div>
+            <div className="dash-topbar-right">
+              <button className="btn btn-icon" type="button" title="Notifications">
+                <Bell size={15} />
+              </button>
+              <ThemeToggle />
+              <a className="btn btn-ac btn-sm" href={`/t/${tenantSlug}`}>
+                View Store
+              </a>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={logout}>
+                Logout
+              </button>
             </div>
           </div>
 
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-            <StatTile label="Revenue" value={money(stats?.transactions.revenueNgn ?? 0)} />
-            <StatTile label="Successful payments" value={String(stats?.transactions.success ?? 0)} />
-            <StatTile label="Total vouchers" value={String(voucherTotals.total)} />
-            <StatTile label="Unused vouchers" value={String(voucherTotals.unused)} />
-            <StatTile label="Assigned vouchers" value={String(voucherTotals.assigned)} />
-          </div>
+          <div className="dash-content">
+            {error ? <div className="alert-banner warn">{error}</div> : null}
+            {notice ? (
+              <div className="alert-banner info">
+                <Check size={16} />
+                {notice}
+                <button className="btn btn-ghost btn-xs" type="button" onClick={() => setNotice("")}>
+                  Dismiss
+                </button>
+              </div>
+            ) : null}
+            {loading ? (
+              <div className="settings-card">
+                <Loader2 className="spin" size={18} /> Loading tenant dashboard...
+              </div>
+            ) : null}
 
-          {dashboardVisibility.inventorySnapshot && (stats?.voucherPool.length ?? 0) > 0 ? (
-            <div className="mt-6">
-              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <section className={`dash-section ${view === "overview" ? "on" : ""}`}>
+              <div className="dash-header">
                 <div>
-                  <p className="text-sm font-semibold text-slate-950">{isRadiusVoucherMode ? "Voucher health" : "Pool health"}</p>
-                  <p className="text-sm text-slate-600">
-                    {isRadiusVoucherMode
-                      ? "Manual and payment-issued RADIUS vouchers grouped by plan."
-                      : "Top plan pools with remaining voucher availability."}
-                  </p>
+                  <div className="dash-title">Dashboard</div>
+                  <div className="dash-sub">{todayLabel()} · All-time</div>
                 </div>
-                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">
-                  {isRadiusVoucherMode ? "Voucher snapshot" : "Inventory snapshot"}
-                </p>
-              </div>
-              <div className="grid gap-4 xl:grid-cols-3">
-              {stats?.voucherPool.slice(0, 6).map((item) => (
-                <div key={item.code} className="rounded-[24px] border border-slate-200/90 bg-white px-5 py-4 shadow-[var(--shadow-sm)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-lg font-semibold leading-tight text-slate-950">{item.name}</p>
-                      <p className="mt-1 text-sm text-slate-500">{item.unused}/{item.total} unused</p>
-                    </div>
-                    <span className={[
-                      "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
-                      item.percentageRemaining > 30
-                        ? "bg-emerald-100 text-emerald-700"
-                        : item.percentageRemaining > 10
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-rose-100 text-rose-700",
-                    ].join(" ")}>
-                      {item.percentageRemaining.toFixed(0)}%
-                    </span>
-                  </div>
-                  <div className="mt-4 h-2 rounded-full bg-slate-100">
-                    <div
-                      className={[
-                        "h-2 rounded-full transition-all duration-500",
-                        item.percentageRemaining > 30
-                          ? "bg-emerald-500"
-                          : item.percentageRemaining > 10
-                            ? "bg-amber-500"
-                            : "bg-rose-500",
-                      ].join(" ")}
-                      style={{ width: `${Math.min(100, Math.max(0, item.percentageRemaining))}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-              </div>
-            </div>
-          ) : null}
-        </section>
-        ) : null}
-
-        {statsError ? (
-          <Alert variant="destructive">
-            <AlertTitle>Stats failed</AlertTitle>
-            <AlertDescription>{statsError}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        {dashboardVisibility.subscriberMonitoring ? (
-        <section id="ops-subscribers" className="panel-surface">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="section-kicker">Live</p>
-              <h2 className="mt-1 section-title">Subscriber monitoring</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Monitor active plans, live sessions, and policy limits for account-based access.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">
-                {subscribers.length} visible
-              </span>
-              <Button type="button" variant="outline" size="sm" onClick={loadSubscribers} disabled={subscribersLoading}>
-                {subscribersLoading ? "Refreshing..." : "Refresh subscribers"}
-              </Button>
-            </div>
-          </div>
-          {subscribersError ? (
-            <Alert variant="destructive" className="mt-4">
-              <AlertTitle>Subscribers failed</AlertTitle>
-              <AlertDescription>{subscribersError}</AlertDescription>
-            </Alert>
-          ) : null}
-          <div className="mt-5 space-y-3">
-            {subscribers.length === 0 && !subscribersLoading ? (
-              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50/85 px-5 py-6">
-                <p className="text-base font-semibold text-slate-900">No subscribers yet</p>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                  Subscriber records will appear here after customers start using account-based access and active sessions are detected.
-                </p>
-              </div>
-            ) : null}
-            {subscribers.map((row) => (
-              <div key={row.subscriberId} className="rounded-[24px] border border-slate-200/90 bg-white px-5 py-4 shadow-[var(--shadow-sm)] transition-[box-shadow] duration-200 hover:shadow-[var(--shadow-md)]">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-semibold text-slate-900">{row.fullName || row.email}</p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {row.email}{row.phone ? ` | ${row.phone}` : ""}
-                    </p>
-                  </div>
-                  <Badge className={row.activeSessions > 0 ? "shrink-0 bg-emerald-600 text-white" : "shrink-0 bg-slate-400 text-white"}>
-                    {row.activeSessions} session{row.activeSessions !== 1 ? "s" : ""}
-                  </Badge>
-                </div>
-                {row.entitlement ? (
-                  <div className="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                    <span><span className="font-medium text-slate-700">Plan:</span> {row.entitlement.planName || row.entitlement.planCode || "-"}</span>
-                    <span><span className="font-medium text-slate-700">Ends:</span> {dt(row.entitlement.endsAt)}</span>
-                    <span><span className="font-medium text-slate-700">Devices:</span> {row.entitlement.maxDevices ?? "Unlimited"}</span>
-                    <span><span className="font-medium text-slate-700">Profile:</span> {row.entitlement.bandwidthProfile || "-"}</span>
-                  </div>
-                ) : (
-                  <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">No active entitlement.</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-        ) : null}
-
-        {dashboardVisibility.architectureSettings ? (
-        <section id="ops-architecture" className="panel-surface">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="section-kicker">Config</p>
-              <h2 className="mt-1 section-title">Architecture settings</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Keep advanced config out of the main screen. Open the editor only when needed.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">
-                {hasArchitectureConfigured ? "Configured" : "Not configured"}
-              </span>
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowArchitectureModal(true)}>
-                <Settings className="size-4" />
-                Configure architecture
-              </Button>
-            </div>
-          </div>
-
-          {architecture ? (
-            <div className="mt-5 rounded-[24px] border border-slate-200/90 bg-slate-50/90 px-5 py-4">
-              <div className="flex flex-wrap gap-2 text-sm text-slate-700">
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">
-                  Access mode: <span className="font-semibold text-slate-900">{architecture.accessMode}</span>
-                </span>
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">
-                  Voucher source: <span className="font-semibold text-slate-900">{architecture.accessMode === "account_access" ? "n/a" : architecture.voucherSourceMode}</span>
-                </span>
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                Keep credentials, adapter settings, and external access controls inside the modal so the main admin view stays readable.
-              </p>
-            </div>
-          ) : null}
-
-          {architectureLoading ? (
-            <p className="mt-4 text-sm text-slate-600">Loading architecture settings...</p>
-          ) : null}
-
-        {architectureError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Architecture error</AlertTitle>
-            <AlertDescription>{architectureError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {architectureNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>Architecture updated</AlertTitle>
-            <AlertDescription>{architectureNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        {omadaTestError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Omada test failed</AlertTitle>
-            <AlertDescription>{omadaTestError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {omadaTestNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>Omada test passed</AlertTitle>
-            <AlertDescription>{omadaTestNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        {mikrotikTestError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>MikroTik test failed</AlertTitle>
-            <AlertDescription>{mikrotikTestError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {mikrotikTestNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>MikroTik test passed</AlertTitle>
-            <AlertDescription>{mikrotikTestNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        </section>
-        ) : null}
-
-        {dashboardVisibility.planManagement ? (
-        <section id="ops-plans" className="panel-surface">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="section-kicker">Plans</p>
-            <h2 className="mt-1 section-title">Plan management</h2>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              Keep plan values readable on desktop: code, pricing, limits, availability, and inventory stay grouped instead of squeezed into tiny cells.
-            </p>
-          </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => setShowCreatePlanModal(true)}>
-            Add plan
-          </Button>
-        </div>
-
-        <div className="mt-3 space-y-3 lg:hidden">
-          {plans.map((plan) => {
-            const draft = planDrafts[plan.id];
-            if (!draft) return null;
-            return (
-              <article key={plan.id} className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
-                <div className="grid gap-2">
-                  <Input
-                    value={draft.code}
-                    onChange={(event) =>
-                      setPlanDrafts((prev) => ({
-                        ...prev,
-                        [plan.id]: { ...prev[plan.id], code: event.target.value },
-                      }))
-                    }
-                  />
-                  <Input
-                    value={draft.name}
-                    onChange={(event) =>
-                      setPlanDrafts((prev) => ({
-                        ...prev,
-                        [plan.id]: { ...prev[plan.id], name: event.target.value },
-                      }))
-                    }
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      value={draft.duration}
-                      inputMode="text"
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], duration: event.target.value },
-                        }))
-                      }
-                      placeholder="1h / 2d / 1w"
-                    />
-                    <Input
-                      value={draft.price}
-                      inputMode="text"
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], price: event.target.value },
-                        }))
-                      }
-                      placeholder="25k / NGN 12000"
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input
-                      value={draft.maxDevices}
-                      inputMode="numeric"
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], maxDevices: event.target.value },
-                        }))
-                      }
-                      placeholder="Max devices (blank = unlimited)"
-                    />
-                    <Input
-                      value={draft.dataLimitMb}
-                      inputMode="text"
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], dataLimitMb: event.target.value },
-                        }))
-                      }
-                      placeholder="500MB / 1.5GB / 2TB"
-                    />
-                    <Input
-                      value={draft.bandwidthProfile}
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], bandwidthProfile: event.target.value },
-                        }))
-                      }
-                      placeholder="Bandwidth profile"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      type="datetime-local"
-                      value={draft.availableFrom}
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], availableFrom: event.target.value },
-                        }))
-                      }
-                      placeholder="Available from"
-                    />
-                    <Input
-                      type="datetime-local"
-                      value={draft.availableTo}
-                      onChange={(event) =>
-                        setPlanDrafts((prev) => ({
-                          ...prev,
-                          [plan.id]: { ...prev[plan.id], availableTo: event.target.value },
-                        }))
-                      }
-                      placeholder="Available to"
-                    />
-                  </div>
-                  {isRadiusVoucherMode ? (
-                    <div className="grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">Paid voucher code format</p>
-                      <select
-                        value={draft.radiusVoucherCharacterSet}
-                        onChange={(event) =>
-                          setPlanDrafts((prev) => ({
-                            ...prev,
-                            [plan.id]: {
-                              ...prev[plan.id],
-                              radiusVoucherCharacterSet: event.target.value as PlanVoucherCharacterSet,
-                            },
-                          }))
-                        }
-                      >
-                        <option value="legacy">Use current default format</option>
-                        <option value="alnum">Letters + numbers</option>
-                        <option value="letters">Letters only</option>
-                        <option value="numbers">Numbers only</option>
-                      </select>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          value={draft.radiusVoucherCodePrefix}
-                          onChange={(event) =>
-                            setPlanDrafts((prev) => ({
-                              ...prev,
-                              [plan.id]: { ...prev[plan.id], radiusVoucherCodePrefix: event.target.value.toUpperCase() },
-                            }))
-                          }
-                          placeholder="Prefix (optional)"
-                          disabled={draft.radiusVoucherCharacterSet === "legacy"}
-                        />
-                        <Input
-                          value={draft.radiusVoucherCodeLength}
-                          inputMode="numeric"
-                          onChange={(event) =>
-                            setPlanDrafts((prev) => ({
-                              ...prev,
-                              [plan.id]: { ...prev[plan.id], radiusVoucherCodeLength: event.target.value },
-                            }))
-                          }
-                          placeholder="Code length"
-                          disabled={draft.radiusVoucherCharacterSet === "legacy"}
-                        />
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">Unused: {plan.unusedCount}</span>
-                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">Assigned: {plan.assignedCount}</span>
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={draft.active}
-                    aria-label={`Set ${plan.name} active`}
-                    title={draft.active ? "Active" : "Inactive"}
-                    onClick={() =>
-                      setPlanDrafts((prev) => ({
-                        ...prev,
-                        [plan.id]: { ...prev[plan.id], active: !prev[plan.id].active },
-                      }))
-                    }
-                    className={[
-                      "relative inline-flex h-6 w-10 items-center rounded-full border transition",
-                      draft.active
-                        ? "border-emerald-600 bg-emerald-600/90"
-                        : "border-slate-300 bg-slate-200",
-                    ].join(" ")}
-                  >
-                    <span
-                      className={[
-                        "inline-block size-4 rounded-full bg-white shadow-sm transition",
-                        draft.active ? "translate-x-5" : "translate-x-1",
-                      ].join(" ")}
-                    />
+                <div className="dash-hdr-r">
+                  <button className="btn btn-muted btn-sm" type="button" onClick={() => setView("vouchers")}>
+                    Import CSV
                   </button>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      onClick={() => savePlan(plan)}
-                      disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
-                      aria-label="Save plan"
-                      title="Save plan"
-                      className="size-8"
-                    >
-                      <Save className="size-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="destructive"
-                      onClick={() => deletePlan(plan)}
-                      disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
-                      aria-label="Delete plan"
-                      title="Delete plan"
-                      className="size-8"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                  <button className="btn btn-ac btn-sm" type="button" onClick={() => { setView("plans"); setShowPlanForm(true); }}>
+                    + Add Plan
+                  </button>
+                </div>
+              </div>
+              <KpiRow
+                items={[
+                  { label: "Total Revenue", value: money(stats?.transactions.revenueNgn), delta: "Live from successful payments", tone: "up" },
+                  { label: "Transactions", value: compact(stats?.transactions.total), delta: `${compact(stats?.transactions.success)} successful`, tone: "up" },
+                  { label: "Vouchers Left", value: compact(availableVouchers), delta: lowStockPlans.length ? `${lowStockPlans[0].name} stock low` : "Ready to sell", tone: lowStockPlans.length ? "warn" : "neu" },
+                  { label: "Active Plans", value: compact(activePlans.length), delta: `${compact(plans.length)} total plans`, tone: "neu" },
+                ]}
+              />
+              <div className="dash-grid">
+                <div className="ac">
+                  <div className="ac-hdr">
+                    <div>
+                      <div className="ac-title">Recent Transactions</div>
+                      <div className="ac-sub">Latest customer payments</div>
+                    </div>
+                    <button className="btn btn-muted btn-sm" type="button" onClick={() => setView("transactions")}>
+                      View all →
+                    </button>
+                  </div>
+                  <TransactionsTable transactions={transactions.slice(0, 5)} compactTable onCancel={cancelTransaction} />
+                </div>
+                <div>
+                  <div className="widget">
+                    <div className="widget-title">Plan Breakdown</div>
+                    {plans.length === 0 ? <EmptyInline label="No plans yet" /> : plans.slice(0, 6).map((plan, index) => (
+                      <div className="bar-row" key={plan.id}>
+                        <div className="bar-meta">
+                          <span className="bar-name">{plan.name}</span>
+                          <span className="bar-val">{Math.round((plan.assignedCount / maxPlanTotal) * 100)}%</span>
+                        </div>
+                        <div className="bar-track">
+                          <div
+                            className="bar-fill"
+                            style={{
+                              width: `${Math.max(3, Math.round((plan.assignedCount / maxPlanTotal) * 100))}%`,
+                              background: index % 3 === 1 ? "var(--amber)" : index % 3 === 2 ? "var(--green)" : "var(--ac)",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="widget">
+                    <div className="widget-title">Voucher Stock</div>
+                    <div className="mini-stack">
+                      {plans.length === 0 ? <EmptyInline label="No voucher stock yet" /> : plans.slice(0, 6).map((plan) => (
+                        <div className="mini-row" key={plan.id}>
+                          <span>{plan.name}</span>
+                          <span className={plan.totalCount > 0 && plan.unusedCount / plan.totalCount <= 0.2 ? "warn-text" : ""}>
+                            {compact(plan.unusedCount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </article>
-            );
-          })}
-          {plans.length === 0 && !plansLoading ? (
-            <p className="rounded-2xl border border-slate-200/85 bg-white p-4 text-sm text-slate-600">No plans available.</p>
-          ) : null}
-        </div>
+              </div>
+            </section>
 
-        <div className="mt-5 hidden lg:block">
-          <div className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1260px] table-fixed text-sm [&_input]:shadow-none">
-                <colgroup>
-                  <col className="w-[12%]" />
-                  <col className="w-[24%]" />
-                  <col className="w-[20%]" />
-                  <col className="w-[20%]" />
-                  <col className="w-[10%]" />
-                  <col className="w-[7%]" />
-                  <col className="w-[7%]" />
-                </colgroup>
-                <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Code</th>
-                    <th className="px-4 py-3">Plan details</th>
-                    <th className="px-4 py-3">Limits</th>
-                    <th className="px-4 py-3">Availability</th>
-                    <th className="px-4 py-3">Inventory</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {plans.map((plan) => {
-                    const draft = planDrafts[plan.id];
-                    if (!draft) return null;
-                    return (
-                      <tr key={plan.id} className="align-top border-b border-slate-100 last:border-0">
-                        <td className="px-4 py-4">
-                          <div className="space-y-2">
-                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Code</p>
-                            <Input
-                              className="h-10 text-sm"
-                              value={draft.code}
-                              onChange={(event) =>
-                                setPlanDrafts((prev) => ({
-                                  ...prev,
-                                  [plan.id]: { ...prev[plan.id], code: event.target.value },
-                                }))
-                              }
-                            />
-                            {isRadiusVoucherMode ? (
-                              <div className="grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-900">Paid voucher format</p>
-                                <select
-                                  className="h-10 text-sm"
-                                  value={draft.radiusVoucherCharacterSet}
-                                  onChange={(event) =>
-                                    setPlanDrafts((prev) => ({
-                                      ...prev,
-                                      [plan.id]: {
-                                        ...prev[plan.id],
-                                        radiusVoucherCharacterSet: event.target.value as PlanVoucherCharacterSet,
-                                      },
-                                    }))
-                                  }
-                                >
-                                  <option value="legacy">Use current default format</option>
-                                  <option value="alnum">Letters + numbers</option>
-                                  <option value="letters">Letters only</option>
-                                  <option value="numbers">Numbers only</option>
-                                </select>
-                                <div className="grid gap-2 xl:grid-cols-2">
-                                  <Input
-                                    className="h-10 text-sm"
-                                    value={draft.radiusVoucherCodePrefix}
-                                    onChange={(event) =>
-                                      setPlanDrafts((prev) => ({
-                                        ...prev,
-                                        [plan.id]: {
-                                          ...prev[plan.id],
-                                          radiusVoucherCodePrefix: event.target.value.toUpperCase(),
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Prefix (optional)"
-                                    disabled={draft.radiusVoucherCharacterSet === "legacy"}
-                                  />
-                                  <Input
-                                    className="h-10 text-sm"
-                                    value={draft.radiusVoucherCodeLength}
-                                    inputMode="numeric"
-                                    onChange={(event) =>
-                                      setPlanDrafts((prev) => ({
-                                        ...prev,
-                                        [plan.id]: {
-                                          ...prev[plan.id],
-                                          radiusVoucherCodeLength: event.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Code length"
-                                    disabled={draft.radiusVoucherCharacterSet === "legacy"}
-                                  />
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="space-y-3">
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Name</p>
-                              <Input
-                                className="h-10 text-sm"
-                                value={draft.name}
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], name: event.target.value },
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div className="grid gap-3 xl:grid-cols-2">
-                              <div className="space-y-2">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Duration</p>
-                                <Input
-                                  className="h-10 text-sm"
-                                  value={draft.duration}
-                                  inputMode="text"
-                                  onChange={(event) =>
-                                    setPlanDrafts((prev) => ({
-                                      ...prev,
-                                      [plan.id]: { ...prev[plan.id], duration: event.target.value },
-                                    }))
-                                  }
-                                  placeholder="1h / 2d / 1w"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Price</p>
-                                <Input
-                                  className="h-10 text-sm"
-                                  value={draft.price}
-                                  inputMode="text"
-                                  onChange={(event) =>
-                                    setPlanDrafts((prev) => ({
-                                      ...prev,
-                                      [plan.id]: { ...prev[plan.id], price: event.target.value },
-                                    }))
-                                  }
-                                  placeholder="25k / NGN 12000"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="grid gap-3">
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Max devices</p>
-                              <Input
-                                className="h-10 text-sm"
-                                value={draft.maxDevices}
-                                inputMode="numeric"
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], maxDevices: event.target.value },
-                                  }))
-                                }
-                                placeholder="Blank = unlimited"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Data limit</p>
-                              <Input
-                                className="h-10 text-sm"
-                                value={draft.dataLimitMb}
-                                inputMode="text"
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], dataLimitMb: event.target.value },
-                                  }))
-                                }
-                                placeholder="500MB / 1.5GB / 2TB"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Bandwidth profile</p>
-                              <Input
-                                className="h-10 text-sm"
-                                value={draft.bandwidthProfile}
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], bandwidthProfile: event.target.value },
-                                  }))
-                                }
-                                placeholder="Bandwidth profile"
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="space-y-3">
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Available from</p>
-                              <Input
-                                className="h-10 text-sm"
-                                type="datetime-local"
-                                value={draft.availableFrom}
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], availableFrom: event.target.value },
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Available to</p>
-                              <Input
-                                className="h-10 text-sm"
-                                type="datetime-local"
-                                value={draft.availableTo}
-                                onChange={(event) =>
-                                  setPlanDrafts((prev) => ({
-                                    ...prev,
-                                    [plan.id]: { ...prev[plan.id], availableTo: event.target.value },
-                                  }))
-                                }
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="space-y-2 text-sm text-slate-700">
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                              <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Unused</p>
-                              <p className="mt-1 text-lg font-semibold text-slate-950">{plan.unusedCount}</p>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                              <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Assigned</p>
-                              <p className="mt-1 text-lg font-semibold text-slate-950">{plan.assignedCount}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="space-y-3">
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={draft.active}
-                              aria-label={`Set ${plan.name} active`}
-                              title={draft.active ? "Active" : "Inactive"}
-                              onClick={() =>
-                                setPlanDrafts((prev) => ({
-                                  ...prev,
-                                  [plan.id]: { ...prev[plan.id], active: !prev[plan.id].active },
-                                }))
-                              }
-                              className={[
-                                "relative inline-flex h-6 w-10 items-center rounded-full border transition",
-                                draft.active
-                                  ? "border-emerald-600 bg-emerald-600/90"
-                                  : "border-slate-300 bg-slate-200",
-                              ].join(" ")}
-                            >
-                              <span
-                                className={[
-                                  "inline-block size-4 rounded-full bg-white shadow-sm transition",
-                                  draft.active ? "translate-x-5" : "translate-x-1",
-                                ].join(" ")}
-                              />
-                            </button>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                              <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Total</p>
-                              <p className="mt-1 text-lg font-semibold text-slate-950">{plan.totalCount}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => savePlan(plan)}
-                              disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
-                              className="justify-center"
-                            >
-                              <Save className="size-3.5" />
-                              Save
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => deletePlan(plan)}
-                              disabled={savingPlanIds[plan.id] || deletingPlanIds[plan.id]}
-                              className="justify-center"
-                            >
-                              <Trash2 className="size-3.5" />
-                              Delete
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {plans.length === 0 && !plansLoading ? (
-              <p className="p-4 text-sm text-slate-600">No plans available.</p>
-            ) : null}
-          </div>
-        </div>
-
-        {plansError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Plan action failed</AlertTitle>
-            <AlertDescription>{plansError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {planNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>Plan update</AlertTitle>
-            <AlertDescription>{planNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        </section>
-        ) : null}
-
-        {dashboardVisibility.voucherOperations ? (
-        <section id="ops-vouchers" className="panel-surface">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="section-kicker">Inventory</p>
-            <h2 className="mt-1 section-title">Voucher operations</h2>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              {hasArchitectureConfigured
-                ? isExternalAccessMode
-                  ? "External account-access mode: voucher inventory is bypassed. Use subscriber monitoring and RADIUS accounting."
-                  : isApiAutomationMode
-                    ? isOmadaMode
-                      ? "Omada automation mode: vouchers are created automatically after each successful customer payment."
-                      : "MikroTik direct mode: vouchers are created automatically after each successful customer payment."
-                  : isRadiusVoucherMode
-                    ? hasPlans
-                      ? "RADIUS voucher mode: generate voucher codes manually for a plan or let PaySpot issue them automatically after successful customer payment."
-                      : "RADIUS voucher mode active. Create at least one plan before issuing manual vouchers."
-                  : hasPlans
-                    ? "CSV mode: create manually, batch generate, or import CSV."
-                    : "CSV mode active. Create at least one plan before adding or generating vouchers."
-                : "Configure architecture first to unlock voucher action flows."}
-            </p>
-          </div>
-          {hasArchitectureConfigured ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {canManuallyCreateVouchers && hasPlans ? (
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowCreateVoucherModal(true)}>
-                  Add voucher
-                </Button>
-              ) : null}
-              {canBatchGenerateVouchers ? (
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowGenerateVoucherModal(true)}>
-                  Batch generate
-                </Button>
-              ) : null}
-              {canImportCsvVouchers ? (
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowImportVoucherModal(true)}>
-                  Import CSV
-                </Button>
-              ) : null}
-            </div>
-          ) : (
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowArchitectureModal(true)}>
-              <Settings className="size-4" />
-              Configure architecture
-            </Button>
-          )}
-        </div>
-
-        <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_220px_220px_auto]">
-          <Input
-            placeholder="Search voucher, plan, email, phone"
-            value={voucherQuery}
-            onChange={(event) => setVoucherQuery(event.target.value)}
-          />
-          <select className="h-11" value={voucherStatus} onChange={(event) => setVoucherStatus(event.target.value)}>
-            <option value="all">All statuses</option>
-            <option value="UNUSED">Unused</option>
-            <option value="ASSIGNED">Assigned</option>
-          </select>
-          <select className="h-11" value={voucherPlan} onChange={(event) => setVoucherPlan(event.target.value)}>
-            <option value="all">All plans</option>
-            {plans.map((plan) => (
-              <option key={plan.id} value={plan.id}>
-                {plan.name}
-              </option>
-            ))}
-          </select>
-          <Button type="button" variant="outline" size="sm" onClick={loadVouchers} disabled={vouchersLoading} className="xl:self-end">
-            {vouchersLoading ? "Loading..." : "Refresh"}
-          </Button>
-        </div>
-
-        <div className="mt-3 space-y-3 lg:hidden">
-          {vouchers.map((row) => (
-            <article key={row.id} className="rounded-2xl border border-slate-200/85 bg-white p-4 shadow-[var(--shadow-sm)]">
-              <div className="flex items-start gap-3">
-                <input
-                  aria-label={`Select voucher ${row.voucherCode}`}
-                  type="checkbox"
-                  className="mt-1 shrink-0"
-                  checked={selectedVoucherIds.includes(row.id)}
-                  onChange={(event) =>
-                    setSelectedVoucherIds((prev) =>
-                      event.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
-                    )
-                  }
-                />
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-900 break-all">{row.voucherCode}</p>
-                  <p className="text-xs text-slate-500">{row.packageName}</p>
+            <section className={`dash-section ${view === "transactions" ? "on" : ""}`}>
+              <div className="dash-header">
+                <div>
+                  <div className="dash-title">Transactions</div>
+                  <div className="dash-sub">{compact(stats?.transactions.total)} total · {money(stats?.transactions.revenueNgn)} revenue</div>
+                </div>
+                <div className="dash-hdr-r">
+                  <button className="btn btn-muted btn-sm" type="button" onClick={() => void refreshTransactions(transactionPage)}>
+                    Refresh
+                  </button>
                 </div>
               </div>
-              <div className="mt-2">
-                {row.status === "UNUSED" ? (
-                  <Badge className="bg-emerald-700 text-white">UNUSED</Badge>
-                ) : (
-                  <Badge className="bg-amber-600 text-white">ASSIGNED</Badge>
-                )}
+              <KpiRow
+                items={[
+                  { label: "Total Txns", value: compact(stats?.transactions.total), delta: "All statuses", tone: "up" },
+                  { label: "Success Rate", value: `${successRate}%`, delta: `${compact(stats?.transactions.success)} paid`, tone: "up" },
+                  { label: "Pending", value: compact((stats?.transactions.pending ?? 0) + (stats?.transactions.processing ?? 0)), delta: "Awaiting confirm", tone: "warn" },
+                  { label: "Failed", value: compact(stats?.transactions.failed), delta: "Needs retry or support", tone: "neu" },
+                ]}
+              />
+              <div className="ac">
+                <div className="tbar">
+                  <input className="tsearch" placeholder="Search name, phone, code..." value={transactionQuery} onChange={(event) => { setTransactionPage(1); setTransactionQuery(event.target.value); }} />
+                  <select className="tfilter" value={transactionStatus} onChange={(event) => { setTransactionPage(1); setTransactionStatus(event.target.value); }}>
+                    <option value="all">All statuses</option>
+                    <option value="success">Paid</option>
+                    <option value="pending">Pending</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                  <select className="tfilter" value={transactionPlan} onChange={(event) => { setTransactionPage(1); setTransactionPlan(event.target.value); }}>
+                    <option value="all">All plans</option>
+                    {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
+                  </select>
+                </div>
+                <TransactionsTable transactions={transactions} onCancel={cancelTransaction} />
+                <Pager pagination={transactionPagination} page={transactionPage} setPage={setTransactionPage} />
               </div>
-              <div className="mt-3 grid gap-1 text-xs text-slate-600">
-                <p>Email: {row.assignedToEmail || "-"}</p>
-                <p>Phone: {row.assignedToPhone || "-"}</p>
-                <p>Created: {dt(row.createdAt)}</p>
-                <p>Assigned: {dt(row.assignedAt)}</p>
-              </div>
-            </article>
-          ))}
-          {vouchers.length === 0 && !vouchersLoading ? (
-            <p className="rounded-2xl border border-slate-200/85 bg-white p-4 text-sm text-slate-600">No vouchers found.</p>
-          ) : null}
-        </div>
+            </section>
 
-        <div className="mt-5 hidden lg:block">
-          <div className="overflow-hidden rounded-[24px] border border-slate-200/90 bg-white">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1080px] table-fixed text-sm">
-                <colgroup>
-                  <col className="w-[5%]" />
-                  <col className="w-[17%]" />
-                  <col className="w-[16%]" />
-                  <col className="w-[30%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[10%]" />
-                  <col className="w-[10%]" />
-                </colgroup>
-                <thead className="border-b border-slate-200 bg-slate-50/95 text-left text-xs uppercase tracking-[0.08em] text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3"></th>
-                    <th className="px-4 py-3">Voucher</th>
-                    <th className="px-4 py-3">Plan</th>
-                    <th className="px-4 py-3">Assigned to</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Created</th>
-                    <th className="px-4 py-3">Assigned</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vouchers.map((row) => (
-                    <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                      <td className="px-4 py-4 align-top">
-                        <input
-                          aria-label={`Select voucher ${row.voucherCode}`}
-                          type="checkbox"
-                          checked={selectedVoucherIds.includes(row.id)}
-                          onChange={(event) =>
-                            setSelectedVoucherIds((prev) =>
-                              event.target.checked ? [...prev, row.id] : prev.filter((id) => id !== row.id),
-                            )
-                          }
-                        />
-                      </td>
-                      <td className="px-4 py-4 align-top">
-                        <div className="space-y-1">
-                          <p className="font-semibold break-all text-slate-950">{row.voucherCode}</p>
-                          <p className="text-xs uppercase tracking-[0.08em] text-slate-500">{row.packageCode}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 align-top">
-                        <p className="font-medium text-slate-900">{row.packageName}</p>
-                      </td>
-                      <td className="px-4 py-4 align-top">
-                        <div className="space-y-2">
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                            <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Email</p>
-                            <p className="mt-1 break-all text-sm text-slate-900">{row.assignedToEmail || "-"}</p>
-                          </div>
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                            <p className="text-xs uppercase tracking-[0.08em] text-slate-500">Phone</p>
-                            <p className="mt-1 text-sm text-slate-900">{row.assignedToPhone || "-"}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 align-top">
-                        {row.status === "UNUSED" ? (
-                          <Badge className="bg-emerald-700 text-white">UNUSED</Badge>
-                        ) : (
-                          <Badge className="bg-amber-600 text-white">ASSIGNED</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 align-top text-sm text-slate-600">{dt(row.createdAt)}</td>
-                      <td className="px-4 py-4 align-top text-sm text-slate-600">{dt(row.assignedAt)}</td>
-                    </tr>
+            <section className={`dash-section ${view === "vouchers" ? "on" : ""}`}>
+              <div className="dash-header">
+                <div>
+                  <div className="dash-title">Vouchers</div>
+                  <div className="dash-sub">{compact(availableVouchers)} available · {compact(usedVouchers)} used</div>
+                </div>
+                <div className="dash-hdr-r">
+                  <button className="btn btn-muted btn-sm" type="button" onClick={() => setVoucherActionOpen((open) => !open)}>
+                    Import / Generate
+                  </button>
+                </div>
+              </div>
+              {lowStockPlans.length ? (
+                <div className="alert-banner warn">Low stock warning: {lowStockPlans[0].name} is down to {compact(lowStockPlans[0].unusedCount)} vouchers.</div>
+              ) : null}
+              <KpiRow
+                items={[
+                  { label: "Total Stock", value: compact(totalVouchers), delta: "All plans combined", tone: "neu" },
+                  { label: "Used", value: compact(usedVouchers), delta: `${totalVouchers ? Math.round((usedVouchers / totalVouchers) * 100) : 0}% utilisation`, tone: "neu" },
+                  { label: "Available", value: compact(availableVouchers), delta: "Ready to sell", tone: "up" },
+                  { label: "Low Stock Plans", value: compact(lowStockPlans.length), delta: lowStockPlans.length ? "Needs import" : "Healthy", tone: lowStockPlans.length ? "warn" : "neu" },
+                ]}
+              />
+              {voucherActionOpen ? (
+                <form className="settings-card" onSubmit={createVouchers}>
+                  <div className="settings-card-title">Import or Generate Vouchers</div>
+                  <div className="field-row">
+                    <div className="field">
+                      <label>Plan</label>
+                      <select value={voucherForm.packageId} onChange={(event) => setVoucherForm((prev) => ({ ...prev, packageId: event.target.value }))}>
+                        {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label>Generate Count</label>
+                      <input value={voucherForm.generateCount} onChange={(event) => setVoucherForm((prev) => ({ ...prev, generateCount: event.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="field-row">
+                    <div className="field">
+                      <label>Optional Prefix</label>
+                      <input value={voucherForm.prefix} onChange={(event) => setVoucherForm((prev) => ({ ...prev, prefix: event.target.value }))} placeholder="WIFI" />
+                    </div>
+                    <div className="field">
+                      <label>Single Manual Code</label>
+                      <input value={voucherForm.voucherCode} onChange={(event) => setVoucherForm((prev) => ({ ...prev, voucherCode: event.target.value }))} placeholder="Leave blank to auto-generate" />
+                    </div>
+                  </div>
+                  <input ref={importInput} type="file" accept=".csv,text/csv" hidden onChange={importCsv} />
+                  <div className="settings-foot">
+                    <button className="btn btn-muted btn-sm" type="button" onClick={() => importInput.current?.click()} disabled={creatingVouchers}>
+                      Import CSV
+                    </button>
+                    <button className="btn btn-ac btn-sm" type="submit" disabled={creatingVouchers || !voucherForm.packageId}>
+                      {creatingVouchers ? <Loader2 className="spin" size={14} /> : null}
+                      Generate
+                    </button>
+                  </div>
+                </form>
+              ) : null}
+              <div className="ac">
+                <div className="ac-hdr">
+                  <div className="ac-title">Stock by Plan</div>
+                  <button className="btn btn-ac btn-sm" type="button" onClick={() => setVoucherActionOpen(true)}>
+                    Import CSV
+                  </button>
+                </div>
+                <div className="table-scroll">
+                  <table className="t">
+                    <thead><tr><th>Plan</th><th>Duration</th><th>Total Imported</th><th>Used</th><th>Available</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                      {plans.map((plan) => {
+                        const badge = voucherBadge(plan);
+                        return (
+                          <tr key={plan.id}>
+                            <td className="td-main">{plan.name}</td>
+                            <td>{duration(plan.durationMinutes)}</td>
+                            <td className="td-muted">{compact(plan.totalCount)}</td>
+                            <td className="td-muted">{compact(plan.assignedCount)}</td>
+                            <td className="td-mono">{compact(plan.unusedCount)}</td>
+                            <td><span className={badge.className}>{badge.label}</span></td>
+                            <td><button className="btn btn-muted btn-xs" type="button" onClick={() => { setVoucherForm((prev) => ({ ...prev, packageId: plan.id })); setVoucherActionOpen(true); }}>Import more</button></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="ac">
+                <div className="tbar">
+                  <input className="tsearch" placeholder="Search code, plan, email..." value={voucherQuery} onChange={(event) => { setVoucherPage(1); setVoucherQuery(event.target.value); }} />
+                  <select className="tfilter" value={voucherStatus} onChange={(event) => { setVoucherPage(1); setVoucherStatus(event.target.value); }}>
+                    <option value="all">All statuses</option>
+                    <option value="UNUSED">Available</option>
+                    <option value="ASSIGNED">Used</option>
+                  </select>
+                  <select className="tfilter" value={voucherPlan} onChange={(event) => { setVoucherPage(1); setVoucherPlan(event.target.value); }}>
+                    <option value="all">All plans</option>
+                    {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
+                  </select>
+                </div>
+                <div className="table-scroll">
+                  <table className="t">
+                    <thead><tr><th>Voucher</th><th>Plan</th><th>Assigned To</th><th>Date</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {vouchers.length === 0 ? <EmptyRow colSpan={5} label="No vouchers match this filter." /> : vouchers.map((voucher) => (
+                        <tr key={voucher.id}>
+                          <td className="td-mono">{voucher.voucherCode}</td>
+                          <td className="td-main">{voucher.packageName}</td>
+                          <td>{voucher.assignedToEmail || voucher.assignedToPhone || "Unassigned"}</td>
+                          <td>{dateTime(voucher.assignedAt || voucher.createdAt)}</td>
+                          <td><span className={`badge ${voucher.status === "UNUSED" ? "badge-g" : "badge-a"}`}>{voucher.status === "UNUSED" ? "Available" : "Used"}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Pager pagination={voucherPagination} page={voucherPage} setPage={setVoucherPage} />
+              </div>
+            </section>
+
+            <section className={`dash-section ${view === "plans" ? "on" : ""}`}>
+              <div className="dash-header">
+                <div>
+                  <div className="dash-title">Plans</div>
+                  <div className="dash-sub">{compact(activePlans.length)} active plans</div>
+                </div>
+                <div className="dash-hdr-r">
+                  <button className="btn btn-ac btn-sm" type="button" onClick={() => {
+                    closeEditPlan();
+                    setShowPlanForm((open) => !open);
+                  }}>
+                    + New Plan
+                  </button>
+                </div>
+              </div>
+              {showPlanForm ? (
+                <form className="settings-card" onSubmit={createPlan}>
+                  <div className="settings-card-title">New Plan</div>
+                  <div className="field-row">
+                    <div className="field"><label>Plan Name</label><input required value={newPlan.name} onChange={(event) => setNewPlan((prev) => ({ ...prev, name: event.target.value }))} placeholder="1 Day Wi-Fi" /></div>
+                    <div className="field"><label>Price (NGN)</label><input required type="number" min="0" value={newPlan.priceNgn} onChange={(event) => setNewPlan((prev) => ({ ...prev, priceNgn: event.target.value }))} /></div>
+                  </div>
+                  <div className="field-row">
+                    <div className="field"><label>Duration (minutes)</label><input type="number" min="1" value={newPlan.durationMinutes} onChange={(event) => setNewPlan((prev) => ({ ...prev, durationMinutes: event.target.value }))} /></div>
+                    <div className="field"><label>Max Devices</label><input type="number" min="1" max="32" value={newPlan.maxDevices} onChange={(event) => setNewPlan((prev) => ({ ...prev, maxDevices: event.target.value }))} /></div>
+                  </div>
+                  <div className="field-row">
+                    <div className="field"><label>Speed / Profile</label><input value={newPlan.bandwidthProfile} onChange={(event) => setNewPlan((prev) => ({ ...prev, bandwidthProfile: event.target.value }))} placeholder="10Mbps" /></div>
+                    <div className="field"><label>Data Limit (MB)</label><input type="number" min="1" value={newPlan.dataLimitMb} onChange={(event) => setNewPlan((prev) => ({ ...prev, dataLimitMb: event.target.value }))} placeholder="Optional" /></div>
+                  </div>
+                  <div className="field"><label>Description</label><textarea value={newPlan.description} onChange={(event) => setNewPlan((prev) => ({ ...prev, description: event.target.value }))} /></div>
+                  <div className="settings-foot">
+                    <button className="btn btn-muted btn-sm" type="button" onClick={() => setShowPlanForm(false)}>Cancel</button>
+                    <button className="btn btn-ac btn-sm" type="submit" disabled={creatingPlan}>{creatingPlan ? <Loader2 className="spin" size={14} /> : null}Create Plan</button>
+                  </div>
+                </form>
+              ) : null}
+              {editingPlanId && editPlan ? (
+                <form className="settings-card" onSubmit={updatePlan}>
+                  <div className="settings-card-title">Edit Plan</div>
+                  <div className="field-row">
+                    <div className="field"><label>Plan Name</label><input required value={editPlan.name} onChange={(event) => setEditPlan((prev) => prev ? ({ ...prev, name: event.target.value }) : prev)} /></div>
+                    <div className="field"><label>Plan Code</label><input required value={editPlan.code} onChange={(event) => setEditPlan((prev) => prev ? ({ ...prev, code: event.target.value }) : prev)} /></div>
+                  </div>
+                  <div className="field-row">
+                    <div className="field"><label>Price (NGN)</label><input required type="number" min="0" value={editPlan.priceNgn} onChange={(event) => setEditPlan((prev) => prev ? ({ ...prev, priceNgn: event.target.value }) : prev)} /></div>
+                    <div className="field"><label>Duration (minutes)</label><input type="number" min="1" value={editPlan.durationMinutes} onChange={(event) => setEditPlan((prev) => prev ? ({ ...prev, durationMinutes: event.target.value }) : prev)} /></div>
+                  </div>
+                  <div className="field-row">
+                    <div className="field"><label>Max Devices</label><input type="number" min="1" max="32" value={editPlan.maxDevices} onChange={(event) => setEditPlan((prev) => prev ? ({ ...prev, maxDevices: event.target.value }) : prev)} /></div>
+                    <div className="field"><label>Data Limit (MB)</label><input type="number" min="1" value={editPlan.dataLimitMb} onChange={(event) => setEditPlan((prev) => prev ? ({ ...prev, dataLimitMb: event.target.value }) : prev)} placeholder="Optional" /></div>
+                  </div>
+                  <div className="field-row">
+                    <div className="field"><label>Speed / Profile</label><input value={editPlan.bandwidthProfile} onChange={(event) => setEditPlan((prev) => prev ? ({ ...prev, bandwidthProfile: event.target.value }) : prev)} placeholder="10Mbps" /></div>
+                    <label className="toggle" style={{ alignSelf: "end", marginBottom: 8 }}>
+                      <input type="checkbox" checked={editPlan.active} onChange={(event) => setEditPlan((prev) => prev ? ({ ...prev, active: event.target.checked }) : prev)} />
+                      <span className="toggle-label">Plan is active</span>
+                    </label>
+                  </div>
+                  <div className="field"><label>Description</label><textarea value={editPlan.description} onChange={(event) => setEditPlan((prev) => prev ? ({ ...prev, description: event.target.value }) : prev)} /></div>
+                  <div className="settings-foot">
+                    <button className="btn btn-muted btn-sm" type="button" onClick={closeEditPlan}>Cancel</button>
+                    <button className="btn btn-ac btn-sm" type="submit" disabled={savingPlan}>{savingPlan ? <Loader2 className="spin" size={14} /> : null}Save Plan</button>
+                  </div>
+                </form>
+              ) : null}
+              <div className="plans-toolbar">
+                <input className="tsearch" placeholder="Search plans..." style={{ width: 220 }} value={planQuery} onChange={(event) => setPlanQuery(event.target.value)} />
+                <select className="tfilter" value={planStatus} onChange={(event) => setPlanStatus(event.target.value)}>
+                  <option value="all">All plans</option>
+                  <option value="active">Active only</option>
+                  <option value="inactive">Inactive only</option>
+                </select>
+                <div className="plans-toolbar-r">
+                  <div className="view-toggle">
+                    <button className={`view-btn ${planView === "list" ? "on" : ""}`} type="button" onClick={() => setPlanView("list")}><List size={14} />List</button>
+                    <button className={`view-btn ${planView === "grid" ? "on" : ""}`} type="button" onClick={() => setPlanView("grid")}><Grid2X2 size={14} />Grid</button>
+                  </div>
+                </div>
+              </div>
+              {planView === "list" ? (
+                <div className="plans-table-wrap">
+                  <div className="table-scroll">
+                    <table className="plans-t">
+                      <thead><tr><th>Plan Name</th><th>Price</th><th>Duration</th><th>Speed / Devices / Data</th><th>Used</th><th>Revenue est.</th><th>Status</th><th>Actions</th></tr></thead>
+                      <tbody>{filteredPlans.map((plan) => <PlanRow key={plan.id} plan={plan} onEdit={openEditPlan} onToggle={togglePlan} onDelete={deletePlan} />)}</tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="plans-grid">
+                  {filteredPlans.map((plan) => (
+                    <div className={`plan-grid-card ${plan.active ? "" : "inactive"}`} key={plan.id}>
+                      <div className="pgc-top"><div><div className="pgc-name">{plan.name}</div><div className="td-muted">{plan.code}</div></div><div className="pgc-price">{money(plan.priceNgn)}</div></div>
+                      <div className="pgc-specs"><span className="pgc-spec">{duration(plan.durationMinutes)}</span><span className="pgc-spec">{plan.maxDevices || 1} devices</span><span className="pgc-spec">{plan.bandwidthProfile || "Standard"}</span></div>
+                      <div className="pgc-stats"><div><div className="pgc-stat-v">{compact(plan.assignedCount)}</div><div className="pgc-stat-l">Used</div></div><div><div className="pgc-stat-v">{compact(plan.unusedCount)}</div><div className="pgc-stat-l">Available</div></div></div>
+                      <div className="pgc-foot"><button className="btn btn-ac btn-xs" type="button" onClick={() => openEditPlan(plan)}>Edit</button><button className="btn btn-muted btn-xs" type="button" onClick={() => void togglePlan(plan)}>{plan.active ? "Pause" : "Activate"}</button><button className="btn btn-red btn-xs" type="button" onClick={() => void deletePlan(plan)}>Delete</button></div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-            {vouchers.length === 0 && !vouchersLoading ? (
-              <p className="p-4 text-sm text-slate-600">No vouchers found.</p>
-            ) : null}
-          </div>
-        </div>
+                </div>
+              )}
+            </section>
 
-        <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <p className="text-sm text-slate-600">
-            Showing {vouchers.length} / {voucherTotal} | Selected {selectedVoucherIds.length}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {canReclaimVouchers ? (
-              <Button type="button" variant="outline" size="sm" onClick={reclaimSelected} disabled={selectedVoucherIds.length === 0}>
-                <ArchiveRestore className="size-4" />
-                Unarchive
-              </Button>
-            ) : null}
-            {canDeleteVouchers ? (
-              <Button type="button" variant="destructive" size="sm" onClick={deleteSelected} disabled={selectedVoucherIds.length === 0}>
-                <Trash2 className="size-4" />
-                Delete
-              </Button>
-            ) : null}
-            {canDeleteVouchers || canReclaimVouchers ? <span className="mx-1 h-5 w-px shrink-0 bg-slate-200" /> : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setVoucherPage((prev) => Math.max(1, prev - 1))}
-              disabled={voucherPage <= 1}
-            >
-              <ChevronLeft className="size-4" />
-              Prev
-            </Button>
-            <span className="text-sm text-slate-600">{voucherPage} / {voucherTotalPages}</span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setVoucherPage((prev) => Math.min(voucherTotalPages, prev + 1))}
-              disabled={voucherPage >= voucherTotalPages}
-            >
-              Next
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        </div>
-
-        {vouchersError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Voucher action failed</AlertTitle>
-            <AlertDescription>{vouchersError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {voucherNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>Voucher update</AlertTitle>
-            <AlertDescription>{voucherNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        {importError ? (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTitle>Import failed</AlertTitle>
-            <AlertDescription>{importError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {importNotice ? (
-          <Alert variant="success" className="mt-4">
-            <AlertTitle>Import complete</AlertTitle>
-            <AlertDescription>{importNotice}</AlertDescription>
-          </Alert>
-        ) : null}
-        </section>
-        ) : null}
-      </div>
-
-      {showQuickActionsModal && canShowQuickActions ? (
-        <ModalShell title="Quick actions" onClose={() => setShowQuickActionsModal(false)}>
-          <div className="grid gap-2">
-            {dashboardVisibility.planManagement ? (
-            <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreatePlanModal(true); }}>
-              Add plan
-            </Button>
-            ) : null}
-            {dashboardVisibility.voucherOperations && hasArchitectureConfigured && canManuallyCreateVouchers && hasPlans ? (
-              <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowCreateVoucherModal(true); }}>
-                Add voucher
-              </Button>
-            ) : null}
-            {dashboardVisibility.voucherOperations && hasArchitectureConfigured && canBatchGenerateVouchers ? (
-              <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowGenerateVoucherModal(true); }}>
-                Batch generate vouchers
-              </Button>
-            ) : null}
-            {dashboardVisibility.voucherOperations && hasArchitectureConfigured && canImportCsvVouchers ? (
-              <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowImportVoucherModal(true); }}>
-                Import voucher CSV
-              </Button>
-            ) : null}
-            {dashboardVisibility.architectureSettings ? (
-            <Button type="button" variant="outline" onClick={() => { setShowQuickActionsModal(false); setShowArchitectureModal(true); }}>
-              <Settings className="size-4" />
-              Configure architecture
-            </Button>
-            ) : null}
-          </div>
-        </ModalShell>
-      ) : null}
-
-      {showArchitectureModal && architecture ? (
-        <ModalShell title="Configure architecture" onClose={() => setShowArchitectureModal(false)}>
-          <form className="grid gap-3" onSubmit={saveArchitecture}>
-            <div className="flex items-center justify-end">
-              {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "omada_openapi" ? (
-                <Link
-                  href="/help/omada-openapi"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  <CircleHelp className="size-3.5" />
-                  Omada setup help
-                </Link>
-              ) : architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "mikrotik_rest" ? (
-                <Link
-                  href="/help/mikrotik-rest"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  <CircleHelp className="size-3.5" />
-                  MikroTik setup help
-                </Link>
-              ) : architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "radius_voucher" ? (
-                <Link
-                  href="/help/radius-voucher"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
-                >
-                  <CircleHelp className="size-3.5" />
-                  RADIUS voucher help
-                </Link>
-              ) : architecture.accessMode === "account_access" ? (
-                <Link
-                  href="/help/external-radius"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
-                >
-                  <CircleHelp className="size-3.5" />
-                  External RADIUS help
-                </Link>
-                ) : null}
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="accessMode">Access mode</Label>
-                <select
-                  id="accessMode"
-                  value={architecture.accessMode}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? (() => {
-                            const nextMode = event.target.value as ArchitectureConfig["accessMode"];
-                            return {
-                              ...prev,
-                              accessMode: nextMode,
-                              voucherSourceMode:
-                                nextMode === "account_access" ? "import_csv" : prev.voucherSourceMode,
-                            };
-                          })()
-                        : prev,
-                    )
-                  }
-                >
-                  <option value="voucher_access">Voucher access</option>
-                  <option value="account_access">Account access (External RADIUS)</option>
-                </select>
+            <section className={`dash-section ${view === "network" ? "on" : ""}`}>
+              <div className="dash-header">
+                <div>
+                  <div className="dash-title">Network Setup</div>
+                  <div className="dash-sub">Configure your hotspot platform</div>
+                </div>
               </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="voucherSourceMode">Voucher source</Label>
-                <select
-                  id="voucherSourceMode"
-                  value={architecture.voucherSourceMode}
-                  disabled={architecture.accessMode === "account_access"}
-                  onChange={(event) =>
-                    setArchitecture((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            voucherSourceMode: event.target.value as ArchitectureConfig["voucherSourceMode"],
-                          }
-                        : prev,
-                    )
-                  }
-                >
-                  <option value="import_csv">Import CSV (default)</option>
-                  <option value="omada_openapi">Omada OpenAPI sync</option>
-                  <option value="mikrotik_rest">MikroTik direct (REST)</option>
-                  <option value="radius_voucher">External RADIUS voucher mode</option>
-                </select>
-                {architecture.accessMode === "account_access" ? (
-                  <p className="text-xs text-slate-500">
-                    Voucher source is disabled in account-access mode.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Dashboard visibility</p>
-              <p className="mt-2 text-xs text-slate-600">
-                Hide sections that are not relevant for this tenant so their admin workspace stays focused.
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {DASHBOARD_VISIBILITY_OPTIONS.map((option) => (
-                  <label
-                    key={option.key}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-                  >
-                    <span className="flex items-start gap-2">
-                      <input
-                        type="checkbox"
-                        checked={architecture.dashboardVisibility[option.key]}
-                        onChange={(event) =>
-                          setArchitecture((prev) =>
-                            prev
-                              ? {
-                                  ...prev,
-                                  dashboardVisibility: {
-                                    ...prev.dashboardVisibility,
-                                    [option.key]: event.target.checked,
-                                  },
-                                }
-                              : prev,
-                          )
-                        }
-                      />
-                      <span>
-                        <span className="block font-medium text-slate-900">{option.label}</span>
-                        <span className="mt-1 block text-xs text-slate-500">{option.description}</span>
-                      </span>
-                    </span>
-                  </label>
+              <div className="platform-pills">
+                {[
+                  ["omada", "Omada Cloud"],
+                  ["mikrotik", "MikroTik RouterOS"],
+                  ["radius", "RADIUS / FreeRADIUS"],
+                  ["csv", "CSV Only"],
+                ].map(([key, label]) => (
+                  <button key={key} className={`platform-pill ${networkPlatform === key ? "on" : ""}`} type="button" onClick={() => setNetworkPlatform(key as NetworkPlatform)}>{label}</button>
                 ))}
               </div>
-            </div>
-
-            {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "omada_openapi" ? (
-              <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Omada OpenAPI credentials</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <Input
-                    value={architecture.omada.apiBaseUrl}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? { ...prev, omada: { ...prev.omada, apiBaseUrl: event.target.value } }
-                          : prev,
-                      )
-                    }
-                    placeholder="https://use1-omada-northbound.tplinkcloud.com"
-                  />
-                  <Input
-                    value={architecture.omada.omadacId}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev ? { ...prev, omada: { ...prev.omada, omadacId: event.target.value } } : prev,
-                      )
-                    }
-                    placeholder="Omada ID"
-                  />
-                  <Input
-                    value={architecture.omada.siteId}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev ? { ...prev, omada: { ...prev.omada, siteId: event.target.value } } : prev,
-                      )
-                    }
-                    placeholder="Site ID"
-                  />
-                  <Input
-                    value={architecture.omada.clientId}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev ? { ...prev, omada: { ...prev.omada, clientId: event.target.value } } : prev,
-                      )
-                    }
-                    placeholder="Client ID"
-                  />
-                  <Input
-                    type="password"
-                    value={omadaClientSecret}
-                    onChange={(event) => setOmadaClientSecret(event.target.value)}
-                    placeholder={
-                      architecture.omada.hasClientSecret
-                        ? "Client secret (leave blank to keep)"
-                        : "Client secret"
-                    }
-                  />
-                  <Input
-                    value={architecture.omada.hotspotOperatorUsername}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              omada: { ...prev.omada, hotspotOperatorUsername: event.target.value },
-                            }
-                          : prev,
-                      )
-                    }
-                    placeholder="Hotspot operator username"
-                  />
-                  <Input
-                    type="password"
-                    value={omadaHotspotOperatorPassword}
-                    onChange={(event) => setOmadaHotspotOperatorPassword(event.target.value)}
-                    placeholder={
-                      architecture.omada.hasHotspotOperatorPassword
-                        ? "Hotspot operator password (leave blank to keep)"
-                        : "Hotspot operator password"
-                    }
-                  />
+              <div className="netform">
+                <div className="netform-title">{networkPlatform === "omada" ? "Omada Cloud OpenAPI" : networkPlatform === "mikrotik" ? "MikroTik RouterOS REST API" : networkPlatform === "radius" ? "RADIUS Server" : "CSV Voucher Pool"}</div>
+                {networkPlatform === "omada" ? <OmadaPanel architecture={architecture} /> : null}
+                {networkPlatform === "mikrotik" ? <MikrotikPanel architecture={architecture} /> : null}
+                {networkPlatform === "radius" ? <RadiusPanel architecture={architecture} /> : null}
+                {networkPlatform === "csv" ? <CsvPanel /> : null}
+                <div className="settings-foot">
+                  <button className="btn btn-muted btn-sm" type="button" onClick={() => void refreshArchitecture()}>Reload</button>
+                  <button className="btn btn-ac btn-sm" type="button" onClick={() => void saveArchitecture()} disabled={savingArchitecture}>
+                    {savingArchitecture ? <Loader2 className="spin" size={14} /> : null}
+                    Save
+                  </button>
                 </div>
-                <div className="mt-3 grid gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs text-slate-600">
-                      Need Site ID? Fetch available sites from Omada using the current credentials.
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={discoverOmadaSites}
-                      disabled={omadaSitesLoading || architectureSaving || omadaTestLoading}
-                    >
-                      {omadaSitesLoading ? "Fetching sites..." : "Fetch sites"}
-                    </Button>
+                <div className={architecture ? "net-status ok" : "net-status warn"}>
+                  {architecture ? "Configured mode loaded from backend." : "Not configured yet."}
+                </div>
+              </div>
+            </section>
+
+            <section className={`dash-section ${view === "settings" ? "on" : ""}`}>
+              <div className="dash-header">
+                <div>
+                  <div className="dash-title">Settings</div>
+                  <div className="dash-sub">Account and integration config</div>
+                </div>
+              </div>
+              <div className="settings-layout">
+                <div className="settings-tabs">
+                  {[
+                    ["general", "General"],
+                    ["appearance", "Appearance"],
+                    ["payments", "Payments"],
+                    ["sms", "SMS"],
+                    ["notifications", "Notifications"],
+                  ].map(([key, label]) => (
+                    <button key={key} className={`settings-tab ${settingsTab === key ? "on" : ""}`} type="button" onClick={() => setSettingsTab(key as SettingsTab)}>{label}</button>
+                  ))}
+                </div>
+                <div>
+                  <div className={`settings-panel ${settingsTab === "general" ? "on" : ""}`}>
+                    <div className="settings-card">
+                      <div className="settings-card-title">Venue Details</div>
+                      <div className="field"><label>Venue Name</label><input value={name} readOnly /></div>
+                      <div className="field"><label>Store URL Slug</label><input value={tenantSlug} readOnly /><div className="hint">Your store: {tenantSlug}.payspot.app</div></div>
+                    </div>
                   </div>
-                  {omadaSiteOptions.length > 0 ? (
-                    <select
-                      value={architecture.omada.siteId}
-                      onChange={(event) =>
-                        setArchitecture((prev) =>
-                          prev ? { ...prev, omada: { ...prev.omada, siteId: event.target.value } } : prev,
-                        )
-                      }
-                    >
-                      <option value="">Select discovered site</option>
-                      {omadaSiteOptions.map((site) => (
-                        <option key={site.siteId} value={site.siteId}>
-                          {site.name ? `${site.name} (${site.siteId})` : site.siteId}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
-                  {omadaSitesError ? <p className="text-sm text-red-700">{omadaSitesError}</p> : null}
-                  {omadaSitesNotice ? <p className="text-sm text-slate-600">{omadaSitesNotice}</p> : null}
+                  <div className={`settings-panel ${settingsTab === "appearance" ? "on" : ""}`}>
+                    <form className="settings-card" onSubmit={saveAppearance}>
+                      <div className="settings-card-title">Brand Colors</div>
+                      <div className="field-row">
+                        <div className="field">
+                          <label>Store Primary Color</label>
+                          <input
+                            type="color"
+                            value={appearanceForm.storePrimaryColor}
+                            onChange={(event) => setAppearanceForm((current) => ({ ...current, storePrimaryColor: event.target.value }))}
+                          />
+                          <div className="hint">Used on the public purchase page and receipt email.</div>
+                        </div>
+                        <div className="field">
+                          <label>Dashboard Primary Color</label>
+                          <input
+                            type="color"
+                            value={appearanceForm.dashboardPrimaryColor}
+                            onChange={(event) => setAppearanceForm((current) => ({ ...current, dashboardPrimaryColor: event.target.value }))}
+                          />
+                          <div className="hint">Used for buttons, badges, and highlights in this dashboard.</div>
+                        </div>
+                      </div>
+                      <div className="settings-foot">
+                        <button className="btn btn-ac" type="submit" disabled={savingAppearance}>
+                          {savingAppearance ? "Saving..." : "Save colors"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                  <div className={`settings-panel ${settingsTab === "payments" ? "on" : ""}`}>
+                    <form className="settings-card" onSubmit={savePayments}>
+                      <div className="settings-card-title">Paystack Configuration</div>
+                      <div className="field-row">
+                        <div className="field">
+                          <label>Public Key</label>
+                          <input
+                            value={paymentForm.paystackPublicKey}
+                            onChange={(event) => setPaymentForm((current) => ({ ...current, paystackPublicKey: event.target.value }))}
+                            placeholder={architecture?.payment.hasPublicKey ? `Stored - ending ${architecture.payment.publicKeyLast4}` : "pk_test_... or pk_live_..."}
+                          />
+                          <div className="hint">Used for popup checkout compatibility and operator reference.</div>
+                        </div>
+                        <div className="field">
+                          <label>Secret Key</label>
+                          <input
+                            type="password"
+                            value={paymentForm.paystackSecretKey}
+                            onChange={(event) => setPaymentForm((current) => ({ ...current, paystackSecretKey: event.target.value }))}
+                            placeholder="Leave blank to keep saved secret key"
+                          />
+                          <div className="hint">Server-side verification uses the secret key and never exposes it to customers.</div>
+                        </div>
+                      </div>
+                      <div className="field">
+                        <label>Webhook URL</label>
+                        <div className="key-display"><span>{`${origin || "https://payspot.app"}/api/t/${tenantSlug}/payments/webhook`}</span></div>
+                      </div>
+                      <div className="settings-foot">
+                        <button className="btn btn-ac" type="submit" disabled={savingPayments}>
+                          {savingPayments ? "Saving..." : "Save payment settings"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                  <div className={`settings-panel ${settingsTab === "sms" ? "on" : ""}`}>
+                    <div className="settings-card">
+                      <div className="settings-card-title">SMS Delivery</div>
+                      <div className="field"><label>Sender ID</label><input value="PaySpot" readOnly /></div>
+                      <div className="field"><label>SMS Template</label><textarea readOnly value={`Your ${name} WiFi code is {code}. Duration: {plan}. Enjoy!`} /></div>
+                    </div>
+                  </div>
+                  <div className={`settings-panel ${settingsTab === "notifications" ? "on" : ""}`}>
+                    <form className="settings-card" onSubmit={saveNotifications}>
+                      <div className="settings-card-title">Email Notifications</div>
+                      <div className="toggle-list">
+                        <NotificationToggle
+                          label="Daily revenue summary"
+                          enabled={notificationForm.dailyRevenueSummary}
+                          onChange={(dailyRevenueSummary) => setNotificationForm((current) => ({ ...current, dailyRevenueSummary }))}
+                        />
+                        <NotificationToggle
+                          label="Failed payment alerts"
+                          enabled={notificationForm.failedPaymentAlerts}
+                          onChange={(failedPaymentAlerts) => setNotificationForm((current) => ({ ...current, failedPaymentAlerts }))}
+                        />
+                        <NotificationToggle
+                          label="Low voucher stock alerts"
+                          enabled={notificationForm.lowVoucherStockAlerts}
+                          onChange={(lowVoucherStockAlerts) => setNotificationForm((current) => ({ ...current, lowVoucherStockAlerts }))}
+                        />
+                        <NotificationToggle
+                          label="Weekly analytics digest"
+                          enabled={notificationForm.weeklyAnalyticsDigest}
+                          onChange={(weeklyAnalyticsDigest) => setNotificationForm((current) => ({ ...current, weeklyAnalyticsDigest }))}
+                        />
+                      </div>
+                      <div className="hint" style={{ marginTop: 12 }}>
+                        Default is off for all tenant emails except low voucher stock alerts for CSV voucher tenants.
+                      </div>
+                      <div className="settings-foot">
+                        <button className="btn btn-ac" type="submit" disabled={savingNotifications}>
+                          {savingNotifications ? "Saving..." : "Save notifications"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               </div>
-            ) : null}
+            </section>
+          </div>
 
-            {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "mikrotik_rest" ? (
-              <div className="rounded-2xl border border-slate-200/85 bg-slate-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">MikroTik REST credentials</p>
-                <p className="mt-2 text-xs text-slate-600">
-                  Enter the router or controller URL once. PaySpot will create the hotspot user automatically after successful payment using the plan&apos;s duration and data limit.
-                </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <Input
-                    value={architecture.mikrotik.baseUrl}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? { ...prev, mikrotik: { ...prev.mikrotik, baseUrl: event.target.value } }
-                          : prev,
-                      )
-                    }
-                    placeholder="https://router.example.com"
-                  />
-                  <Input
-                    value={architecture.mikrotik.username}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? { ...prev, mikrotik: { ...prev.mikrotik, username: event.target.value } }
-                          : prev,
-                      )
-                    }
-                    placeholder="REST username"
-                  />
-                  <Input
-                    type="password"
-                    value={mikrotikPassword}
-                    onChange={(event) => setMikrotikPassword(event.target.value)}
-                    placeholder={
-                      architecture.mikrotik.hasPassword
-                        ? "REST password (leave blank to keep)"
-                        : "REST password"
-                    }
-                  />
-                  <Input
-                    value={architecture.mikrotik.hotspotServer}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? { ...prev, mikrotik: { ...prev.mikrotik, hotspotServer: event.target.value } }
-                          : prev,
-                      )
-                    }
-                    placeholder="Hotspot server (optional)"
-                  />
-                  <Input
-                    value={architecture.mikrotik.defaultProfile}
-                    onChange={(event) =>
-                      setArchitecture((prev) =>
-                        prev
-                          ? { ...prev, mikrotik: { ...prev.mikrotik, defaultProfile: event.target.value } }
-                          : prev,
-                      )
-                    }
-                    placeholder="Default profile (optional)"
-                  />
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={architecture.mikrotik.verifyTls}
-                      onChange={(event) =>
-                        setArchitecture((prev) =>
-                          prev
-                            ? { ...prev, mikrotik: { ...prev.mikrotik, verifyTls: event.target.checked } }
-                            : prev,
-                        )
-                      }
-                    />
-                    Verify TLS certificate
-                  </label>
-                </div>
-                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                  Voucher code is generated after payment. Password = same as voucher code. Duration and data limit come from each PaySpot plan.
-                </div>
-              </div>
-            ) : null}
-
-            {architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "radius_voucher" ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">RADIUS voucher adapter</p>
-                <p className="mt-2 text-xs text-amber-900/80">
-                  PaySpot issues the voucher immediately after payment. Your external RADIUS service should call the PaySpot
-                  adapter endpoints to authorize the voucher and report accounting updates.
-                </p>
-                <div className="mt-3 rounded-xl border border-amber-300 bg-white/80 px-3 py-2 text-xs text-amber-900">
-                  <p><code>POST /api/t/&lt;slug&gt;/radius/authorize</code></p>
-                  <p><code>POST /api/t/&lt;slug&gt;/radius/accounting</code></p>
-                  <p className="mt-2">Voucher code is generated after payment. Password = same as voucher code. Format can be configured per plan.</p>
-                </div>
-                {architecture.radius?.hasAdapterSecret ? (
-                  <p className="mt-3 text-xs text-amber-900/80">
-                    Current adapter secret fingerprint: <code>****{architecture.radius.adapterSecretLast4}</code>
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-
-            {architecture.accessMode === "account_access" || (
-              architecture.accessMode === "voucher_access" && architecture.voucherSourceMode === "radius_voucher"
-            ) ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">External RADIUS adapter</p>
-                <p className="mt-2 text-xs text-amber-900/80">
-                  Shared secret for `/api/t/&lt;slug&gt;/radius/*` is generated and managed automatically.
-                </p>
-                {architecture.radius?.hasAdapterSecret ? (
-                  <p className="mt-1 text-xs text-amber-900/80">
-                    Current secret fingerprint: <code>****{architecture.radius.adapterSecretLast4}</code>
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap justify-end gap-2">
-              {architecture.voucherSourceMode === "omada_openapi" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={testOmadaConnection}
-                  disabled={omadaTestLoading || architectureSaving}
-                >
-                  {omadaTestLoading ? "Testing..." : "Test Omada connection"}
-                </Button>
-              ) : null}
-              {architecture.voucherSourceMode === "mikrotik_rest" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={testMikrotikConnection}
-                  disabled={mikrotikTestLoading || architectureSaving}
-                >
-                  {mikrotikTestLoading ? "Testing..." : "Test MikroTik connection"}
-                </Button>
-              ) : null}
-              <Button type="submit" disabled={architectureSaving || omadaTestLoading || mikrotikTestLoading}>
-                {architectureSaving ? "Saving..." : "Save architecture"}
-              </Button>
-            </div>
-          </form>
-        </ModalShell>
-      ) : null}
-
-      {showCreatePlanModal ? (
-        <ModalShell title="Add plan" onClose={() => setShowCreatePlanModal(false)}>
-          <form className="grid gap-2" onSubmit={createPlan}>
-            <Input value={newPlanName} onChange={(event) => setNewPlanName(event.target.value)} placeholder="Name" />
-            <Input
-              value={newPlanDuration}
-              inputMode="text"
-              onChange={(event) => setNewPlanDuration(event.target.value)}
-              placeholder="Duration optional (e.g. 90m, 1h, 2d, 1w)"
-            />
-            <Input
-              value={newPlanPrice}
-              inputMode="text"
-              onChange={(event) => setNewPlanPrice(event.target.value)}
-              placeholder="Price (e.g. 25000, 25k, NGN 25,000)"
-            />
-            <Input
-              value={newPlanMaxDevices}
-              inputMode="numeric"
-              onChange={(event) => setNewPlanMaxDevices(event.target.value)}
-              placeholder="Max devices (optional, blank = unlimited)"
-            />
-            <Input
-              value={newPlanBandwidthProfile}
-              onChange={(event) => setNewPlanBandwidthProfile(event.target.value)}
-              placeholder="Bandwidth profile (optional)"
-            />
-            <Input
-              value={newPlanDataLimitMb}
-              inputMode="text"
-              onChange={(event) => setNewPlanDataLimitMb(event.target.value)}
-              placeholder="Data limit (e.g. 500MB, 1.5GB, 2TB)"
-            />
-            <Input
-              type="datetime-local"
-              value={newPlanAvailableFrom}
-              onChange={(event) => setNewPlanAvailableFrom(event.target.value)}
-              placeholder="Available from (optional)"
-            />
-            <Input
-              type="datetime-local"
-              value={newPlanAvailableTo}
-              onChange={(event) => setNewPlanAvailableTo(event.target.value)}
-              placeholder="Available to (optional)"
-            />
-            {isRadiusVoucherMode ? (
-              <div className="grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">Paid voucher code format</p>
-                <p className="text-xs text-amber-900/80">
-                  Used only when PaySpot generates a voucher after successful payment for this plan.
-                </p>
-                <select
-                  value={newPlanRadiusVoucherCharacterSet}
-                  onChange={(event) =>
-                    setNewPlanRadiusVoucherCharacterSet(event.target.value as PlanVoucherCharacterSet)
-                  }
-                >
-                  <option value="legacy">Use current default format</option>
-                  <option value="alnum">Letters + numbers</option>
-                  <option value="letters">Letters only</option>
-                  <option value="numbers">Numbers only</option>
-                </select>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Input
-                    value={newPlanRadiusVoucherCodePrefix}
-                    onChange={(event) => setNewPlanRadiusVoucherCodePrefix(event.target.value.toUpperCase())}
-                    placeholder="Prefix (optional)"
-                    disabled={newPlanRadiusVoucherCharacterSet === "legacy"}
-                  />
-                  <Input
-                    value={newPlanRadiusVoucherCodeLength}
-                    inputMode="numeric"
-                    onChange={(event) => setNewPlanRadiusVoucherCodeLength(event.target.value)}
-                    placeholder="Code length"
-                    disabled={newPlanRadiusVoucherCharacterSet === "legacy"}
-                  />
-                </div>
-                <p className="text-xs text-amber-900/80">
-                  Prefix is optional. Length applies to the random part only.
-                </p>
-              </div>
-            ) : null}
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              {newPlanDuration.trim() ? (
-                Number.isFinite(parsedNewPlanDuration ?? Number.NaN)
-                  ? `Duration: ${formatDurationPreview(parsedNewPlanDuration!)}`
-                  : "Duration: invalid format"
-              ) : architecture?.accessMode === "account_access"
-                ? "Duration: optional (leave blank for unlimited time)"
-                : architecture?.voucherSourceMode === "mikrotik_rest" || architecture?.voucherSourceMode === "radius_voucher"
-                  ? "Duration: optional in MikroTik or RADIUS voucher mode (data-only plans supported)"
-                  : "Duration: required for voucher plans"}
-              {" | "}
-              {newPlanPrice.trim() ? (
-                Number.isFinite(parsedNewPlanPrice ?? Number.NaN)
-                  ? `Price: NGN ${parsedNewPlanPrice!.toLocaleString()}`
-                  : "Price: invalid format"
-              ) : "Price: enter 25000, 25k, or NGN 25,000"}
-              {" | "}
-              {newPlanDataLimitMb.trim() ? (
-                Number.isFinite(parsedNewPlanDataLimit ?? Number.NaN)
-                  ? `Data: ${formatDataLimitPreviewMb(parsedNewPlanDataLimit!)}`
-                  : "Data: invalid format"
-              ) : "Data: optional (leave blank for unlimited data)"}
-              {" | "}
-              {newPlanAvailableFrom.trim() || newPlanAvailableTo.trim()
-                ? "Availability window set"
-                : "Availability: always on"}
-            </div>
-            <div className="flex justify-end">
-              <Button type="submit" disabled={creatingPlan}>{creatingPlan ? "Creating..." : "Add plan"}</Button>
-            </div>
-            {plansError ? <p className="text-sm text-red-700">{plansError}</p> : null}
-          </form>
-        </ModalShell>
-      ) : null}
-
-      {showCreateVoucherModal && canManuallyCreateVouchers ? (
-        <ModalShell title={isRadiusVoucherMode ? "Create manual RADIUS voucher" : "Add voucher"} onClose={() => setShowCreateVoucherModal(false)}>
-          <form className="grid gap-2" onSubmit={createVoucher}>
-            <Input
-              value={newVoucherCode}
-              onChange={(event) => setNewVoucherCode(event.target.value)}
-              placeholder="Voucher code"
-            />
-            <select value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </select>
-            {isRadiusVoucherMode ? (
-              <p className="text-xs text-slate-600">
-                This creates an immediately usable RADIUS voucher without taking payment first.
-              </p>
-            ) : null}
-            <div className="flex justify-end">
-              <Button type="submit" disabled={creatingVoucher}>{creatingVoucher ? "Saving..." : isRadiusVoucherMode ? "Create voucher" : "Add voucher"}</Button>
-            </div>
-            {vouchersError ? <p className="text-sm text-red-700">{vouchersError}</p> : null}
-          </form>
-        </ModalShell>
-      ) : null}
-
-      {showGenerateVoucherModal && canBatchGenerateVouchers ? (
-        <ModalShell title={isRadiusVoucherMode ? "Batch generate RADIUS vouchers" : "Batch generate vouchers"} onClose={() => setShowGenerateVoucherModal(false)}>
-          <form className="grid gap-2" onSubmit={generateVouchers}>
-            <Input
-              value={generateCount}
-              inputMode="numeric"
-              onChange={(event) => setGenerateCount(event.target.value)}
-              placeholder="Quantity"
-            />
-            <Input
-              value={generatePrefix}
-              onChange={(event) => setGeneratePrefix(event.target.value)}
-              placeholder="Optional prefix"
-            />
-            <Input
-              value={generateCodeLength}
-              inputMode="numeric"
-              onChange={(event) => setGenerateCodeLength(event.target.value)}
-              placeholder="Code length"
-            />
-            <select value={generateCharacterSet} onChange={(event) => setGenerateCharacterSet(event.target.value)}>
-              <option value="alnum">Letters + numbers</option>
-              <option value="letters">Letters only</option>
-              <option value="numbers">Numbers only</option>
-            </select>
-            <select value={newVoucherPackageId} onChange={(event) => setNewVoucherPackageId(event.target.value)}>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </select>
-            {isRadiusVoucherMode ? (
-              <p className="text-xs text-slate-600">
-                Generated vouchers will be active immediately and can be used on the RADIUS hotspot without payment.
-              </p>
-            ) : null}
-            <div className="flex justify-end">
-              <Button type="submit" disabled={generatingVouchers}>{generatingVouchers ? "Generating..." : "Generate"}</Button>
-            </div>
-            {vouchersError ? <p className="text-sm text-red-700">{vouchersError}</p> : null}
-          </form>
-        </ModalShell>
-      ) : null}
-
-      {showImportVoucherModal && isCsvMode ? (
-        <ModalShell title="Import voucher CSV" onClose={() => setShowImportVoucherModal(false)}>
-          <form className="grid gap-2" onSubmit={importCsv}>
-            <Input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
-            />
-            <Input
-              value={importPackageCode}
-              onChange={(event) => setImportPackageCode(event.target.value)}
-              placeholder="Optional forced plan code"
-            />
-            <div className="flex justify-end">
-              <Button type="submit" disabled={importLoading}>{importLoading ? "Importing..." : "Import"}</Button>
-            </div>
-            {importError ? <p className="text-sm text-red-700">{importError}</p> : null}
-          </form>
-        </ModalShell>
-      ) : null}
-
+          <div className="mob-menu">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button key={item.key} className={`mob-btn ${view === item.key ? "on" : ""}`} type="button" onClick={() => setView(item.key)}>
+                  <Icon size={18} />
+                  {item.short}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
     </>
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function KpiRow({ items }: { items: Array<{ label: string; value: string; delta: string; tone: "up" | "dn" | "neu" | "warn" }> }) {
   return (
-    <div className="dashboard-kpi">
-      <p className="dashboard-kpi-label">{label}</p>
-      <p className="dashboard-kpi-value">{value}</p>
+    <div className="kpi-row">
+      {items.map((item) => (
+        <div className="kpi" key={item.label}>
+          <div className="kpi-hdr"><div className="kpi-label">{item.label}</div></div>
+          <div className="kpi-val">{item.value}</div>
+          <div className={`kpi-delta ${item.tone}`}>{item.delta}</div>
+        </div>
+      ))}
     </div>
   );
 }
 
-function ModalShell({
-  title,
-  onClose,
-  children,
+function TransactionsTable({
+  transactions,
+  compactTable = false,
+  onCancel,
 }: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
+  transactions: Transaction[];
+  compactTable?: boolean;
+  onCancel?: (reference: string) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" onClick={onClose}>
-      <div
-        className="w-full max-w-xl rounded-xl border border-slate-200/90 bg-white p-5 shadow-[var(--shadow-lg)]"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex size-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-100"
-            aria-label="Close"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-        {children}
+    <div className="table-scroll">
+      <table className="t">
+        <thead>
+          <tr>
+            <th>Customer</th>
+            {!compactTable ? <th>Phone</th> : null}
+            <th>Plan</th>
+            {!compactTable ? <th>Method</th> : null}
+            <th>Amount</th>
+            <th>Voucher</th>
+            <th>Status</th>
+            <th>{compactTable ? "Time" : "Date"}</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {transactions.length === 0 ? <EmptyRow colSpan={compactTable ? 7 : 9} label="No transactions yet." /> : transactions.map((transaction) => {
+            const badge = statusBadge(transaction.paymentStatus);
+            const canCancel = transaction.paymentStatus === "pending" || transaction.paymentStatus === "processing";
+            return (
+              <tr key={transaction.id}>
+                <td className="td-main">{transaction.email || transaction.reference}</td>
+                {!compactTable ? <td>{transaction.phone || "-"}</td> : null}
+                <td>{transaction.packageName || transaction.packageCode || "Plan"}</td>
+                {!compactTable ? <td>{transaction.deliveryMode === "account_access" ? "Account" : "Voucher"}</td> : null}
+                <td className="td-muted">{money(transaction.amountNgn)}</td>
+                <td className="td-mono">{transaction.voucherCode || "-"}</td>
+                <td><span className={badge.className}>{badge.label}</span></td>
+                <td>{dateTime(transaction.paidAt || transaction.createdAt)}</td>
+                <td>
+                  {canCancel ? (
+                    <button className="btn btn-red btn-xs" type="button" onClick={() => onCancel?.(transaction.reference)}>
+                      Cancel
+                    </button>
+                  ) : (
+                    <span className="td-muted">-</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Pager({ pagination, page, setPage }: { pagination: Pagination; page: number; setPage: (page: number) => void }) {
+  return (
+    <div className="t-pagination">
+      <span>
+        Showing page {pagination.page} of {pagination.totalPages} · {compact(pagination.total)} total
+      </span>
+      <div className="pager-actions">
+        <button className="btn btn-muted btn-xs" type="button" onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}>
+          <ChevronLeft size={12} /> Prev
+        </button>
+        <button className="btn btn-muted btn-xs" type="button" onClick={() => setPage(Math.min(pagination.totalPages, page + 1))} disabled={page >= pagination.totalPages}>
+          Next <ChevronRight size={12} />
+        </button>
       </div>
     </div>
   );
+}
+
+function PlanRow({
+  plan,
+  onEdit,
+  onToggle,
+  onDelete,
+}: {
+  plan: Plan;
+  onEdit: (plan: Plan) => void;
+  onToggle: (plan: Plan) => void;
+  onDelete: (plan: Plan) => void;
+}) {
+  return (
+    <tr>
+      <td><div className="td-name">{plan.name}</div><div className="td-spec">{plan.code}</div></td>
+      <td className="td-price">{money(plan.priceNgn)}</td>
+      <td>{duration(plan.durationMinutes)}</td>
+      <td className="td-spec">{planSpec(plan)}</td>
+      <td className="td-stats">{compact(plan.assignedCount)}</td>
+      <td className="td-price">{money(plan.assignedCount * plan.priceNgn)}</td>
+      <td><span className={`badge ${plan.active ? "badge-g" : "badge-m"}`}>{plan.active ? "Active" : "Inactive"}</span></td>
+      <td>
+        <div className="plans-acts">
+          <button className="btn btn-ac btn-xs" type="button" onClick={() => onEdit(plan)}>Edit</button>
+          <button className="btn btn-muted btn-xs" type="button" onClick={() => onToggle(plan)}>{plan.active ? "Pause" : "Activate"}</button>
+          <button className="btn btn-red btn-xs" type="button" onClick={() => onDelete(plan)}>Delete</button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function NotificationToggle({
+  label,
+  enabled,
+  onChange,
+}: {
+  label: string;
+  enabled: boolean;
+  onChange: (enabled: boolean) => void;
+}) {
+  return (
+    <button className="toggle" type="button" onClick={() => onChange(!enabled)}>
+      <span className={`toggle-track ${enabled ? "on" : ""}`} />
+      <span className="toggle-label">{label}</span>
+    </button>
+  );
+}
+
+function OmadaPanel({ architecture }: { architecture: Architecture | null }) {
+  return (
+    <>
+      <div className="field-row">
+        <div className="field"><label>Omada API Base URL</label><input value={architecture?.omada.apiBaseUrl || ""} readOnly placeholder="https://openapi.tplinkcloud.com" /></div>
+        <div className="field"><label>Omada Controller ID</label><input value={architecture?.omada.omadacId || ""} readOnly placeholder="Controller ID" /></div>
+      </div>
+      <div className="field-row">
+        <div className="field"><label>Site ID</label><input value={architecture?.omada.siteId || ""} readOnly /></div>
+        <div className="field"><label>Client ID</label><input value={architecture?.omada.clientId || ""} readOnly /></div>
+      </div>
+    </>
+  );
+}
+
+function MikrotikPanel({ architecture }: { architecture: Architecture | null }) {
+  return (
+    <>
+      <div className="field-row">
+        <div className="field"><label>Router URL</label><input value={architecture?.mikrotik.baseUrl || ""} readOnly placeholder="https://192.168.88.1" /></div>
+        <div className="field"><label>Username</label><input value={architecture?.mikrotik.username || ""} readOnly /></div>
+      </div>
+      <div className="field-row">
+        <div className="field"><label>Hotspot Server</label><input value={architecture?.mikrotik.hotspotServer || ""} readOnly /></div>
+        <div className="field"><label>Default Profile</label><input value={architecture?.mikrotik.defaultProfile || ""} readOnly /></div>
+      </div>
+    </>
+  );
+}
+
+function RadiusPanel({ architecture }: { architecture: Architecture | null }) {
+  return (
+    <div className="field">
+      <label>Adapter Secret</label>
+      <div className="key-display"><span>{architecture?.radius.hasAdapterSecret ? `Configured · ending ${architecture.radius.adapterSecretLast4 || "****"}` : "Not configured"}</span></div>
+    </div>
+  );
+}
+
+function CsvPanel() {
+  return (
+    <div className="csv-drop">Upload pre-generated voucher codes via CSV. PaySpot will dispense them one per purchase.</div>
+  );
+}
+
+function EmptyRow({ colSpan, label }: { colSpan: number; label: string }) {
+  return (
+    <tr>
+      <td colSpan={colSpan} className="td-muted">{label}</td>
+    </tr>
+  );
+}
+
+function EmptyInline({ label }: { label: string }) {
+  return <div className="td-muted">{label}</div>;
 }

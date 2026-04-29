@@ -175,7 +175,7 @@ SMTP_FROM="PaySpot <no-reply@your-domain.com>"
 
 Notes:
 - When running the app inside Docker Compose, use `postgres` as the DB host in `DATABASE_URL`.
-- Docker publishes Postgres on `POSTGRES_HOST_PORT` (default `5433`) to avoid conflicts with other stacks.
+- Docker publishes Postgres on `127.0.0.1:POSTGRES_HOST_PORT` (default `5433`) so it stays reachable from the VPS itself without being exposed publicly.
 - When running the app directly on your host machine, switch DB host to `localhost` and port to `POSTGRES_HOST_PORT`.
 - `SESSION_COOKIE_SECURE` controls the auth cookie `Secure` flag.
 - Use `false` for plain HTTP deployments, `true` for HTTPS. If unset, app infers from `APP_URL`.
@@ -207,6 +207,10 @@ Run app directly on host (requires Postgres running separately):
 npm install
 npm run dev
 ```
+
+Windows note for the VPS DB tunnel:
+- `Run with PowerShell` can fail when your PowerShell execution policy is `Restricted`.
+- Use [scripts/start-vps-db-tunnel.cmd](/c:/Users/abdul/Abdul's/payspot/scripts/start-vps-db-tunnel.cmd) instead, or run `powershell -ExecutionPolicy Bypass -File .\scripts\start-vps-db-tunnel.ps1` from a terminal.
 
 ## Resume Payments (Safe)
 If a user closes the tab before completing payment, they can resume the transaction using their

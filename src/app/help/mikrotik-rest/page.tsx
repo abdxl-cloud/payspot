@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Lora, Public_Sans } from "next/font/google";
 import {
   BadgeCheck,
@@ -11,7 +10,7 @@ import {
   TerminalSquare,
   Wifi,
 } from "lucide-react";
-import { AppTopbar } from "@/components/app-topbar";
+import { PrototypeDocsShell } from "@/components/prototype-docs-shell";
 
 const display = Lora({
   subsets: ["latin"],
@@ -183,19 +182,7 @@ const troubleshooting = [
 
 export default function MikrotikRestHelpPage() {
   return (
-    <div className={`${display.variable} ${body.variable} app-shell`}>
-      <div className="app-container">
-        <AppTopbar
-          breadcrumb="Client setup playbook"
-          environment="Docs"
-          accountLabel="Self-serve"
-          action={
-            <Link href="/" className="hero-chip">
-              Back to PaySpot
-            </Link>
-          }
-        />
-
+    <PrototypeDocsShell title="Client setup playbook" className={`${display.variable} ${body.variable}`}>
         <main className="mt-6 grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
           <section
             className="rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-[var(--shadow-md)] sm:p-8"
@@ -430,7 +417,6 @@ export default function MikrotikRestHelpPage() {
             </section>
           </aside>
         </main>
-      </div>
-    </div>
+    </PrototypeDocsShell>
   );
 }

@@ -476,7 +476,7 @@ export async function PATCH(request: Request, { params }: Props) {
   const args: Array<string | number | null> = [];
 
   if (typeof body.code === "string") {
-    const code = body.code.trim().toLowerCase();
+    const code = normalizePlanCodeCandidate(body.code);
     if (!code || code.length < 2) {
       return Response.json({ error: "Invalid code" }, { status: 400 });
     }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getSessionUserFromRequest } from "@/lib/auth";
-import { isPaystackSecretKey } from "@/lib/paystack-key";
+import { isPaystackPublicKey, isPaystackSecretKey } from "@/lib/paystack-key";
 import {
   type AccessMode,
   getTenantBySlug,
@@ -8,6 +8,7 @@ import {
   isTenantSlugAvailable,
   setTenantArchitecture,
   setTenantPaystackSecret,
+  setTenantPaystackPublicKey,
   type PortalAuthMode,
   setUserMustChangePassword,
   type VoucherSourceMode,
@@ -22,6 +23,7 @@ type Props = {
 const schema = z.object({
   newPassword: z.string().min(8).max(200).optional(),
   paystackSecretKey: z.string().min(10).max(200).optional(),
+  paystackPublicKey: z.string().min(10).max(200).optional(),
   newSlug: z
     .string()
     .trim()
@@ -34,6 +36,12 @@ const schema = z.object({
       accessMode: z.enum(["voucher_access", "account_access"]).optional(),
       voucherSourceMode: z.enum(["import_csv", "omada_openapi", "mikrotik_rest", "radius_voucher"]).optional(),
       portalAuthMode: z.enum(["omada_builtin", "external_radius_portal", "external_radius_voucher"]).optional(),
+      appearance: z
+        .object({
+          storePrimaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+          dashboardPrimaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+        })
+        .optional(),
       omada: z
         .object({
           apiBaseUrl: z.string().max(300).optional(),
@@ -126,6 +134,12 @@ export async function POST(request: Request, { params }: Props) {
       { status: 400 },
     );
   }
+  if (parsed.data.paystackPublicKey && !isPaystackPublicKey(parsed.data.paystackPublicKey)) {
+    return Response.json(
+      { error: "Use a valid Paystack public key (pk_test_... or pk_live_...)." },
+      { status: 400 },
+    );
+  }
 
   const selectedAccessMode = parsed.data.architecture?.accessMode
     ?? (parsed.data.architecture?.portalAuthMode === "external_radius_portal"
@@ -204,6 +218,18 @@ export async function POST(request: Request, { params }: Props) {
       );
     }
   }
+  if (parsed.data.paystackPublicKey) {
+    const res = await setTenantPaystackPublicKey({
+      tenantId: tenant.id,
+      paystackPublicKey: parsed.data.paystackPublicKey,
+    });
+    if (res.status === "invalid_public_key") {
+      return Response.json(
+        { error: "Use a valid Paystack public key (pk_test_... or pk_live_...)." },
+        { status: 400 },
+      );
+    }
+  }
 
   if (parsed.data.architecture) {
     try {
@@ -212,6 +238,7 @@ export async function POST(request: Request, { params }: Props) {
         accessMode: parsed.data.architecture.accessMode as AccessMode | undefined,
         voucherSourceMode: parsed.data.architecture.voucherSourceMode as VoucherSourceMode | undefined,
         portalAuthMode: parsed.data.architecture.portalAuthMode as PortalAuthMode | undefined,
+        appearance: parsed.data.architecture.appearance,
         omada: parsed.data.architecture.omada
           ? {
               apiBaseUrl: parsed.data.architecture.omada.apiBaseUrl?.trim(),

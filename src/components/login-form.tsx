@@ -2,12 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { KeyRound, Mail } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { readJsonResponse } from "@/lib/http";
 
 export function LoginForm() {
@@ -30,15 +24,10 @@ export function LoginForm() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          password,
-        }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await readJsonResponse<{ error?: string; redirectTo?: string }>(response);
-      if (!response.ok) {
-        throw new Error(data?.error || "Login failed.");
-      }
+      if (!response.ok) throw new Error(data?.error || "Login failed.");
       window.location.href = data?.redirectTo || "/admin";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -47,63 +36,29 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="border-slate-200/85 bg-white/92">
-      <CardHeader className="space-y-2">
-        <p className="section-kicker">Authentication</p>
-        <CardTitle className="section-title">Sign in to PaySpot</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Login failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                id="email"
-                type="email"
-                className="h-11 pl-9"
-                placeholder="seeduser@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+    <div className="lf-wrap">
+      <div className="lf-title">Welcome back</div>
+      <div className="lf-sub">Sign in to your operator dashboard</div>
+      <form className="lf-card" onSubmit={handleSubmit}>
+        {error ? <div className="lf-error">{error}</div> : null}
+        <div className="field">
+          <label htmlFor="loginEmail">Email address</label>
+          <input id="loginEmail" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="walstreet@example.com" required />
+        </div>
+        <div className="field login-password-field">
+          <div className="lf-row">
+            <label htmlFor="loginPassword">Password</label>
+            <Link className="lf-forgot" href="/forgot-password">Forgot?</Link>
           </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
-              <KeyRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                id="password"
-                type="password"
-                className="h-11 pl-9"
-                placeholder="********"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <Button type="submit" className="h-12" disabled={!canSubmit}>
-            {loading ? "Signing in..." : "Sign in"}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-slate-600">
-          <Link href="/forgot-password" className="underline underline-offset-4">
-            Forgot password?
-          </Link>
-        </p>
-      </CardContent>
-    </Card>
+          <input id="loginPassword" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="************" required />
+        </div>
+        <button className="lf-submit" type="submit" disabled={!canSubmit}>
+          {loading ? "Signing in..." : "Sign In ->"}
+        </button>
+      </form>
+      <div className="lf-footer">
+        Need access? <Link href="/#request-access">Request an account</Link>
+      </div>
+    </div>
   );
 }

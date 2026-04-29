@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
-import { AppTopbar } from "@/components/app-topbar";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
 import { getSessionUser } from "@/lib/store";
 
@@ -17,26 +18,24 @@ export default async function ForgotPasswordPage() {
   }
 
   return (
-    <div className="app-shell">
-      <div className="auth-container">
-        <div className="w-full">
-          <AppTopbar
-            breadcrumb="Authentication / Reset request"
-            environment="Public"
-            accountLabel="Guest"
-          />
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
-            <section className="order-2 panel-surface space-y-4 lg:order-1">
-              <p className="section-kicker">Account recovery</p>
-              <h1 className="panel-title">Recover access quickly</h1>
-              <p className="panel-copy max-w-xl">
-                Enter your admin email and we will send a secure reset link if an account exists.
-              </p>
-            </section>
-            <div className="order-1 mx-auto w-full max-w-xl lg:order-2">
-              <ForgotPasswordForm />
-            </div>
+    <div className="auth-prototype-shell">
+      <div className="auth-prototype-grid">
+        <section className="auth-prototype-copy">
+          <div className="auth-prototype-nav">
+            <Link href="/" className="auth-brand">PaySpot</Link>
+            <ThemeToggle />
           </div>
+          <p className="section-kicker">Account recovery</p>
+          <h1>Recover access without losing the operation.</h1>
+          <p>Enter your admin email and PaySpot will send a secure reset link if an account exists.</p>
+          <div className="auth-signal-grid">
+            <span>Tokenized reset</span>
+            <span>Tenant protected</span>
+            <span>Payment-safe</span>
+          </div>
+        </section>
+        <div className="auth-prototype-card">
+          <ForgotPasswordForm />
         </div>
       </div>
     </div>

@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import { CaptiveBrowserAuth } from "@/components/captive-browserauth";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { VoucherDisplay } from "@/components/voucher-display";
 import {
   createCaptivePortalSearchParams,
@@ -34,16 +36,28 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
 
   if (!transaction) {
     return (
-      <div className="app-shell">
-        <div className="app-container max-w-3xl py-12 sm:py-20">
+      <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
           <div className="status-card">
             <h1 className="status-title">Transaction not found</h1>
             <p className="status-copy">
               We could not locate this payment reference. Please contact us at payspot@abdxl.cloud if you were charged.
             </p>
           </div>
-        </div>
-      </div>
+      </VerifyFrame>
+    );
+  }
+
+  if (transaction.payment_status === "cancelled") {
+    return (
+      <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
+          <div className="status-card">
+            <h1 className="status-title">Payment cancelled</h1>
+            <p className="status-copy">
+              This pending payment was cancelled by the operator, so PaySpot will not keep checking it.
+            </p>
+            <p className="mt-2 text-sm text-slate-500">Reference: {reference}</p>
+          </div>
+      </VerifyFrame>
     );
   }
 
@@ -57,14 +71,12 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
           ? "Tenant payment key is invalid. Use a Paystack secret key (sk_test_... or sk_live_...)."
           : "Payments are not configured for this tenant.";
       return (
-        <div className="app-shell">
-          <div className="app-container max-w-3xl py-12 sm:py-20">
+        <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
             <div className="status-card">
               <h1 className="status-title">Unable to verify payment</h1>
               <p className="status-copy">{message}</p>
             </div>
-          </div>
-        </div>
+        </VerifyFrame>
       );
     }
     try {
@@ -77,8 +89,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
     } catch (error) {
       console.error("Payment verification failed", error);
       return (
-        <div className="app-shell">
-          <div className="app-container max-w-3xl py-12 sm:py-20">
+        <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
             <div className="status-card">
               <h1 className="status-title">Unable to verify payment right now</h1>
               <p className="status-copy">
@@ -86,8 +97,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
               </p>
               <p className="mt-2 text-sm text-slate-500">Reference: {reference}</p>
             </div>
-          </div>
-        </div>
+        </VerifyFrame>
       );
     }
   }
@@ -108,8 +118,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
             ? "This voucher was also delivered to your phone by SMS."
             : "Your voucher is shown above and ready to use.";
     return (
-      <div className="app-shell">
-        <div className="app-container max-w-3xl py-12 sm:py-20">
+      <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
           <div className="status-card">
             <p className="section-kicker">Payment confirmed</p>
             <h1 className="mt-2 status-title">
@@ -201,8 +210,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
               </>
             ) : null}
           </div>
-        </div>
-      </div>
+      </VerifyFrame>
     );
   }
 
@@ -231,26 +239,46 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
       "This payment could not be completed. Please contact us at payspot@abdxl.cloud.";
 
     return (
-      <div className="app-shell">
-        <div className="app-container max-w-3xl py-12 sm:py-20">
+      <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
           <div className="status-card">
             <h1 className="status-title">Payment not completed</h1>
             <p className="status-copy">{message}</p>
             <p className="mt-2 text-sm text-slate-500">Reference: {reference}</p>
           </div>
-        </div>
-      </div>
+      </VerifyFrame>
     );
   }
 
   return (
-    <div className="app-shell">
-      <div className="app-container max-w-3xl py-12 sm:py-20">
+    <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
         <div className="status-card">
           <h1 className="status-title">Payment pending</h1>
           <p className="status-copy">We are verifying your payment. Please refresh this page in a moment.</p>
           <p className="mt-2 text-sm text-slate-500">Reference: {reference}</p>
         </div>
+    </VerifyFrame>
+  );
+}
+
+function VerifyFrame({
+  tenantName,
+  tenantSlug,
+  children,
+}: {
+  tenantName: string;
+  tenantSlug: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="verify-prototype-shell">
+      <div className="verify-prototype-container">
+        <header className="prototype-nav">
+          <a href={`/t/${tenantSlug}`} className="prototype-brand">
+            {tenantName}
+          </a>
+          <ThemeToggle />
+        </header>
+        {children}
       </div>
     </div>
   );

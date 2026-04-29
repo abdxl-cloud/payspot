@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { ResetPasswordForm } from "@/components/reset-password-form";
-import { AppTopbar } from "@/components/app-topbar";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type Props = {
   params: { token: string } | Promise<{ token: string }>;
@@ -10,26 +11,24 @@ export const dynamic = "force-dynamic";
 export default async function ResetPasswordPage({ params }: Props) {
   const { token } = await params;
   return (
-    <div className="app-shell">
-      <div className="auth-container">
-        <div className="w-full">
-          <AppTopbar
-            breadcrumb="Authentication / Set new password"
-            environment="Public"
-            accountLabel="Guest"
-          />
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
-            <section className="order-2 panel-surface space-y-4 lg:order-1">
-              <p className="section-kicker">Credential reset</p>
-              <h1 className="panel-title">Create a new secure password</h1>
-              <p className="panel-copy max-w-xl">
-                Use a strong password to protect tenant operations and payment configurations.
-              </p>
-            </section>
-            <div className="order-1 mx-auto w-full max-w-xl lg:order-2">
-              <ResetPasswordForm token={token} />
-            </div>
+    <div className="auth-prototype-shell">
+      <div className="auth-prototype-grid">
+        <section className="auth-prototype-copy">
+          <div className="auth-prototype-nav">
+            <Link href="/" className="auth-brand">PaySpot</Link>
+            <ThemeToggle />
           </div>
+          <p className="section-kicker">Credential reset</p>
+          <h1>Create a new secure operator password.</h1>
+          <p>Use a strong password to protect tenant operations, voucher inventory, and payment configuration.</p>
+          <div className="auth-signal-grid">
+            <span>Minimum 8 chars</span>
+            <span>Secure session</span>
+            <span>Operator only</span>
+          </div>
+        </section>
+        <div className="auth-prototype-card">
+          <ResetPasswordForm token={token} />
         </div>
       </div>
     </div>

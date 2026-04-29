@@ -25,6 +25,8 @@
 *.pem
 Thumbs.db
 Desktop.ini
+.claude/
+.codex-runtime/
 
 # debug
 npm-debug.log*
