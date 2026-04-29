@@ -1497,19 +1497,6 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
                           <div className="hint">Server-side verification uses the secret key and never exposes it to customers.</div>
                         </div>
                       </div>
-                      <div className="key-display">
-                        <span>
-                          Billing model: {architecture?.payment.billingModel === "fixed_subscription"
-                            ? `Fixed subscription - NGN ${compact(architecture.payment.subscriptionAmountNgn)} ${architecture.payment.subscriptionInterval}`
-                            : `${architecture?.payment.feePercent ?? 0}% per successful transaction`}
-                        </span>
-                      </div>
-                      {architecture?.payment.billingModel === "percent" ? (
-                        <div className="hint">
-                          Percentage billing is configured by the PaySpot admin using the tenant Paystack subaccount. You only need
-                          to manage your own Paystack API keys here when your account uses direct tenant payments.
-                        </div>
-                      ) : null}
                       <div className="field">
                         <label>Webhook URL</label>
                         <div className="key-display"><span>{`${origin || "https://payspot.app"}/api/t/${tenantSlug}/payments/webhook`}</span></div>
