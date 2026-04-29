@@ -15,6 +15,8 @@ const baseEnvSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
   TENANT_SECRETS_KEY: z.string().optional(),
+  PAYSTACK_SECRET_KEY: z.string().optional(),
+  PAYSTACK_PUBLIC_KEY: z.string().optional(),
 });
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>;
@@ -90,5 +92,13 @@ export function getAdminEnv() {
   const key = env.ADMIN_API_KEY?.trim();
   return {
     ADMIN_API_KEY: key && key !== "" ? key : null,
+  };
+}
+
+export function getPlatformPaystackEnv() {
+  const env = getEnv();
+  return {
+    PAYSTACK_SECRET_KEY: env.PAYSTACK_SECRET_KEY?.trim() || null,
+    PAYSTACK_PUBLIC_KEY: env.PAYSTACK_PUBLIC_KEY?.trim() || null,
   };
 }

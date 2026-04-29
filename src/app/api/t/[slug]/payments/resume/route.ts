@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { verifyAndProcess } from "@/lib/payments";
+import { requirePaystackSecretForTransaction } from "@/lib/paystack-routing";
 import {
   getTenantBySlug,
   getTransaction,
   getTransactionByReferenceEmail,
   getTransactionByReferencePhone,
-  requireTenantPaystackSecretKey,
   resetTransactionToPending,
 } from "@/lib/store";
 import { getResumeTtlMs } from "@/lib/payments";
@@ -77,11 +77,18 @@ export async function POST(request: Request, { params }: Props) {
   if (transaction.payment_status === "pending") {
     let paystackSecretKey: string;
     try {
-      paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
+      paystackSecretKey = await requirePaystackSecretForTransaction({
+        tenantId: tenant.id,
+        transaction,
+      });
     } catch (error) {
       const message =
         error instanceof Error && error.message === "Tenant Paystack key is invalid"
           ? "Tenant payment key is invalid. Use a Paystack secret key (sk_test_... or sk_live_...)."
+          : error instanceof Error && error.message === "Platform Paystack key is invalid"
+            ? "Admin Paystack key is invalid. Contact PaySpot support."
+            : error instanceof Error && error.message === "Platform Paystack key is not configured"
+              ? "Admin Paystack key is not configured. Contact PaySpot support."
           : "Tenant payments are not configured";
       return Response.json(
         { error: message },
@@ -105,7 +112,10 @@ export async function POST(request: Request, { params }: Props) {
   // "abandoned" mid-flow even when the money has already left the account.
   if (transaction.payment_status === "paystack_failed") {
     try {
-      const paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
+      const paystackSecretKey = await requirePaystackSecretForTransaction({
+        tenantId: tenant.id,
+        transaction,
+      });
       await resetTransactionToPending({ tenantId: tenant.id, reference });
       await verifyAndProcess({
         tenantId: tenant.id,

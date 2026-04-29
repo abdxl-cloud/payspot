@@ -25,21 +25,33 @@ export async function initializeTransaction(params: {
   amountKobo: number;
   reference: string;
   callbackUrl: string;
+  subaccount?: string | null;
+  transactionChargeKobo?: number | null;
+  bearer?: "account" | "subaccount";
   metadata?: Record<string, unknown>;
 }) {
+  const payload: Record<string, unknown> = {
+    email: params.email,
+    amount: params.amountKobo,
+    reference: params.reference,
+    callback_url: params.callbackUrl,
+    metadata: params.metadata ?? {},
+  };
+  if (params.subaccount) {
+    payload.subaccount = params.subaccount;
+    payload.bearer = params.bearer ?? "subaccount";
+    if (params.transactionChargeKobo && params.transactionChargeKobo > 0) {
+      payload.transaction_charge = params.transactionChargeKobo;
+    }
+  }
+
   const response = await fetch(`${baseUrl}/transaction/initialize`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${params.secretKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      email: params.email,
-      amount: params.amountKobo,
-      reference: params.reference,
-      callback_url: params.callbackUrl,
-      metadata: params.metadata ?? {},
-    }),
+    body: JSON.stringify(payload),
   });
 
   let data: { status?: boolean; message?: string; data?: unknown } | null = null;

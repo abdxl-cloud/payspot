@@ -1,6 +1,6 @@
 import { getDb } from "@/lib/db";
-import { requireTenantPaystackSecretKey } from "@/lib/store";
 import { verifyAndProcess } from "@/lib/payments";
+import { requirePaystackSecretForTransaction } from "@/lib/paystack-routing";
 
 const POLL_INTERVAL_MS = 60_000; // 60 seconds
 const POLL_WINDOW_MS = 3 * 60 * 60 * 1000; // 3 hours
@@ -9,6 +9,9 @@ type PendingTx = {
   tenant_id: string;
   reference: string;
   amount_ngn: number;
+  platform_billing_model: "percent" | "fixed_subscription" | null;
+  platform_fee_ngn: number | null;
+  paystack_subaccount_code: string | null;
 };
 
 async function pollOnce() {
@@ -54,7 +57,7 @@ async function pollOnce() {
   const pending = await db
     .prepare(
       `
-      SELECT tenant_id, reference, amount_ngn
+      SELECT tenant_id, reference, amount_ngn, platform_billing_model, platform_fee_ngn, paystack_subaccount_code
       FROM transactions
       WHERE payment_status = 'pending'
         AND created_at > ?
@@ -68,7 +71,10 @@ async function pollOnce() {
 
   for (const tx of pending) {
     try {
-      const secretKey = await requireTenantPaystackSecretKey(tx.tenant_id);
+      const secretKey = await requirePaystackSecretForTransaction({
+        tenantId: tx.tenant_id,
+        transaction: tx,
+      });
       await verifyAndProcess({
         tenantId: tx.tenant_id,
         reference: tx.reference,

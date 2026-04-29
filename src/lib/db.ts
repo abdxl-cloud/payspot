@@ -112,6 +112,13 @@ async function initSchema() {
       paystack_secret_last4 TEXT,
       paystack_public_key TEXT,
       paystack_public_key_last4 TEXT,
+      paystack_subaccount_code TEXT,
+      paystack_subaccount_last4 TEXT,
+      platform_billing_model TEXT NOT NULL DEFAULT 'percent',
+      platform_fee_percent REAL NOT NULL DEFAULT 0,
+      platform_subscription_amount_ngn INTEGER NOT NULL DEFAULT 0,
+      platform_subscription_interval TEXT NOT NULL DEFAULT 'monthly',
+      approval_message TEXT,
       admin_api_key_hash TEXT,
       voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv',
       portal_auth_mode TEXT NOT NULL DEFAULT 'omada_builtin',
@@ -243,6 +250,12 @@ async function initSchema() {
       email TEXT NOT NULL,
       phone TEXT NOT NULL,
       amount_ngn INTEGER NOT NULL,
+      platform_billing_model TEXT,
+      platform_fee_percent REAL NOT NULL DEFAULT 0,
+      platform_fee_ngn INTEGER NOT NULL DEFAULT 0,
+      tenant_net_amount_ngn INTEGER NOT NULL DEFAULT 0,
+      paystack_transaction_charge_kobo INTEGER NOT NULL DEFAULT 0,
+      paystack_subaccount_code TEXT,
       voucher_code TEXT,
       voucher_source_mode TEXT,
       package_id TEXT NOT NULL REFERENCES voucher_packages(id),
@@ -368,6 +381,20 @@ async function initSchema() {
     ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS paystack_public_key_last4 TEXT;
     ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS paystack_subaccount_code TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS paystack_subaccount_last4 TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS platform_billing_model TEXT NOT NULL DEFAULT 'percent';
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS platform_fee_percent REAL NOT NULL DEFAULT 0;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS platform_subscription_amount_ngn INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS platform_subscription_interval TEXT NOT NULL DEFAULT 'monthly';
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS approval_message TEXT;
+    ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv';
     ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS portal_auth_mode TEXT NOT NULL DEFAULT 'omada_builtin';
@@ -421,6 +448,18 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS radius_voucher_character_set TEXT;
     ALTER TABLE transactions
       ADD COLUMN IF NOT EXISTS subscriber_id TEXT;
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS platform_billing_model TEXT;
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS platform_fee_percent REAL NOT NULL DEFAULT 0;
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS platform_fee_ngn INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS tenant_net_amount_ngn INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS paystack_transaction_charge_kobo INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS paystack_subaccount_code TEXT;
     ALTER TABLE transactions
       ADD COLUMN IF NOT EXISTS delivery_mode TEXT NOT NULL DEFAULT 'voucher';
     ALTER TABLE transactions

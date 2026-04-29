@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { TenantAdminPanel } from "@/components/tenant-admin-panel";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
-import { getSessionUser, getTenantBySlug } from "@/lib/store";
+import { getSessionUser, getTenantBySlug, isTenantPaymentConfigured } from "@/lib/store";
 
 type Props = {
   params: { slug: string } | Promise<{ slug: string }>;
@@ -25,7 +25,7 @@ export default async function TenantAdminPage({ params }: Props) {
     redirect("/login");
   }
 
-  if (user.role === "tenant" && (user.mustChangePassword || !tenant.paystack_secret_enc || tenant.status !== "active")) {
+  if (user.role === "tenant" && (user.mustChangePassword || !isTenantPaymentConfigured(tenant) || tenant.status !== "active")) {
     redirect(`/t/${tenant.slug}/setup`);
   }
 

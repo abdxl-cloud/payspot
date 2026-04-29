@@ -1,11 +1,22 @@
 import { getSessionUserFromRequest } from "@/lib/auth";
-import { getAppEnv } from "@/lib/env";
 import { sendMail } from "@/lib/mailer";
+import { requirePlatformPaystackKeys } from "@/lib/paystack-routing";
+import { sendTenantApprovalEmail } from "@/lib/tenant-approval-email";
 import {
   approveTenantRequestById,
   denyTenantRequestById,
   listTenantRequests,
 } from "@/lib/store";
+import { z } from "zod";
+
+const approvalSettingsSchema = z.object({
+  billingModel: z.enum(["percent", "fixed_subscription"]).optional(),
+  feePercent: z.coerce.number().min(0).max(100).optional(),
+  subscriptionAmountNgn: z.coerce.number().int().min(0).optional(),
+  subscriptionInterval: z.enum(["monthly", "yearly"]).optional(),
+  paystackSubaccountCode: z.string().trim().max(80).optional(),
+  approvalMessage: z.string().max(1200).optional(),
+});
 
 function mapRequest(row: Awaited<ReturnType<typeof listTenantRequests>>[number]) {
   return {
@@ -49,7 +60,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as {
     requestId?: string;
     action?: string;
-  } | null;
+  } & Record<string, unknown> | null;
 
   const requestId = body?.requestId?.trim();
   const action = body?.action?.trim().toLowerCase();
@@ -80,7 +91,37 @@ export async function POST(request: Request) {
     return Response.json({ status: "ok", request: result.request ? mapRequest(result.request) : null });
   }
 
-  const result = await approveTenantRequestById(requestId);
+  const approvalSettings = approvalSettingsSchema.safeParse(body ?? {});
+  if (!approvalSettings.success) {
+    return Response.json({ error: "Invalid approval settings", details: approvalSettings.error.flatten() }, { status: 400 });
+  }
+  const percentBilling =
+    approvalSettings.data.billingModel === "percent" &&
+    Number(approvalSettings.data.feePercent ?? 0) > 0;
+  if (percentBilling) {
+    if (
+      !approvalSettings.data.paystackSubaccountCode ||
+      !/^ACCT_[A-Z0-9]+$/i.test(approvalSettings.data.paystackSubaccountCode)
+    ) {
+      return Response.json({ error: "A valid tenant Paystack subaccount code (ACCT_...) is required for percentage billing." }, { status: 400 });
+    }
+    try {
+      requirePlatformPaystackKeys();
+    } catch (error) {
+      return Response.json({
+        error:
+          error instanceof Error && error.message === "Platform Paystack key is invalid"
+            ? "Admin Paystack key is invalid. Set PAYSTACK_SECRET_KEY to a valid sk_test_... or sk_live_... key."
+            : error instanceof Error && error.message === "Platform Paystack public key is invalid"
+              ? "Admin Paystack public key is invalid. Set PAYSTACK_PUBLIC_KEY to a valid pk_test_... or pk_live_... key."
+              : error instanceof Error && error.message === "Platform Paystack public key is not configured"
+                ? "Admin Paystack public key is required before approving percentage-billed tenants. Set PAYSTACK_PUBLIC_KEY."
+            : "Admin Paystack key is required before approving percentage-billed tenants. Set PAYSTACK_SECRET_KEY.",
+      }, { status: 409 });
+    }
+  }
+
+  const result = await approveTenantRequestById(requestId, approvalSettings.data);
   if (result.status === "missing") {
     return Response.json({ error: "Request not found" }, { status: 404 });
   }
@@ -97,27 +138,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "Unable to approve request" }, { status: 500 });
   }
 
-  const { APP_URL } = getAppEnv();
-  const loginUrl = new URL("/login", APP_URL).toString();
-  await sendMail({
-    to: result.tenant.admin_email,
-    subject: `Your tenant portal is approved: ${result.tenant.name}`,
-    text: [
-      "Your tenant portal has been approved.",
-      "",
-      `Tenant: ${result.tenant.name}`,
-      `Slug: ${result.tenant.slug}`,
-      `Purchase link: ${new URL(`/t/${result.tenant.slug}`, APP_URL).toString()}`,
-      "",
-      "Login details:",
-      `Email: ${result.email}`,
-      `Temporary password: ${result.temporaryPassword}`,
-      "",
-      "Sign in here:",
-      loginUrl,
-      "",
-      "On first login, you must set your password and Paystack key before using the portal.",
-    ].join("\n"),
+  await sendTenantApprovalEmail({
+    tenant: result.tenant,
+    email: result.email,
+    temporaryPassword: result.temporaryPassword,
+    approvalMessage: approvalSettings.data.approvalMessage,
+    billingModel: approvalSettings.data.billingModel,
+    feePercent: approvalSettings.data.feePercent,
+    subscriptionAmountNgn: approvalSettings.data.subscriptionAmountNgn,
+    subscriptionInterval: approvalSettings.data.subscriptionInterval,
   }).catch((error) => {
     console.error("Tenant request approval email failed", error);
   });

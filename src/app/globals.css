@@ -831,6 +831,861 @@
   gap: 1rem;
 }
 
+.voucher-check-shell {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: clip;
+  background:
+    radial-gradient(ellipse 70% 52% at 8% -10%, var(--ac-dim), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 100% 0%, color-mix(in oklch, var(--green), transparent 90%), transparent 65%),
+    var(--bg);
+}
+
+.voucher-check-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--tx) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--tx) 4%, transparent) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(ellipse 70% 48% at 50% 0%, black, transparent 72%);
+}
+
+.voucher-check-container {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(100%, 1120px);
+  margin-inline: auto;
+  gap: 1rem;
+  padding: clamp(1rem, 3vw, 2.5rem);
+  padding-bottom: 6rem;
+}
+
+.voucher-check-head,
+.voucher-check-hero,
+.voucher-check-ticket,
+.voucher-check-card,
+.voucher-check-form {
+  border: 1px solid var(--bd);
+  background: color-mix(in oklch, var(--s1), transparent 5%);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgb(255 255 255 / 0.035);
+  backdrop-filter: blur(18px);
+}
+
+.voucher-check-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 0.9rem;
+  padding: 0.85rem 1rem;
+}
+
+.voucher-check-brand,
+.voucher-check-actions,
+.voucher-check-buy {
+  display: flex;
+  align-items: center;
+}
+
+.voucher-check-brand {
+  min-width: 0;
+  gap: 0.85rem;
+}
+
+.voucher-check-brand > span {
+  display: grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--bd);
+  border-radius: 0.7rem;
+  background: var(--s2);
+  color: var(--ac);
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 800;
+}
+
+.voucher-check-brand strong {
+  display: block;
+  overflow: hidden;
+  color: var(--tx);
+  font-weight: 800;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voucher-check-brand small {
+  display: block;
+  overflow: hidden;
+  color: var(--tx3);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voucher-check-actions {
+  flex: 0 0 auto;
+  gap: 0.65rem;
+}
+
+.voucher-check-buy {
+  gap: 0.4rem;
+  height: 2rem;
+  border: 1px solid var(--ac-bd);
+  border-radius: 999px;
+  background: var(--ac-dim);
+  color: var(--ac);
+  padding: 0 0.75rem;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.voucher-check-buy svg,
+.voucher-check-input-row button svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.voucher-check-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+  gap: clamp(1rem, 3vw, 1.5rem);
+  align-items: stretch;
+  margin-top: clamp(1rem, 2vw, 1.5rem);
+  border-radius: 1.35rem;
+  padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.voucher-check-copy {
+  display: grid;
+  align-content: center;
+  gap: 1.1rem;
+  min-height: 24rem;
+  padding: clamp(0.5rem, 3vw, 1.5rem);
+}
+
+.voucher-check-copy h1 {
+  max-width: 10ch;
+  color: var(--tx);
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(3rem, 10vw, 7.2rem);
+  font-weight: 900;
+  letter-spacing: -0.07em;
+  line-height: 0.83;
+  text-wrap: balance;
+}
+
+.voucher-check-copy p:not(.section-kicker) {
+  max-width: 39rem;
+  color: var(--tx2);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.voucher-check-metrics,
+.voucher-check-stat-grid {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--bd);
+  border-radius: 0.9rem;
+  background: var(--bd);
+}
+
+.voucher-check-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 42rem;
+}
+
+.voucher-check-metric,
+.voucher-check-stat {
+  min-width: 0;
+  background: var(--s1);
+  padding: 1rem;
+}
+
+.voucher-check-metric svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--ac);
+}
+
+.voucher-check-metric span,
+.voucher-check-stat span,
+.voucher-check-progress span,
+.voucher-check-form label {
+  display: block;
+  color: var(--tx3);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.voucher-check-metric strong,
+.voucher-check-stat strong {
+  display: block;
+  margin-top: 0.4rem;
+  overflow-wrap: anywhere;
+  color: var(--tx);
+  font-weight: 800;
+}
+
+.voucher-check-form {
+  display: grid;
+  align-content: center;
+  border-radius: 1.1rem;
+  padding: clamp(1rem, 3vw, 1.4rem);
+}
+
+.voucher-check-form h2 {
+  margin: 0.4rem 0 1.25rem;
+  color: var(--tx);
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(1.7rem, 4vw, 2.55rem);
+  font-weight: 850;
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+}
+
+.voucher-check-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+
+.voucher-check-input-row input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--bd);
+  border-radius: 0.75rem;
+  background: var(--s2);
+  color: var(--tx);
+  padding: 0.85rem 0.95rem;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.92rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  outline: none;
+}
+
+.voucher-check-input-row input:focus {
+  border-color: var(--ac-bd);
+  box-shadow: 0 0 0 3px var(--ac-dim);
+}
+
+.voucher-check-input-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: var(--ac);
+  color: #0d0d0d;
+  padding: 0.85rem 1rem;
+  font-weight: 850;
+}
+
+.voucher-check-message {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 1rem;
+  border: 1px solid var(--bd);
+  border-radius: 0.85rem;
+  background: var(--s2);
+  padding: 0.9rem 1rem;
+}
+
+.voucher-check-message strong {
+  color: var(--tx);
+}
+
+.voucher-check-message span {
+  color: var(--tx2);
+  overflow-wrap: anywhere;
+}
+
+.voucher-check-message.good {
+  border-color: var(--ac-bd);
+  background: var(--ac-dim);
+}
+
+.voucher-check-message.bad {
+  border-color: oklch(0.65 0.18 25 / 0.28);
+  background: oklch(0.65 0.18 25 / 0.1);
+}
+
+.voucher-check-message.bad strong {
+  color: var(--red);
+}
+
+.voucher-check-results {
+  display: grid;
+  gap: 1rem;
+}
+
+.voucher-check-ticket {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  overflow: hidden;
+  border-radius: 1.35rem;
+  padding: clamp(1.2rem, 4vw, 2rem);
+  background:
+    radial-gradient(ellipse 80% 90% at 100% 0%, var(--ac-dim), transparent 60%),
+    linear-gradient(135deg, var(--s1), var(--s2));
+}
+
+.voucher-check-ticket h2 {
+  margin-top: 0.3rem;
+  color: var(--tx);
+  font-family: var(--font-mono), monospace;
+  font-size: clamp(2rem, 8vw, 4.5rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 0.95;
+  overflow-wrap: anywhere;
+}
+
+.voucher-check-ticket p:not(.section-kicker) {
+  margin-top: 0.65rem;
+  color: var(--tx2);
+}
+
+.voucher-check-status {
+  flex: 0 0 auto;
+  border: 1px solid var(--bd);
+  border-radius: 999px;
+  background: var(--s2);
+  color: var(--tx2);
+  padding: 0.35rem 0.8rem;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.voucher-check-status.good {
+  border-color: oklch(0.72 0.17 155 / 0.24);
+  background: oklch(0.72 0.17 155 / 0.12);
+  color: var(--green);
+}
+
+.voucher-check-status.warn {
+  border-color: oklch(0.78 0.18 80 / 0.26);
+  background: oklch(0.78 0.18 80 / 0.12);
+  color: var(--amber);
+}
+
+.voucher-check-status.bad {
+  border-color: oklch(0.65 0.18 25 / 0.28);
+  background: oklch(0.65 0.18 25 / 0.12);
+  color: var(--red);
+}
+
+.voucher-check-stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+}
+
+.voucher-check-stat-grid.compact {
+  border-radius: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.voucher-check-stat.accent {
+  background: var(--ac-dim);
+}
+
+.voucher-check-stat.warn {
+  background: oklch(0.78 0.18 80 / 0.09);
+}
+
+.voucher-check-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  gap: 1rem;
+}
+
+.voucher-check-card {
+  border-radius: 1rem;
+  padding: clamp(1rem, 3vw, 1.3rem);
+}
+
+.voucher-check-card.large {
+  min-height: 100%;
+}
+
+.voucher-check-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.voucher-check-card-head > span {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--ac-bd);
+  border-radius: 0.75rem;
+  background: var(--ac-dim);
+  color: var(--ac);
+}
+
+.voucher-check-card-head svg,
+.voucher-check-empty svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.voucher-check-card h3 {
+  margin-top: 0.25rem;
+  color: var(--tx);
+  font-family: var(--font-heading), sans-serif;
+  font-size: 1.45rem;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.voucher-check-usage,
+.voucher-check-side,
+.voucher-check-mini-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.voucher-check-usage {
+  margin-top: 1rem;
+}
+
+.voucher-check-progress {
+  border: 1px solid oklch(0.78 0.18 80 / 0.24);
+  border-radius: 0.85rem;
+  background: oklch(0.78 0.18 80 / 0.09);
+  padding: 1rem;
+}
+
+.voucher-check-progress > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.voucher-check-progress strong {
+  color: var(--tx);
+  font-family: var(--font-mono), monospace;
+}
+
+.voucher-check-progress p,
+.voucher-check-note,
+.voucher-check-empty span {
+  margin-top: 0.4rem;
+  color: var(--tx2);
+}
+
+.voucher-check-progress-track {
+  overflow: hidden;
+  height: 0.55rem;
+  margin-top: 0.8rem;
+  border-radius: 999px;
+  background: var(--s2);
+}
+
+.voucher-check-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--amber), var(--ac));
+}
+
+.voucher-check-empty {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 1rem;
+  border: 1px dashed var(--bd2);
+  border-radius: 0.85rem;
+  background: var(--s2);
+  padding: 1.2rem;
+  color: var(--tx3);
+}
+
+.voucher-check-empty strong {
+  color: var(--tx);
+}
+
+.approval-review-shell {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: clip;
+  background:
+    radial-gradient(ellipse 70% 52% at 8% -10%, var(--ac-dim), transparent 60%),
+    radial-gradient(ellipse 45% 38% at 100% 0%, oklch(0.78 0.18 80 / 0.12), transparent 68%),
+    var(--bg);
+}
+
+.approval-review-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--tx) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--tx) 4%, transparent) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(ellipse 70% 48% at 50% 0%, black, transparent 72%);
+}
+
+.approval-review-wrap {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 1180px);
+  margin-inline: auto;
+  padding: clamp(1rem, 4vw, 3rem);
+}
+
+.approval-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--bd);
+  border-radius: 0.9rem;
+  background: color-mix(in oklch, var(--s1), transparent 8%);
+  padding: 0.85rem 1rem;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(18px);
+}
+
+.approval-review-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.approval-review-brand > span {
+  display: grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  place-items: center;
+  border: 1px solid var(--bd);
+  border-radius: 0.7rem;
+  background: var(--s2);
+  color: var(--ac);
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 900;
+}
+
+.approval-review-brand strong {
+  display: block;
+  color: var(--tx);
+  font-weight: 850;
+}
+
+.approval-review-brand small {
+  color: var(--tx3);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+}
+
+.approval-review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1fr);
+  gap: clamp(1rem, 4vw, 2rem);
+  align-items: center;
+  min-height: calc(100vh - 8rem);
+  padding-block: clamp(1.5rem, 5vw, 4rem);
+}
+
+.approval-review-copy {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.approval-review-copy h1 {
+  max-width: 10ch;
+  color: var(--tx);
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(3rem, 9vw, 6.5rem);
+  font-weight: 900;
+  letter-spacing: -0.07em;
+  line-height: 0.84;
+}
+
+.approval-review-copy p:not(.section-kicker) {
+  max-width: 38rem;
+  color: var(--tx2);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.approval-review-summary {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  max-width: 42rem;
+  border: 1px solid var(--bd);
+  border-radius: 0.9rem;
+  background: var(--bd);
+}
+
+.approval-review-summary div {
+  display: grid;
+  gap: 0.35rem;
+  background: var(--s1);
+  padding: 1rem;
+}
+
+.approval-review-summary svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--ac);
+}
+
+.approval-review-summary span,
+.approval-review-field label {
+  color: var(--tx3);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.approval-review-summary strong {
+  color: var(--tx);
+  overflow-wrap: anywhere;
+}
+
+.approval-review-card {
+  border: 1px solid var(--bd);
+  border-radius: 1.25rem;
+  background: color-mix(in oklch, var(--s1), transparent 5%);
+  padding: clamp(1rem, 3vw, 1.5rem);
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgb(255 255 255 / 0.035);
+  backdrop-filter: blur(18px);
+}
+
+.approval-review-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.approval-review-card-head h2 {
+  margin-top: 0.35rem;
+  color: var(--tx);
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+
+.approval-review-card-head > span {
+  flex: 0 0 auto;
+  color: var(--tx3);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+}
+
+.approval-review-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.approval-review-radio {
+  display: flex;
+  gap: 0.8rem;
+  border: 1px solid var(--bd);
+  border-radius: 0.9rem;
+  background: var(--s2);
+  padding: 1rem;
+}
+
+.approval-review-radio input {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.2rem;
+  accent-color: var(--ac);
+}
+
+.approval-review-radio strong,
+.approval-review-closed strong {
+  display: block;
+  color: var(--tx);
+}
+
+.approval-review-radio small,
+.approval-review-closed span,
+.approval-review-field small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--tx2);
+  line-height: 1.5;
+}
+
+.approval-review-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.approval-review-field input,
+.approval-review-field select,
+.approval-review-field textarea {
+  width: 100%;
+  border: 1px solid var(--bd);
+  border-radius: 0.75rem;
+  background: var(--s2);
+  color: var(--tx);
+  padding: 0.8rem 0.9rem;
+  outline: none;
+}
+
+.approval-review-field textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.approval-review-field input:focus,
+.approval-review-field select:focus,
+.approval-review-field textarea:focus {
+  border-color: var(--ac-bd);
+  box-shadow: 0 0 0 3px var(--ac-dim);
+}
+
+.approval-review-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px;
+  gap: 0.85rem;
+}
+
+.approval-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 0.35rem;
+}
+
+.approval-review-actions button,
+.approval-review-deny,
+.approval-review-closed a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 0.75rem;
+  padding: 0.8rem 1rem;
+  font-weight: 850;
+}
+
+.approval-review-actions button {
+  border: 0;
+  background: var(--ac);
+  color: #0d0d0d;
+}
+
+.approval-review-actions button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.approval-review-deny {
+  border: 1px solid oklch(0.65 0.18 25 / 0.28);
+  background: oklch(0.65 0.18 25 / 0.1);
+  color: var(--red);
+}
+
+.approval-review-closed {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid var(--bd);
+  border-radius: 0.9rem;
+  background: var(--s2);
+  padding: 1rem;
+}
+
+.approval-review-closed a {
+  width: fit-content;
+  margin-top: 0.5rem;
+  background: var(--ac);
+  color: #0d0d0d;
+}
+
+@media (max-width: 860px) {
+  .approval-review-grid {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .approval-review-copy h1 {
+    max-width: 12ch;
+  }
+}
+
+@media (max-width: 560px) {
+  .approval-review-split {
+    grid-template-columns: 1fr;
+  }
+
+  .approval-review-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 860px) {
+  .voucher-check-hero,
+  .voucher-check-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .voucher-check-copy {
+    min-height: 0;
+  }
+
+  .voucher-check-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .voucher-check-buy {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .voucher-check-head,
+  .voucher-check-ticket {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .voucher-check-actions {
+    justify-content: flex-start;
+  }
+
+  .voucher-check-input-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .prototype-checkout {
   display: grid;
   gap: 1rem;

@@ -72,7 +72,7 @@ export async function POST(request: Request) {
   const { OWNER_EMAIL } = getMailEnv();
 
   const approveUrl = new URL(
-    `/api/admin/tenant-requests/${reviewToken}/approve`,
+    `/admin/tenant-requests/${reviewToken}/review`,
     APP_URL,
   ).toString();
   const denyUrl = new URL(
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     notes ? `- Notes: ${notes}` : null,
     "",
     "Review:",
-    `Approve: ${approveUrl}`,
+    `Review and approve: ${approveUrl}`,
     `Deny: ${denyUrl}`,
   ].filter(Boolean).join("\n");
   const html = `
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
             `).join("")}
           </table>
           <div style="margin-top:24px">
-            <a href="${approveUrl}" style="display:inline-block;margin:0 8px 8px 0;background:#72f064;color:#101010;text-decoration:none;border-radius:10px;padding:13px 18px;font-weight:800">Approve request</a>
+            <a href="${approveUrl}" style="display:inline-block;margin:0 8px 8px 0;background:#72f064;color:#101010;text-decoration:none;border-radius:10px;padding:13px 18px;font-weight:800">Review and approve</a>
             <a href="${denyUrl}" style="display:inline-block;margin:0 0 8px;background:#2a1616;color:#ff6b6b;text-decoration:none;border:1px solid #5a2424;border-radius:10px;padding:12px 17px;font-weight:800">Deny</a>
           </div>
         </td></tr>

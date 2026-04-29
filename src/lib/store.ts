@@ -16,6 +16,13 @@ export type TenantRow = {
   paystack_secret_last4: string | null;
   paystack_public_key: string | null;
   paystack_public_key_last4: string | null;
+  paystack_subaccount_code: string | null;
+  paystack_subaccount_last4: string | null;
+  platform_billing_model: PlatformBillingModel | null;
+  platform_fee_percent: number | null;
+  platform_subscription_amount_ngn: number | null;
+  platform_subscription_interval: PlatformSubscriptionInterval | null;
+  approval_message: string | null;
   admin_api_key_hash: string | null;
   voucher_source_mode: string | null;
   portal_auth_mode: string | null;
@@ -37,6 +44,18 @@ export type TenantRow = {
   ui_config_json: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type PlatformBillingModel = "percent" | "fixed_subscription";
+export type PlatformSubscriptionInterval = "monthly" | "yearly";
+
+export type TenantApprovalOptions = {
+  billingModel?: PlatformBillingModel;
+  feePercent?: number;
+  subscriptionAmountNgn?: number;
+  subscriptionInterval?: PlatformSubscriptionInterval;
+  paystackSubaccountCode?: string | null;
+  approvalMessage?: string | null;
 };
 
 export type VoucherSourceMode = "import_csv" | "omada_openapi" | "mikrotik_rest" | "radius_voucher";
@@ -94,6 +113,12 @@ export type TenantAppearance = {
 export type TenantPaymentSettings = {
   hasPublicKey: boolean;
   publicKeyLast4: string;
+  hasSubaccount: boolean;
+  subaccountLast4: string;
+  billingModel: PlatformBillingModel;
+  feePercent: number;
+  subscriptionAmountNgn: number;
+  subscriptionInterval: PlatformSubscriptionInterval;
 };
 
 export type TenantEmailNotificationSettings = {
@@ -223,6 +248,12 @@ export type TransactionRow = {
   email: string;
   phone: string;
   amount_ngn: number;
+  platform_billing_model: PlatformBillingModel | null;
+  platform_fee_percent: number | null;
+  platform_fee_ngn: number | null;
+  tenant_net_amount_ngn: number | null;
+  paystack_transaction_charge_kobo: number | null;
+  paystack_subaccount_code: string | null;
   voucher_code: string | null;
   voucher_source_mode: VoucherSourceMode | null;
   package_id: string;
@@ -340,6 +371,77 @@ function normalizeUsername(username: string) {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function normalizePlatformBillingModel(value: string | null | undefined): PlatformBillingModel {
+  return value === "fixed_subscription" ? "fixed_subscription" : "percent";
+}
+
+function normalizePlatformSubscriptionInterval(
+  value: string | null | undefined,
+): PlatformSubscriptionInterval {
+  return value === "yearly" ? "yearly" : "monthly";
+}
+
+function normalizeTenantApprovalOptions(options?: TenantApprovalOptions) {
+  const billingModel = normalizePlatformBillingModel(options?.billingModel);
+  const feePercent = Math.max(0, Math.min(100, Number(options?.feePercent ?? 0)));
+  const subscriptionAmountNgn = Math.max(
+    0,
+    Math.round(Number(options?.subscriptionAmountNgn ?? 0)),
+  );
+  return {
+    billingModel,
+    feePercent: Number.isFinite(feePercent) ? feePercent : 0,
+    subscriptionAmountNgn: Number.isFinite(subscriptionAmountNgn) ? subscriptionAmountNgn : 0,
+    subscriptionInterval: normalizePlatformSubscriptionInterval(options?.subscriptionInterval),
+    paystackSubaccountCode: normalizePaystackSubaccountCode(options?.paystackSubaccountCode),
+    approvalMessage: options?.approvalMessage?.trim() || null,
+  };
+}
+
+function normalizePaystackSubaccountCode(value: string | null | undefined) {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return null;
+  return normalized.toUpperCase();
+}
+
+function isPaystackSubaccountCode(value: string) {
+  return /^ACCT_[A-Z0-9]+$/i.test(value.trim());
+}
+
+export function calculatePlatformFee(params: {
+  amountNgn: number;
+  billingModel?: string | null;
+  feePercent?: number | null;
+}) {
+  const amountNgn = Math.max(0, Math.round(params.amountNgn));
+  const feePercent =
+    normalizePlatformBillingModel(params.billingModel) === "percent"
+      ? Math.max(0, Math.min(100, Number(params.feePercent ?? 0)))
+      : 0;
+  const platformFeeNgn = Math.min(amountNgn, Math.round((amountNgn * feePercent) / 100));
+  return {
+    billingModel: normalizePlatformBillingModel(params.billingModel),
+    feePercent: Number.isFinite(feePercent) ? feePercent : 0,
+    platformFeeNgn,
+    tenantNetAmountNgn: amountNgn - platformFeeNgn,
+    paystackTransactionChargeKobo: platformFeeNgn * 100,
+  };
+}
+
+export function tenantUsesPlatformPaystack(tenant: Pick<TenantRow, "platform_billing_model" | "platform_fee_percent">) {
+  return normalizePlatformBillingModel(tenant.platform_billing_model) === "percent" &&
+    Number(tenant.platform_fee_percent ?? 0) > 0;
+}
+
+export function isTenantPaymentConfigured(
+  tenant: Pick<TenantRow, "paystack_secret_enc" | "paystack_subaccount_code" | "platform_billing_model" | "platform_fee_percent">,
+) {
+  if (tenantUsesPlatformPaystack(tenant)) {
+    return !!tenant.paystack_subaccount_code;
+  }
+  return !!tenant.paystack_secret_enc;
 }
 
 export function normalizeVoucherSourceMode(
@@ -1909,6 +2011,14 @@ export async function listTenantRequests(params?: {
     .all(limit) as TenantRequestRow[];
 }
 
+export async function getTenantRequestByReviewToken(reviewToken: string) {
+  const db = getDb();
+  const tokenHash = hashToken(reviewToken);
+  return await db
+    .prepare("SELECT * FROM tenant_requests WHERE review_token_hash = ?")
+    .get(tokenHash) as TenantRequestRow | undefined;
+}
+
 export async function denyTenantRequestById(requestId: string) {
   const db = getDb();
   const now = nowIso();
@@ -1934,8 +2044,12 @@ export async function denyTenantRequestById(requestId: string) {
   return { status: "denied" as const, request };
 }
 
-export async function approveTenantRequestById(requestId: string) {
+export async function approveTenantRequestById(
+  requestId: string,
+  options?: TenantApprovalOptions,
+) {
   const db = getDb();
+  const approvalOptions = normalizeTenantApprovalOptions(options);
 
   const run = db.transaction(async () => {
     const request = await db
@@ -1985,8 +2099,12 @@ export async function approveTenantRequestById(requestId: string) {
     await db.prepare(
       `
         INSERT INTO tenants (
-          id, slug, name, admin_email, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          id, slug, name, admin_email, status,
+          paystack_subaccount_code, paystack_subaccount_last4,
+          platform_billing_model, platform_fee_percent, platform_subscription_amount_ngn,
+          platform_subscription_interval, approval_message,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     ).run(
       tenantId,
@@ -1994,6 +2112,13 @@ export async function approveTenantRequestById(requestId: string) {
       request.requested_name,
       request.requested_email,
       "pending_setup",
+      approvalOptions.paystackSubaccountCode,
+      approvalOptions.paystackSubaccountCode ? approvalOptions.paystackSubaccountCode.slice(-4) : null,
+      approvalOptions.billingModel,
+      approvalOptions.feePercent,
+      approvalOptions.subscriptionAmountNgn,
+      approvalOptions.subscriptionInterval,
+      approvalOptions.approvalMessage,
       now,
       now,
     );
@@ -2066,9 +2191,13 @@ export async function denyTenantRequest(reviewToken: string) {
   return { status: "denied" as const, request };
 }
 
-export async function approveTenantRequest(reviewToken: string) {
+export async function approveTenantRequest(
+  reviewToken: string,
+  options?: TenantApprovalOptions,
+) {
   const db = getDb();
   const tokenHash = hashToken(reviewToken);
+  const approvalOptions = normalizeTenantApprovalOptions(options);
 
   const run = db.transaction(async () => {
     const request = await db
@@ -2118,8 +2247,12 @@ export async function approveTenantRequest(reviewToken: string) {
     await db.prepare(
       `
         INSERT INTO tenants (
-          id, slug, name, admin_email, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          id, slug, name, admin_email, status,
+          paystack_subaccount_code, paystack_subaccount_last4,
+          platform_billing_model, platform_fee_percent, platform_subscription_amount_ngn,
+          platform_subscription_interval, approval_message,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     ).run(
       tenantId,
@@ -2127,6 +2260,13 @@ export async function approveTenantRequest(reviewToken: string) {
       request.requested_name,
       request.requested_email,
       "pending_setup",
+      approvalOptions.paystackSubaccountCode,
+      approvalOptions.paystackSubaccountCode ? approvalOptions.paystackSubaccountCode.slice(-4) : null,
+      approvalOptions.billingModel,
+      approvalOptions.feePercent,
+      approvalOptions.subscriptionAmountNgn,
+      approvalOptions.subscriptionInterval,
+      approvalOptions.approvalMessage,
       now,
       now,
     );
@@ -2230,6 +2370,31 @@ export async function setTenantPaystackPublicKey(params: {
   return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
 }
 
+export async function setTenantPaystackSubaccountCode(params: {
+  tenantId: string;
+  paystackSubaccountCode: string | null;
+}) {
+  const db = getDb();
+  const tenant = await getTenantById(params.tenantId);
+  if (!tenant) return { status: "missing" as const };
+
+  const code = normalizePaystackSubaccountCode(params.paystackSubaccountCode);
+  if (code && !isPaystackSubaccountCode(code)) {
+    return { status: "invalid_subaccount_code" as const };
+  }
+
+  const now = nowIso();
+  await db.prepare(
+    `
+      UPDATE tenants
+      SET paystack_subaccount_code = ?, paystack_subaccount_last4 = ?, updated_at = ?
+      WHERE id = ?
+    `,
+  ).run(code, code ? code.slice(-4) : null, now, params.tenantId);
+
+  return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
+}
+
 export async function getTenantArchitecture(tenantId: string) {
   const tenant = await getTenantById(tenantId);
   if (!tenant) return null;
@@ -2249,6 +2414,12 @@ export async function getTenantArchitecture(tenantId: string) {
     payment: {
       hasPublicKey: !!tenant.paystack_public_key,
       publicKeyLast4: tenant.paystack_public_key_last4 ?? "",
+      hasSubaccount: !!tenant.paystack_subaccount_code,
+      subaccountLast4: tenant.paystack_subaccount_last4 ?? "",
+      billingModel: normalizePlatformBillingModel(tenant.platform_billing_model),
+      feePercent: Number(tenant.platform_fee_percent ?? 0),
+      subscriptionAmountNgn: Number(tenant.platform_subscription_amount_ngn ?? 0),
+      subscriptionInterval: normalizePlatformSubscriptionInterval(tenant.platform_subscription_interval),
     },
     notifications: normalizeTenantEmailNotifications(tenant.ui_config_json, tenant.voucher_source_mode),
     omada: {
@@ -2847,6 +3018,12 @@ export async function createTransaction(params: {
   email: string;
   phone: string;
   amountNgn: number;
+  platformBillingModel?: PlatformBillingModel | null;
+  platformFeePercent?: number | null;
+  platformFeeNgn?: number | null;
+  tenantNetAmountNgn?: number | null;
+  paystackTransactionChargeKobo?: number | null;
+  paystackSubaccountCode?: string | null;
   packageId: string;
   subscriberId?: string | null;
   deliveryMode?: "voucher" | "account_access";
@@ -2861,9 +3038,12 @@ export async function createTransaction(params: {
   await db.prepare(
     `
       INSERT INTO transactions (
-        id, tenant_id, reference, email, phone, amount_ngn, package_id, authorization_url,
+        id, tenant_id, reference, email, phone, amount_ngn,
+        platform_billing_model, platform_fee_percent, platform_fee_ngn, tenant_net_amount_ngn,
+        paystack_transaction_charge_kobo, paystack_subaccount_code,
+        package_id, authorization_url,
         subscriber_id, delivery_mode, voucher_source_mode, payment_status, created_at, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -2872,6 +3052,12 @@ export async function createTransaction(params: {
     email,
     params.phone,
     params.amountNgn,
+    params.platformBillingModel ?? null,
+    params.platformFeePercent ?? 0,
+    params.platformFeeNgn ?? 0,
+    params.tenantNetAmountNgn ?? params.amountNgn,
+    params.paystackTransactionChargeKobo ?? 0,
+    normalizePaystackSubaccountCode(params.paystackSubaccountCode),
     params.packageId,
     params.authorizationUrl,
     params.subscriberId ?? null,
@@ -2889,6 +3075,13 @@ export async function getTransaction(tenantId: string, reference: string) {
   return await db
     .prepare("SELECT * FROM transactions WHERE tenant_id = ? AND reference = ?")
     .get(tenantId, reference) as TransactionRow | undefined;
+}
+
+export async function getTransactionByReference(reference: string) {
+  const db = getDb();
+  return await db
+    .prepare("SELECT * FROM transactions WHERE reference = ? LIMIT 1")
+    .get(reference) as TransactionRow | undefined;
 }
 
 export async function getTransactionByReferenceEmail(

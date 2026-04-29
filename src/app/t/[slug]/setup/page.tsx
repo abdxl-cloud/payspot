@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { TenantSetupPanel } from "@/components/tenant-setup-panel";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-cookies";
-import { getSessionUser, getStats, getTenantBySlug } from "@/lib/store";
+import { getSessionUser, getStats, getTenantBySlug, isTenantPaymentConfigured } from "@/lib/store";
 
 type Props = {
   params: { slug: string } | Promise<{ slug: string }>;
@@ -23,7 +23,8 @@ export default async function TenantSetupPage({ params }: Props) {
   const tenant = await getTenantBySlug(slug);
   if (!tenant) notFound();
 
-  const setupComplete = !user.mustChangePassword && !!tenant.paystack_secret_enc && tenant.status === "active";
+  const paymentConfigured = isTenantPaymentConfigured(tenant);
+  const setupComplete = !user.mustChangePassword && paymentConfigured && tenant.status === "active";
   if (setupComplete) redirect(`/t/${tenant.slug}/admin`);
   const hasVoucherImport = (await getStats(tenant.id)).some((row) => row.total > 0);
 
@@ -34,7 +35,7 @@ export default async function TenantSetupPage({ params }: Props) {
         tenantName={tenant.name}
         currentSlug={tenant.slug}
         requirePasswordChange={user.mustChangePassword}
-        requirePaystackKey={!tenant.paystack_secret_enc}
+        requirePaystackKey={!paymentConfigured}
         requireVoucherImport={!hasVoucherImport}
       />
     </div>

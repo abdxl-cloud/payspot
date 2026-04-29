@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { buildSessionCookie } from "@/lib/auth-cookies";
 import { verifyPassword } from "@/lib/password";
-import { createSession, getTenantById, getUserByEmail } from "@/lib/store";
+import { createSession, getTenantById, getUserByEmail, isTenantPaymentConfigured } from "@/lib/store";
 
 const schema = z.object({
   email: z.string().email().max(200),
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     }
 
     tenantSlug = tenant.slug;
-    const needsSetup = user.must_change_password === 1 || !tenant.paystack_secret_enc;
+    const needsSetup = user.must_change_password === 1 || !isTenantPaymentConfigured(tenant);
     redirectTo = needsSetup ? `/t/${tenant.slug}/setup` : `/t/${tenant.slug}/admin`;
   }
 

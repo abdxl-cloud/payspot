@@ -1,5 +1,5 @@
 import { getSessionUserFromRequest } from "@/lib/auth";
-import { getTenantAdminStats, getTenantBySlug } from "@/lib/store";
+import { getTenantAdminStats, getTenantBySlug, isTenantPaymentConfigured } from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -22,7 +22,7 @@ export async function GET(request: Request, { params }: Props) {
 
     const needsSetup =
       user.mustChangePassword ||
-      !tenant.paystack_secret_enc ||
+      !isTenantPaymentConfigured(tenant) ||
       tenant.status !== "active";
     if (needsSetup) {
       return Response.json(

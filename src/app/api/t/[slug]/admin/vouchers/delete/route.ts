@@ -1,7 +1,7 @@
 import { parse } from "csv-parse/sync";
 import { getDb } from "@/lib/db";
 import { getSessionUserFromRequest } from "@/lib/auth";
-import { getTenantBySlug } from "@/lib/store";
+import { getTenantBySlug, isTenantPaymentConfigured } from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -95,7 +95,7 @@ export async function POST(request: Request, { params }: Props) {
 
     const needsSetup =
       user.mustChangePassword ||
-      !tenant.paystack_secret_enc ||
+      !isTenantPaymentConfigured(tenant) ||
       tenant.status !== "active";
     if (needsSetup) {
       return Response.json(

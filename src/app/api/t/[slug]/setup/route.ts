@@ -5,6 +5,7 @@ import {
   type AccessMode,
   getTenantBySlug,
   getUserById,
+  isTenantPaymentConfigured,
   isTenantSlugAvailable,
   setTenantArchitecture,
   setTenantPaystackSecret,
@@ -111,7 +112,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const mustChangePassword = userRow.must_change_password === 1;
-  const requirePaystackKey = !tenant.paystack_secret_enc;
+  const requirePaystackKey = !isTenantPaymentConfigured(tenant);
   const requestedSlug = parsed.data.newSlug?.toLowerCase() ?? tenant.slug;
 
   if (mustChangePassword) {
@@ -290,7 +291,17 @@ export async function POST(request: Request, { params }: Props) {
     }
   }
 
-  const latest = await getTenantBySlug(requestedSlug) ?? tenant;
+  let latest = await getTenantBySlug(requestedSlug) ?? tenant;
+  const passwordReady = mustChangePassword ? !!parsed.data.newPassword : true;
+  if (passwordReady && latest.status !== "active" && isTenantPaymentConfigured(latest)) {
+    const activated = await updateTenant({
+      tenantId: latest.id,
+      status: "active",
+    });
+    if (activated.status === "ok") {
+      latest = activated.tenant;
+    }
+  }
 
   return Response.json({
     status: "ok",

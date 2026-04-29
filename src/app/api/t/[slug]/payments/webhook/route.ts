@@ -1,9 +1,9 @@
 import { verifyWebhookSignature } from "@/lib/paystack";
 import { verifyAndProcess } from "@/lib/payments";
+import { requirePaystackSecretForTransaction } from "@/lib/paystack-routing";
 import {
   getTenantBySlug,
   getTransaction,
-  requireTenantPaystackSecretKey,
 } from "@/lib/store";
 
 type Props = {
@@ -17,33 +17,8 @@ export async function POST(request: Request, { params }: Props) {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
 
-  let paystackSecretKey: string;
-  try {
-    paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
-  } catch (error) {
-    const message =
-      error instanceof Error && error.message === "Tenant Paystack key is invalid"
-        ? "Tenant payment key is invalid. Use a Paystack secret key (sk_test_... or sk_live_...)."
-        : "Tenant payments are not configured";
-    return Response.json(
-      { error: message },
-      { status: 409 },
-    );
-  }
-
   const signature = request.headers.get("x-paystack-signature");
   const bodyText = await request.text();
-
-  if (
-    !signature ||
-    !verifyWebhookSignature({
-      payload: bodyText,
-      signature,
-      secretKey: paystackSecretKey,
-    })
-  ) {
-    return Response.json({ error: "Invalid signature" }, { status: 401 });
-  }
 
   let payload: { event?: string; data?: { reference?: string } };
   try {
@@ -67,6 +42,35 @@ export async function POST(request: Request, { params }: Props) {
   const transaction = await getTransaction(tenant.id, reference);
   if (!transaction) {
     return Response.json({ error: "Unknown transaction" }, { status: 404 });
+  }
+
+  let paystackSecretKey: string;
+  try {
+    paystackSecretKey = await requirePaystackSecretForTransaction({
+      tenantId: tenant.id,
+      transaction,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message === "Tenant Paystack key is invalid"
+        ? "Tenant payment key is invalid. Use a Paystack secret key (sk_test_... or sk_live_...)."
+        : error instanceof Error && error.message === "Platform Paystack key is invalid"
+          ? "Admin Paystack key is invalid. Set PAYSTACK_SECRET_KEY to a valid sk_test_... or sk_live_... key."
+          : error instanceof Error && error.message === "Platform Paystack key is not configured"
+            ? "Admin Paystack key is required for this transaction."
+            : "Tenant payments are not configured";
+    return Response.json({ error: message }, { status: 409 });
+  }
+
+  if (
+    !signature ||
+    !verifyWebhookSignature({
+      payload: bodyText,
+      signature,
+      secretKey: paystackSecretKey,
+    })
+  ) {
+    return Response.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   try {

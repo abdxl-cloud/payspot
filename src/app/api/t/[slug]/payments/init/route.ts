@@ -2,8 +2,10 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { normalizeCaptivePortalContext } from "@/lib/captive-portal";
 import { initializeTransaction } from "@/lib/paystack";
+import { requirePlatformPaystackSecretKey } from "@/lib/paystack-routing";
 import {
   createTransaction,
+  calculatePlatformFee,
   getAvailableCount,
   getPackageByCode,
   getPortalSubscriberSession,
@@ -60,20 +62,6 @@ export async function POST(request: Request, { params }: Props) {
   const tenant = await getTenantBySlug(slug);
   if (!tenant || tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
-  }
-
-  let paystackSecretKey: string;
-  try {
-    paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
-  } catch (error) {
-    const message =
-      error instanceof Error && error.message === "Tenant Paystack key is invalid"
-        ? "Tenant payment key is invalid. Use a Paystack secret key (sk_test_... or sk_live_...)."
-        : "Tenant payments are not configured";
-    return Response.json(
-      { error: message },
-      { status: 409 },
-    );
   }
 
   const body = await request.json();
@@ -156,12 +144,54 @@ export async function POST(request: Request, { params }: Props) {
   try {
     reference = `WIFI-${randomUUID().split("-")[0].toUpperCase()}`;
     const expiresAt = new Date(Date.now() + getResumeTtlMs()).toISOString();
+    const fee = calculatePlatformFee({
+      amountNgn: pkg.price_ngn,
+      billingModel: tenant.platform_billing_model,
+      feePercent: tenant.platform_fee_percent,
+    });
+    const requiresPaystackSplit =
+      fee.billingModel === "percent" && fee.platformFeeNgn > 0;
+    if (requiresPaystackSplit && !tenant.paystack_subaccount_code) {
+      return Response.json(
+        {
+          error:
+            "This tenant is configured for percentage billing, but the tenant Paystack subaccount code has not been set. Add the tenant ACCT_... subaccount code before accepting payments.",
+        },
+        { status: 409 },
+      );
+    }
+    let paystackSecretKey: string;
+    try {
+      paystackSecretKey = requiresPaystackSplit
+        ? requirePlatformPaystackSecretKey()
+        : await requireTenantPaystackSecretKey(tenant.id);
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message === "Tenant Paystack key is invalid"
+          ? "Tenant payment key is invalid. Use a Paystack secret key (sk_test_... or sk_live_...)."
+          : error instanceof Error && error.message === "Platform Paystack key is invalid"
+            ? "Admin Paystack key is invalid. Set PAYSTACK_SECRET_KEY to a valid sk_test_... or sk_live_... key."
+            : requiresPaystackSplit
+              ? "Admin Paystack key is required for percentage billing. Set PAYSTACK_SECRET_KEY before accepting payments."
+              : "Tenant payments are not configured";
+      return Response.json(
+        { error: message },
+        { status: 409 },
+      );
+    }
+
     await createTransaction({
       tenantId: tenant.id,
       reference,
       email,
       phone: normalizedPhone,
       amountNgn: pkg.price_ngn,
+      platformBillingModel: fee.billingModel,
+      platformFeePercent: fee.feePercent,
+      platformFeeNgn: fee.platformFeeNgn,
+      tenantNetAmountNgn: fee.tenantNetAmountNgn,
+      paystackTransactionChargeKobo: fee.paystackTransactionChargeKobo,
+      paystackSubaccountCode: requiresPaystackSplit ? tenant.paystack_subaccount_code : null,
       packageId: pkg.id,
       subscriberId,
       deliveryMode: accountAccessMode ? "account_access" : "voucher",
@@ -181,12 +211,20 @@ export async function POST(request: Request, { params }: Props) {
       amountKobo: pkg.price_ngn * 100,
       reference,
       callbackUrl,
+      subaccount: requiresPaystackSplit ? tenant.paystack_subaccount_code : null,
+      transactionChargeKobo: requiresPaystackSplit ? fee.paystackTransactionChargeKobo : null,
+      bearer: "subaccount",
       metadata: {
         tenant: tenant.slug,
         packageCode: pkg.code,
         phone: normalizedPhone,
         subscriberId: subscriberId ?? undefined,
         deliveryMode: accountAccessMode ? "account_access" : "voucher",
+        platformBillingModel: fee.billingModel,
+        platformFeePercent: fee.feePercent,
+        platformFeeNgn: fee.platformFeeNgn,
+        tenantNetAmountNgn: fee.tenantNetAmountNgn,
+        paystackSplitApplied: requiresPaystackSplit,
       },
     });
     await updateTransactionAuthUrl({

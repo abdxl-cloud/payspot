@@ -678,7 +678,10 @@ export function TenantSetupPanel({
                 </p>
                 <div className="ob-alert info">
                   <CreditCard size={16} />
-                  <span>Get API keys from dashboard.paystack.com -&gt; Settings -&gt; API Keys & Webhook.</span>
+                  <span>
+                    Log in to dashboard.paystack.com, open Settings, then API Keys &amp; Webhooks. Copy the public key
+                    starting with pk_test_ or pk_live_ and the matching secret key starting with sk_test_ or sk_live_.
+                  </span>
                 </div>
                 <div className="ob-field" style={{ marginTop: 18 }}>
                   <label>Public Key</label>
@@ -687,7 +690,10 @@ export function TenantSetupPanel({
                     onChange={(event) => setPaystackPublicKey(event.target.value)}
                     placeholder="pk_live_... (optional reference)"
                   />
-                  <div className="hint">Popup V2 resume uses the backend access code, so the secret key below is the required field.</div>
+                  <div className="hint">
+                    The public key is listed beside your secret key in Paystack Settings -&gt; API Keys &amp; Webhooks.
+                    Use test keys while testing and live keys when the store is ready.
+                  </div>
                 </div>
                 <div className="ob-field">
                   <label>Secret Key</label>

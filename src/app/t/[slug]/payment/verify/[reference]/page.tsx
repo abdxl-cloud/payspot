@@ -8,11 +8,11 @@ import {
   getCaptivePortalContextFromSearchParams,
 } from "@/lib/captive-portal";
 import { verifyAndProcess } from "@/lib/payments";
+import { requirePaystackSecretForTransaction } from "@/lib/paystack-routing";
 import {
   getPackageById,
   getTenantBySlug,
   getTransaction,
-  requireTenantPaystackSecretKey,
 } from "@/lib/store";
 
 type Props = {
@@ -64,11 +64,18 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
   if (transaction.payment_status !== "success") {
     let paystackSecretKey: string;
     try {
-      paystackSecretKey = await requireTenantPaystackSecretKey(tenant.id);
+      paystackSecretKey = await requirePaystackSecretForTransaction({
+        tenantId: tenant.id,
+        transaction,
+      });
     } catch (error) {
       const message =
         error instanceof Error && error.message === "Tenant Paystack key is invalid"
           ? "Tenant payment key is invalid. Use a Paystack secret key (sk_test_... or sk_live_...)."
+          : error instanceof Error && error.message === "Platform Paystack key is invalid"
+            ? "Admin Paystack key is invalid. Contact PaySpot support."
+            : error instanceof Error && error.message === "Platform Paystack key is not configured"
+              ? "Admin Paystack key is not configured. Contact PaySpot support."
           : "Payments are not configured for this tenant.";
       return (
         <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
