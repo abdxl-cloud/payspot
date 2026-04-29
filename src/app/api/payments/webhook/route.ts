@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error && error.message === "Platform Paystack key is invalid"
-        ? "Admin Paystack key is invalid. Set PAYSTACK_SECRET_KEY to a valid sk_test_... or sk_live_... key."
+        ? "Admin Paystack key is invalid. Set PAYSTACK_SECRET_KEY to a valid sk_live_... key."
         : "Admin Paystack key is required for this webhook. Set PAYSTACK_SECRET_KEY.";
     return Response.json({ error: message }, { status: 409 });
   }

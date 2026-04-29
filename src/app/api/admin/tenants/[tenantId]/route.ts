@@ -63,7 +63,7 @@ export async function PATCH(request: Request, { params }: Props) {
 
   if (parsed.data.paystackSecretKey && !isPaystackSecretKey(parsed.data.paystackSecretKey)) {
     return Response.json(
-      { error: "Use a valid Paystack secret key (sk_test_... or sk_live_...)." },
+      { error: "Use a valid live Paystack secret key (sk_live_...)." },
       { status: 400 },
     );
   }

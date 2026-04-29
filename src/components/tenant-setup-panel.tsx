@@ -679,8 +679,8 @@ export function TenantSetupPanel({
                 <div className="ob-alert info">
                   <CreditCard size={16} />
                   <span>
-                    Log in to dashboard.paystack.com, open Settings, then API Keys &amp; Webhooks. Copy the public key
-                    starting with pk_test_ or pk_live_ and the matching secret key starting with sk_test_ or sk_live_.
+                    Log in to dashboard.paystack.com, open Settings, then API Keys &amp; Webhooks. Copy the live public key
+                    starting with pk_live_ and the matching live secret key starting with sk_live_.
                   </span>
                 </div>
                 <div className="ob-field" style={{ marginTop: 18 }}>
@@ -688,11 +688,11 @@ export function TenantSetupPanel({
                   <input
                     value={paystackPublicKey}
                     onChange={(event) => setPaystackPublicKey(event.target.value)}
-                    placeholder="pk_live_... (optional reference)"
+                    placeholder="pk_live_..."
                   />
                   <div className="hint">
                     The public key is listed beside your secret key in Paystack Settings -&gt; API Keys &amp; Webhooks.
-                    Use test keys while testing and live keys when the store is ready.
+                    Use the live key so customers can complete real payments.
                   </div>
                 </div>
                 <div className="ob-field">
@@ -701,7 +701,7 @@ export function TenantSetupPanel({
                     type="password"
                     value={paystackSecretKey}
                     onChange={(event) => setPaystackSecretKey(event.target.value)}
-                    placeholder="sk_test_... or sk_live_..."
+                    placeholder="sk_live_..."
                   />
                 </div>
                 <div className="ob-field">

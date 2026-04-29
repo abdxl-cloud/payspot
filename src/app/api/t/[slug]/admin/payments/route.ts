@@ -44,10 +44,10 @@ export async function PATCH(request: Request, { params }: Props) {
   const secretKey = parsed.data.paystackSecretKey?.trim();
 
   if (publicKey && !isPaystackPublicKey(publicKey)) {
-    return Response.json({ error: "Use a valid Paystack public key (pk_test_... or pk_live_...)." }, { status: 400 });
+    return Response.json({ error: "Use a valid live Paystack public key (pk_live_...)." }, { status: 400 });
   }
   if (secretKey && !isPaystackSecretKey(secretKey)) {
-    return Response.json({ error: "Use a valid Paystack secret key (sk_test_... or sk_live_...)." }, { status: 400 });
+    return Response.json({ error: "Use a valid live Paystack secret key (sk_live_...)." }, { status: 400 });
   }
 
   if (publicKey !== undefined) {
@@ -57,7 +57,7 @@ export async function PATCH(request: Request, { params }: Props) {
     });
     if (result.status === "missing") return Response.json({ error: "Tenant not found" }, { status: 404 });
     if (result.status === "invalid_public_key") {
-      return Response.json({ error: "Use a valid Paystack public key (pk_test_... or pk_live_...)." }, { status: 400 });
+      return Response.json({ error: "Use a valid live Paystack public key (pk_live_...)." }, { status: 400 });
     }
   }
 

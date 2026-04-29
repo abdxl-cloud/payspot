@@ -1479,11 +1479,11 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
                           <input
                             value={paymentForm.paystackPublicKey}
                             onChange={(event) => setPaymentForm((current) => ({ ...current, paystackPublicKey: event.target.value }))}
-                            placeholder={architecture?.payment.hasPublicKey ? `Stored - ending ${architecture.payment.publicKeyLast4}` : "pk_test_... or pk_live_..."}
+                            placeholder={architecture?.payment.hasPublicKey ? `Stored - ending ${architecture.payment.publicKeyLast4}` : "pk_live_..."}
                           />
                           <div className="hint">
                             In Paystack, open <strong>Settings</strong> then <strong>API Keys &amp; Webhooks</strong>. Copy the
-                            public key that starts with <strong>pk_test_</strong> or <strong>pk_live_</strong>.
+                            live public key that starts with <strong>pk_live_</strong>.
                           </div>
                         </div>
                         <div className="field">
@@ -1492,9 +1492,9 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
                             type="password"
                             value={paymentForm.paystackSecretKey}
                             onChange={(event) => setPaymentForm((current) => ({ ...current, paystackSecretKey: event.target.value }))}
-                            placeholder="Leave blank to keep saved secret key"
+                            placeholder="Leave blank to keep saved live secret key"
                           />
-                          <div className="hint">Server-side verification uses the secret key and never exposes it to customers.</div>
+                          <div className="hint">Server-side verification uses the live secret key and never exposes it to customers.</div>
                         </div>
                       </div>
                       <div className="field">

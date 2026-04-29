@@ -131,13 +131,13 @@ export async function POST(request: Request, { params }: Props) {
 
   if (parsed.data.paystackSecretKey && !isPaystackSecretKey(parsed.data.paystackSecretKey)) {
     return Response.json(
-      { error: "Use a valid Paystack secret key (sk_test_... or sk_live_...)." },
+      { error: "Use a valid live Paystack secret key (sk_live_...)." },
       { status: 400 },
     );
   }
   if (parsed.data.paystackPublicKey && !isPaystackPublicKey(parsed.data.paystackPublicKey)) {
     return Response.json(
-      { error: "Use a valid Paystack public key (pk_test_... or pk_live_...)." },
+      { error: "Use a valid live Paystack public key (pk_live_...)." },
       { status: 400 },
     );
   }
@@ -226,7 +226,7 @@ export async function POST(request: Request, { params }: Props) {
     });
     if (res.status === "invalid_public_key") {
       return Response.json(
-        { error: "Use a valid Paystack public key (pk_test_... or pk_live_...)." },
+        { error: "Use a valid live Paystack public key (pk_live_...)." },
         { status: 400 },
       );
     }

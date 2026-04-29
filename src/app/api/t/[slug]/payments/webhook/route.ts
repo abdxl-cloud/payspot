@@ -53,9 +53,9 @@ export async function POST(request: Request, { params }: Props) {
   } catch (error) {
     const message =
       error instanceof Error && error.message === "Tenant Paystack key is invalid"
-        ? "Tenant payment key is invalid. Use a Paystack secret key (sk_test_... or sk_live_...)."
+        ? "Tenant payment key is invalid. Use a live Paystack secret key (sk_live_...)."
         : error instanceof Error && error.message === "Platform Paystack key is invalid"
-          ? "Admin Paystack key is invalid. Set PAYSTACK_SECRET_KEY to a valid sk_test_... or sk_live_... key."
+          ? "Admin Paystack key is invalid. Set PAYSTACK_SECRET_KEY to a valid sk_live_... key."
           : error instanceof Error && error.message === "Platform Paystack key is not configured"
             ? "Admin Paystack key is required for this transaction."
             : "Tenant payments are not configured";
