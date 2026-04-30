@@ -60,8 +60,8 @@ export default async function TenantRequestReviewPage({ params }: Props) {
               </div>
               <div>
                 <ShieldCheck aria-hidden="true" />
-                <span>Request status</span>
-                <strong>{request.status}</strong>
+                <span>Hotspot type</span>
+                <strong>{request.hotspot_type || "Not specified"}</strong>
               </div>
             </div>
           </aside>

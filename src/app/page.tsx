@@ -37,7 +37,7 @@ const landingCriticalCss = `
 const features = [
   ["Payments", "Paystack Collection", "Card, bank transfer, USSD. Funds land directly in your account - we never hold your money."],
   ["Delivery", "Instant SMS Vouchers", "Termii delivers voucher codes the moment payment is confirmed. Zero manual work."],
-  ["Network", "Multi-platform Hotspot", "Omada Cloud OpenAPI, MikroTik REST, RADIUS portals, or just upload a CSV."],
+  ["Network", "Multi-platform Hotspot", "Omada CSV import, MikroTik REST, RADIUS portals, or manual voucher pools."],
   ["Analytics", "Real-time Dashboard", "Revenue, transactions, voucher inventory, plan performance - all in one view, live."],
   ["Branding", "Branded Portal", "Your customers see your name on a custom URL. Mobile-first checkout in minutes."],
   ["Security", "Secure by Default", "Encrypted credentials, HttpOnly sessions, Paystack webhooks verified on every event."],
@@ -119,7 +119,7 @@ export default function Home() {
         <section id="features" className="land-section">
           <div className="sec-kicker">Built for operators</div>
           <h2 className="sec-title">Everything to monetize WiFi</h2>
-          <p className="sec-sub">From CSV import to full Omada API - PaySpot adapts to your existing setup.</p>
+          <p className="sec-sub">From CSV import to MikroTik REST and RADIUS - PaySpot adapts to your existing setup.</p>
           <div className="feat-grid">
             {features.map(([tag, title, copy]) => (
               <article className="feat-card" key={title}>

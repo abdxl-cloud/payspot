@@ -66,6 +66,7 @@ export async function POST(request: Request) {
     requestedSlug: provisionalSlug,
     requestedName: name,
     requestedEmail: email,
+    hotspotType,
   });
 
   const { APP_URL } = getAppEnv();

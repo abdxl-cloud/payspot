@@ -108,7 +108,7 @@ export function TenantRequestForm() {
           <label htmlFor="requestHotspotType">Hotspot Type</label>
           <select id="requestHotspotType" value={form.hotspotType} onChange={(event) => updateField("hotspotType", event.target.value)}>
             <option value="">Select platform...</option>
-            <option>Omada Cloud</option>
+            <option>Omada Cloud (CSV import for now)</option>
             <option>MikroTik RouterOS</option>
             <option>RADIUS / FreeRADIUS</option>
             <option>CSV voucher pool</option>

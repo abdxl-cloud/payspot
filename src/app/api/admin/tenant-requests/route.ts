@@ -24,6 +24,7 @@ function mapRequest(row: Awaited<ReturnType<typeof listTenantRequests>>[number])
     requestedSlug: row.requested_slug,
     requestedName: row.requested_name,
     requestedEmail: row.requested_email,
+    hotspotType: row.hotspot_type,
     status: row.status,
     createdAt: row.created_at,
     reviewedAt: row.reviewed_at,
@@ -147,6 +148,7 @@ export async function POST(request: Request) {
     feePercent: approvalSettings.data.feePercent,
     subscriptionAmountNgn: approvalSettings.data.subscriptionAmountNgn,
     subscriptionInterval: approvalSettings.data.subscriptionInterval,
+    hotspotType: result.request?.hotspot_type,
   }).catch((error) => {
     console.error("Tenant request approval email failed", error);
   });

@@ -39,12 +39,12 @@ const guideCards = [
   {
     href: "/help/omada-openapi",
     title: "Omada OpenAPI",
-    badge: "Automatic Omada vouchers",
+    badge: "Not for current onboarding",
     icon: BookOpen,
     useWhen: [
-      "Omada has Platform Integration > Open API.",
-      "Client mode app credentials are available.",
-      "Fetch sites and Test Omada connection pass.",
+      "Kept as reference while cloud integration is unavailable.",
+      "Use CSV Import for Omada tenants right now.",
+      "Do not send this to new Omada tenants during approval.",
     ],
   },
   {
@@ -84,8 +84,8 @@ const guideCards = [
 
 const omadaSequence = [
   "Check whether the controller has Global View -> Settings -> Platform Integration -> Open API.",
-  "If Open API exists, try Omada OpenAPI first.",
-  "If Open API is missing or fails, choose CSV Import.",
+  "Use CSV Import for Omada tenants. Omada Cloud/OpenAPI integration is not available for current onboarding.",
+  "Create vouchers in Omada, export Voucher Codes as CSV, and import them into PaySpot.",
   "If users must buy while captive, configure the Omada Access List.",
   "If the tenant wants a branded captive entry page, configure Custom Portal Page.",
   "If the tenant wants account login, usage accounting, or device limits, choose External RADIUS.",

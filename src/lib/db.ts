@@ -147,6 +147,7 @@ async function initSchema() {
       requested_slug TEXT NOT NULL,
       requested_name TEXT NOT NULL,
       requested_email TEXT NOT NULL,
+      hotspot_type TEXT,
       status TEXT NOT NULL,
       review_token_hash TEXT NOT NULL UNIQUE,
       created_at TEXT NOT NULL,
@@ -430,6 +431,8 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS radius_adapter_secret_last4 TEXT;
     ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS ui_config_json TEXT;
+    ALTER TABLE tenant_requests
+      ADD COLUMN IF NOT EXISTS hotspot_type TEXT;
     ALTER TABLE voucher_packages
       ADD COLUMN IF NOT EXISTS max_devices INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE voucher_packages

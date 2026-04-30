@@ -119,6 +119,7 @@ export async function POST(request: Request, { params }: Props) {
       feePercent: tenant.platform_fee_percent,
       subscriptionAmountNgn: tenant.platform_subscription_amount_ngn,
       subscriptionInterval: tenant.platform_subscription_interval,
+      hotspotType: result.request?.hotspot_type,
     });
 
     return htmlResponse("Already approved. Login details re-sent.");
@@ -137,6 +138,7 @@ export async function POST(request: Request, { params }: Props) {
     feePercent: parsed.data.feePercent,
     subscriptionAmountNgn: parsed.data.subscriptionAmountNgn,
     subscriptionInterval: parsed.data.subscriptionInterval,
+    hotspotType: result.request?.hotspot_type,
   });
 
   return htmlResponse("Approved. Login details sent.");

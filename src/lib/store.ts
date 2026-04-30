@@ -172,6 +172,7 @@ export type TenantRequestRow = {
   requested_slug: string;
   requested_name: string;
   requested_email: string;
+  hotspot_type: string | null;
   status: string;
   review_token_hash: string;
   created_at: string;
@@ -1952,6 +1953,7 @@ export async function createTenantRequest(params: {
   requestedSlug: string;
   requestedName: string;
   requestedEmail: string;
+  hotspotType?: string | null;
 }) {
   const db = getDb();
   const token = generateToken(32);
@@ -1962,15 +1964,16 @@ export async function createTenantRequest(params: {
   await db.prepare(
     `
       INSERT INTO tenant_requests (
-        id, requested_slug, requested_name, requested_email,
+        id, requested_slug, requested_name, requested_email, hotspot_type,
         status, review_token_hash, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
     params.requestedSlug,
     params.requestedName,
     params.requestedEmail,
+    params.hotspotType?.trim() || null,
     "pending",
     tokenHash,
     now,

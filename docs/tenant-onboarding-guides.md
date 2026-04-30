@@ -59,11 +59,13 @@ Docs:
 
 ### Omada OpenAPI
 
-Use Omada OpenAPI when:
-- `Global View -> Settings -> Platform Integration -> Open API` exists
-- the tenant can create a Client mode app
-- the app has hotspot/voucher permissions for the correct site
-- `Fetch sites` and `Test Omada connection` pass in PaySpot
+Do not use Omada OpenAPI for current tenant onboarding. Omada Cloud/OpenAPI integration is not available for new approved tenants right now.
+
+Use CSV import for Omada tenants:
+- create vouchers in Omada
+- export Voucher Codes as CSV
+- import those CSV files into the matching PaySpot plans
+- configure the Omada access list if customers will buy from inside the captive portal
 
 Docs:
 - In app: `/help/omada-openapi`
@@ -102,9 +104,8 @@ Docs:
 ## Recommended Onboarding Sequence For Omada Tenants
 
 1. Check whether `Open API` exists.
-2. If OpenAPI exists, try `/help/omada-openapi`.
-3. If OpenAPI is missing or fails, choose `/help/csv-import`.
+2. Use `/help/csv-import` for current onboarding. Omada Cloud/OpenAPI integration is not available for new tenants right now.
+3. Create vouchers in Omada and export Voucher Codes as CSV.
 4. If users must buy while captive, configure `/help/omada-access-list`.
 5. If the tenant wants a branded captive entry page, configure `/help/custom-portal`.
 6. If the tenant wants account login or data accounting, move to `/help/external-radius` or `/help/radius-voucher`.
-
