@@ -68,6 +68,12 @@ const prerequisites = [
   "You can open PaySpot tenant admin at /t/<slug>/admin.",
 ] as const;
 
+const clientStartingScreen = [
+  "Many client controllers first open at Global View with Cloud Access connected and a Site List table.",
+  "From that screen, use the left menu: Settings -> Platform Integration -> Open API.",
+  "The Global View screen confirms the controller is reachable, but the exact version and Open API menu still need to be checked.",
+] as const;
+
 const navigationPaths = [
   "PaySpot: /t/<slug>/admin -> Quick actions -> Configure architecture -> Voucher source = omada_openapi.",
   "Omada: Global View -> Settings -> Platform Integration -> Open API.",
@@ -188,6 +194,20 @@ export default function OmadaOpenApiHelpPage() {
               In Omada: <strong>Global View</strong> → <strong>Settings</strong> →{" "}
               <strong>Platform Integration</strong> → <strong>Open API</strong> →{" "}
               <strong>Add New App</strong> (choose <strong>Client mode</strong>).
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-800">
+                Common Client Starting Screen
+              </p>
+              <ul className="mt-2 space-y-2 text-sm text-emerald-950">
+                {clientStartingScreen.map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <CircleCheckBig className="mt-0.5 size-4 shrink-0 text-emerald-700" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">

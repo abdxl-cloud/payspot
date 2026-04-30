@@ -33,6 +33,30 @@ This runbook gives exact, executable steps for 3 production options.
 
 ## Preflight (do this first)
 
+### Client starting screen
+Most client controllers may first open to the Omada `Global View` dashboard, with:
+- left menu: `Dashboard`, `Devices`, `Logs`, `Firmware`, `Network Tools`, `Accounts`, `Settings`
+- top status: `Cloud Access - Connected`
+- center tab: `Site List`
+- one or more sites, for example `WALLSTREET WIFI`
+
+This screen is a valid starting point for PaySpot documentation, but it does not confirm OpenAPI support by itself.
+
+From this exact screen, the client should:
+1. Stay in `Global View`.
+2. Click `Settings` in the left menu.
+3. Open `Platform Integration`.
+4. Look for `Open API`.
+
+If `Open API` is present, continue with the OpenAPI setup below.
+
+If `Open API` is missing, use one of the fallback paths:
+- `CSV import`: safest for older Omada deployments.
+- `RADIUS voucher` or `RADIUS account access`: best automation path when OpenAPI is unavailable or unreliable.
+- `MikroTik REST`: only when the hotspot is handled by MikroTik instead of Omada vouchers.
+
+Ask the client to also capture the controller version from the controller `About` or controller settings screen. The Global View screenshot alone does not show the exact version.
+
 ### A) Confirm exact values in Omada UI
 Navigation:
 1. Omada -> `Global View`

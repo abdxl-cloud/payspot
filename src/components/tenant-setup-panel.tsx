@@ -766,6 +766,8 @@ export function TenantSetupPanel({
                   <div className="ob-net-card">
                     <div className="ob-alert info"><Upload size={16} /> CSV mode uses pre-generated Omada vouchers. You can import now or skip inventory until after launch.</div>
                     <Link href="/help/csv-import" className="btn btn-muted btn-sm" style={{ marginTop: 14 }}><CircleHelp size={14} /> Open CSV import guide</Link>
+                    <Link href="/help/omada-access-list" className="btn btn-muted btn-sm" style={{ marginTop: 14, marginLeft: 8 }}><CircleHelp size={14} /> Open access list guide</Link>
+                    <Link href="/help/custom-portal" className="btn btn-muted btn-sm" style={{ marginTop: 14, marginLeft: 8 }}><CircleHelp size={14} /> Open custom portal guide</Link>
                   </div>
                 ) : null}
               </section>

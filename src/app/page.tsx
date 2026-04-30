@@ -57,7 +57,7 @@ export default function Home() {
             <li><a href="#features">Features</a></li>
             <li><a href="#integrations">Integrations</a></li>
             <li><a href="#request-access">Pricing</a></li>
-            <li><Link href="/help/csv-import">Docs</Link></li>
+            <li><Link href="/help/onboarding">Docs</Link></li>
           </ul>
           <div className="land-nav-right">
             <ThemeToggle />
