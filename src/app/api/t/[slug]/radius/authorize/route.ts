@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   authorizeVoucherRadiusAccess,
   authorizeSubscriberRadiusAccess,
-  getTenantBySlug,
+  resolveStorefrontContextBySlug,
   verifyTenantRadiusAdapterSecret,
 } from "@/lib/store";
 
@@ -30,14 +30,16 @@ function getAdapterSecret(request: Request) {
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant || tenant.status !== "active") {
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront || storefront.tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
+  const { tenant, location, portalAuthMode, voucherSourceMode } = storefront;
 
   const adapterSecret = getAdapterSecret(request);
   const secretOk = await verifyTenantRadiusAdapterSecret({
     tenantId: tenant.id,
+    locationId: location?.id ?? null,
     adapterSecret,
   });
   if (!secretOk) {
@@ -51,8 +53,8 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const voucherMode =
-    tenant.portal_auth_mode === "external_radius_voucher" ||
-    tenant.voucher_source_mode === "radius_voucher";
+    portalAuthMode === "external_radius_voucher" ||
+    voucherSourceMode === "radius_voucher";
   const reauthIntervalSeconds = getRadiusReauthIntervalSeconds();
   if (voucherMode) {
     const authResult = await authorizeVoucherRadiusAccess({

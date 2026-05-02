@@ -1,6 +1,11 @@
 import { getPlatformPaystackEnv } from "@/lib/env";
 import { isPaystackPublicKey, isPaystackSecretKey } from "@/lib/paystack-key";
-import { requireTenantPaystackSecretKey, type TransactionRow } from "@/lib/store";
+import {
+  getPlatformPaystackPublicKey,
+  getPlatformPaystackSecretKey,
+  requireTenantPaystackSecretKey,
+  type TransactionRow,
+} from "@/lib/store";
 
 type PaystackRoutableTransaction = Pick<
   TransactionRow,
@@ -15,29 +20,31 @@ export function usesPlatformPaystack(transaction: PaystackRoutableTransaction) {
   );
 }
 
-export function requirePlatformPaystackSecretKey() {
+export async function requirePlatformPaystackSecretKey() {
   const { PAYSTACK_SECRET_KEY } = getPlatformPaystackEnv();
-  if (!PAYSTACK_SECRET_KEY) {
+  const secretKey = await getPlatformPaystackSecretKey() || PAYSTACK_SECRET_KEY;
+  if (!secretKey) {
     throw new Error("Platform Paystack key is not configured");
   }
-  if (!isPaystackSecretKey(PAYSTACK_SECRET_KEY)) {
+  if (!isPaystackSecretKey(secretKey)) {
     throw new Error("Platform Paystack key is invalid");
   }
-  return PAYSTACK_SECRET_KEY;
+  return secretKey;
 }
 
-export function requirePlatformPaystackKeys() {
-  const secretKey = requirePlatformPaystackSecretKey();
+export async function requirePlatformPaystackKeys() {
+  const secretKey = await requirePlatformPaystackSecretKey();
   const { PAYSTACK_PUBLIC_KEY } = getPlatformPaystackEnv();
-  if (!PAYSTACK_PUBLIC_KEY) {
+  const publicKey = await getPlatformPaystackPublicKey() || PAYSTACK_PUBLIC_KEY;
+  if (!publicKey) {
     throw new Error("Platform Paystack public key is not configured");
   }
-  if (!isPaystackPublicKey(PAYSTACK_PUBLIC_KEY)) {
+  if (!isPaystackPublicKey(publicKey)) {
     throw new Error("Platform Paystack public key is invalid");
   }
   return {
     secretKey,
-    publicKey: PAYSTACK_PUBLIC_KEY,
+    publicKey,
   };
 }
 
@@ -46,7 +53,7 @@ export async function requirePaystackSecretForTransaction(params: {
   transaction: PaystackRoutableTransaction;
 }) {
   if (usesPlatformPaystack(params.transaction)) {
-    return requirePlatformPaystackSecretKey();
+    return await requirePlatformPaystackSecretKey();
   }
   return requireTenantPaystackSecretKey(params.tenantId);
 }

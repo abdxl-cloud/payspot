@@ -3,14 +3,12 @@ import type { CSSProperties } from "react";
 import { Checkout } from "@/components/checkout";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getCaptivePortalContextFromSearchParams } from "@/lib/captive-portal";
-import { getPackagesWithAvailability, getTenantAppearance, getTenantBySlug } from "@/lib/store";
-
-function normalizeAccessMode(
-  value: string | null | undefined,
-): "voucher_access" | "account_access" {
-  if (value === "external_radius_portal") return "account_access";
-  return "voucher_access";
-}
+import {
+  getPackagesWithAvailability,
+  getTenantAppearance,
+  resolveStorefrontContextBySlug,
+  tenantRequiresPlatformSubscription,
+} from "@/lib/store";
 
 type Props = {
   params: { slug: string } | Promise<{ slug: string }>;
@@ -24,10 +22,11 @@ export const dynamic = "force-dynamic";
 export default async function TenantPurchasePage({ params, searchParams }: Props) {
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant) notFound();
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront) notFound();
+  const { tenant, location, displayName, storefrontSlug, accessMode, voucherSourceMode } = storefront;
   const portalContext = getCaptivePortalContextFromSearchParams(resolvedSearchParams);
-  const appearance = await getTenantAppearance(tenant.id);
+  const appearance = await getTenantAppearance(tenant.id, location?.id ?? null);
   const shellStyle = {
     "--ac": appearance.storePrimaryColor,
     "--ac-dim": `${appearance.storePrimaryColor}1a`,
@@ -35,19 +34,23 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
     "--ac-bd": `${appearance.storePrimaryColor}55`,
   } as CSSProperties;
   const autoProvisionVoucherMode =
-    tenant.voucher_source_mode === "omada_openapi" ||
-    tenant.voucher_source_mode === "mikrotik_rest" ||
-    tenant.voucher_source_mode === "radius_voucher";
+    voucherSourceMode === "omada_openapi" ||
+    voucherSourceMode === "mikrotik_rest" ||
+    voucherSourceMode === "radius_voucher";
 
-  if (tenant.status !== "active") {
+  if (tenant.status !== "active" || tenantRequiresPlatformSubscription(tenant)) {
     return (
       <div className="portal-public-shell">
         <div className="portal-public-container" style={shellStyle}>
-          <PortalHeader tenantName={tenant.name} tenantSlug={tenant.slug} />
+          <PortalHeader tenantName={displayName} tenantSlug={storefrontSlug} />
           <div className="status-card">
-            <h1 className="status-title">Portal setup in progress</h1>
+            <h1 className="status-title">
+              {tenantRequiresPlatformSubscription(tenant) ? "Subscription payment pending" : "Portal setup in progress"}
+            </h1>
             <p className="status-copy">
-              This voucher storefront is still being configured. Please check again shortly.
+              {tenantRequiresPlatformSubscription(tenant)
+                ? "This storefront will open after the operator completes the final onboarding subscription step."
+                : "This voucher storefront is still being configured. Please check again shortly."}
             </p>
           </div>
         </div>
@@ -55,9 +58,9 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
     );
   }
 
-  const packages = (await getPackagesWithAvailability(tenant.id))
+  const packages = (await getPackagesWithAvailability(tenant.id, location?.id ?? null))
     .filter((pkg) =>
-      normalizeAccessMode(tenant.portal_auth_mode) === "account_access"
+      accessMode === "account_access"
         ? pkg.price_ngn > 0
         : autoProvisionVoucherMode
         ? pkg.price_ngn > 0
@@ -73,7 +76,7 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
       dataLimitMb: pkg.data_limit_mb,
       description: pkg.description,
       availableCount:
-        normalizeAccessMode(tenant.portal_auth_mode) === "account_access"
+        accessMode === "account_access"
           ? 999999
           : autoProvisionVoucherMode
           ? Math.max(1, pkg.available_count)
@@ -84,7 +87,7 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
     return (
       <div className="portal-public-shell">
         <div className="portal-public-container" style={shellStyle}>
-          <PortalHeader tenantName={tenant.name} tenantSlug={tenant.slug} />
+          <PortalHeader tenantName={displayName} tenantSlug={storefrontSlug} />
           <div className="status-card">
             <h1 className="status-title">Plans are coming soon</h1>
             <p className="status-copy">
@@ -98,21 +101,21 @@ export default async function TenantPurchasePage({ params, searchParams }: Props
 
   return (
     <div className="portal-public-shell">
-      <div className="portal-public-container" style={shellStyle}>
-        <PortalHeader tenantName={tenant.name} tenantSlug={tenant.slug} />
+        <div className="portal-public-container" style={shellStyle}>
+          <PortalHeader tenantName={displayName} tenantSlug={storefrontSlug} />
 
         <section className="portal-public-hero">
           <p className="section-kicker">Captive portal storefront</p>
-          <h1>{tenant.name} Wi-Fi access</h1>
+          <h1>{displayName} Wi-Fi access</h1>
           <p>Choose a plan, pay securely, and receive your access details instantly.</p>
         </section>
 
         <div className="portal-checkout-frame">
           <Checkout
-            tenantSlug={tenant.slug}
+            tenantSlug={storefrontSlug}
             packages={packages}
-            accessMode={normalizeAccessMode(tenant.portal_auth_mode)}
-            voucherSourceMode={tenant.voucher_source_mode ?? "import_csv"}
+            accessMode={accessMode}
+            voucherSourceMode={voucherSourceMode}
             portalContext={portalContext}
           />
         </div>

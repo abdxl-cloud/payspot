@@ -16,10 +16,9 @@ import {
   getPackageById,
   getRadiusVoucherAccessState,
   getTenantAppearance,
-  getTenantBySlug,
+  resolveStorefrontContextBySlug,
   getTransactionByVoucherCode,
   getVoucherPoolEntryByCode,
-  normalizeVoucherSourceMode,
 } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -124,6 +123,7 @@ function statusLabel(status: string) {
 
 async function lookupVoucher(params: {
   tenantId: string;
+  locationId?: string | null;
   rawCode: string;
   voucherSourceMode: VoucherSourceMode;
   radiusVoucherMode: boolean;
@@ -136,9 +136,10 @@ async function lookupVoucher(params: {
       params.tenantId,
       code,
       params.voucherSourceMode === "import_csv" ? "import_csv" : params.voucherSourceMode,
+      params.locationId ?? null,
     ),
     params.voucherSourceMode === "import_csv"
-      ? getVoucherPoolEntryByCode(params.tenantId, code)
+      ? getVoucherPoolEntryByCode(params.tenantId, code, params.locationId ?? null)
       : Promise.resolve(null),
   ]);
 
@@ -249,17 +250,17 @@ function VoucherHeader({ tenantName, slug }: { tenantName: string; slug: string 
       .toUpperCase() || "PS";
 
   return (
-    <header className="voucher-check-head">
-      <Link href={`/t/${slug}`} className="voucher-check-brand">
-        <span>{initials}</span>
+    <header className="portal-public-head">
+      <Link href={`/t/${slug}`} className="portal-venue">
+        <div className="portal-venue-mark">{initials}</div>
         <div>
-          <strong>{tenantName}</strong>
-          <small>{slug}.payspot.app</small>
+          <p className="portal-venue-name">{tenantName}</p>
+          <p className="portal-venue-sub">{slug}.payspot.app</p>
         </div>
       </Link>
-      <div className="voucher-check-actions">
+      <div className="portal-head-actions">
         <ThemeToggle />
-        <Link href={`/t/${slug}`} className="voucher-check-buy">
+        <Link href={`/t/${slug}`} className="prototype-nav-button">
           Buy a plan <ArrowRight aria-hidden="true" />
         </Link>
       </div>
@@ -270,10 +271,11 @@ function VoucherHeader({ tenantName, slug }: { tenantName: string; slug: string 
 export default async function VoucherCheckPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant) notFound();
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront) notFound();
+  const { tenant, location, displayName, storefrontSlug, voucherSourceMode, portalAuthMode } = storefront;
 
-  const appearance = await getTenantAppearance(tenant.id);
+  const appearance = await getTenantAppearance(tenant.id, location?.id ?? null);
   const shellStyle = {
     "--ac": appearance.storePrimaryColor,
     "--ac-dim": `${appearance.storePrimaryColor}1a`,
@@ -281,15 +283,15 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
     "--ac-bd": `${appearance.storePrimaryColor}55`,
   } as CSSProperties;
 
-  const radiusVoucherMode =
-    tenant.portal_auth_mode === "external_radius_voucher" || tenant.voucher_source_mode === "radius_voucher";
-  const voucherSourceMode = normalizeVoucherSourceMode(tenant.voucher_source_mode) as VoucherSourceMode;
   const voucherModeMeta = getVoucherModeMeta(voucherSourceMode);
   const rawCode = typeof resolvedSearchParams.code === "string" ? resolvedSearchParams.code : "";
+  const radiusVoucherMode =
+    portalAuthMode === "external_radius_voucher" || voucherSourceMode === "radius_voucher";
 
   const result = rawCode
     ? await lookupVoucher({
         tenantId: tenant.id,
+        locationId: location?.id ?? null,
         rawCode,
         voucherSourceMode,
         radiusVoucherMode,
@@ -304,7 +306,7 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
   return (
     <main className="voucher-check-shell" style={shellStyle}>
       <div className="voucher-check-container">
-        <VoucherHeader tenantName={tenant.name} slug={slug} />
+        <VoucherHeader tenantName={displayName} slug={storefrontSlug} />
 
         <section className="voucher-check-hero">
           <div className="voucher-check-copy">
@@ -314,7 +316,7 @@ export default async function VoucherCheckPage({ params, searchParams }: Props) 
             <div className="voucher-check-metrics">
               <InfoMetric icon={Search} label="Input" value="Voucher code only" />
               <InfoMetric icon={DatabaseZap} label="Source" value={voucherModeMeta.label} />
-              <InfoMetric icon={ShieldCheck} label="Scope" value={tenant.name} />
+              <InfoMetric icon={ShieldCheck} label="Scope" value={displayName} />
             </div>
           </div>
 

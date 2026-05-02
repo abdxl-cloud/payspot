@@ -20,6 +20,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 type Props = {
   tenantSlug: string;
   tenantName?: string;
+  viewerRole?: "admin" | "tenant";
 };
 
 type View = "overview" | "transactions" | "vouchers" | "plans" | "network" | "settings";
@@ -160,6 +161,20 @@ type Architecture = {
   radius: {
     hasAdapterSecret: boolean;
     adapterSecretLast4: string;
+  };
+};
+
+type TenantLocation = {
+  id: string;
+  slug: string;
+  name: string;
+  status: string;
+  isPrimary: boolean;
+  voucherSourceMode: "import_csv" | "omada_openapi" | "mikrotik_rest" | "radius_voucher";
+  portalAuthMode: "omada_builtin" | "external_radius_portal" | "external_radius_voucher";
+  appearance: {
+    storePrimaryColor: string;
+    dashboardPrimaryColor: string;
   };
 };
 
@@ -439,7 +454,7 @@ function planFormPayload(form: PlanFormState) {
   };
 }
 
-export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
+export function TenantAdminPanel({ tenantSlug, tenantName, viewerRole = "tenant" }: Props) {
   const name = tenantName || tenantSlug;
   const [view, setView] = useState<View>("overview");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
@@ -501,6 +516,8 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
     storePrimaryColor: "#72f064",
     dashboardPrimaryColor: "#72f064",
   });
+  const [locations, setLocations] = useState<TenantLocation[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState("");
   const [paymentForm, setPaymentForm] = useState({
     paystackPublicKey: "",
     paystackSecretKey: "",
@@ -577,6 +594,19 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
     );
   }
 
+  async function refreshLocations() {
+    const payload = await readJson<{ locations: TenantLocation[] }>(`/api/t/${tenantSlug}/admin/locations`);
+    setLocations(payload.locations);
+    const selected =
+      payload.locations.find((location) => location.id === selectedLocationId) ||
+      payload.locations.find((location) => location.isPrimary) ||
+      payload.locations[0];
+    if (selected) {
+      setSelectedLocationId(selected.id);
+      setAppearanceForm(selected.appearance);
+    }
+  }
+
   async function refreshAll() {
     setError("");
     setLoading(true);
@@ -587,6 +617,7 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
         refreshTransactions(1),
         refreshVouchers(1),
         refreshArchitecture(),
+        refreshLocations(),
       ]);
       setTransactionPage(1);
       setVoucherPage(1);
@@ -840,14 +871,22 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
     setSavingAppearance(true);
     setError("");
     try {
-      const payload = await readJson<{ architecture: Architecture }>(`/api/t/${tenantSlug}/admin/architecture`, {
+      const payload = await readJson<{ location: TenantLocation }>(`/api/t/${tenantSlug}/admin/locations`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appearance: appearanceForm }),
+        body: JSON.stringify({
+          locationId: selectedLocationId,
+          appearance: appearanceForm,
+        }),
       });
-      setArchitecture(payload.architecture);
-      setAppearanceForm(payload.architecture.appearance);
-      setNotice("Brand colors saved.");
+      setLocations((current) =>
+        current.map((location) => location.id === payload.location.id ? payload.location : location),
+      );
+      setAppearanceForm(payload.location.appearance);
+      if (payload.location.isPrimary) {
+        setArchitecture((current) => current ? { ...current, appearance: payload.location.appearance } : current);
+      }
+      setNotice(`Brand colors saved for ${payload.location.name}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save brand colors");
     } finally {
@@ -941,6 +980,7 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
   });
   const maxPlanTotal = Math.max(1, ...plans.map((plan) => plan.assignedCount));
   const currentLabel = navItems.find((item) => item.key === view)?.label || "Dashboard";
+  const isPlatformAdmin = viewerRole === "admin";
 
   return (
     <>
@@ -983,6 +1023,11 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
               </button>
             ))}
             <div className="sb-sec">Links</div>
+            {isPlatformAdmin ? (
+              <a className="sb-item" href="/admin">
+                Main Board
+              </a>
+            ) : null}
             <a className="sb-item" href={`/t/${tenantSlug}`}>
               My Store ↗
             </a>
@@ -993,7 +1038,7 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
               <div className="sb-av">{initials(name).slice(0, 1)}</div>
               <div>
                 <div className="sb-uname">{name} Admin</div>
-                <div className="sb-urole">Tenant Admin</div>
+                <div className="sb-urole">{isPlatformAdmin ? "Platform Admin" : "Tenant Admin"}</div>
               </div>
             </div>
           </div>
@@ -1009,6 +1054,12 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
               <span>{currentLabel}</span>
             </div>
             <div className="dash-topbar-right">
+              {isPlatformAdmin ? (
+                <a className="btn btn-muted btn-sm" href="/admin" title="Return to platform admin dashboard">
+                  <ChevronLeft size={14} />
+                  Main Board
+                </a>
+              ) : null}
               <button className="btn btn-icon" type="button" title="Notifications">
                 <Bell size={15} />
               </button>
@@ -1442,7 +1493,27 @@ export function TenantAdminPanel({ tenantSlug, tenantName }: Props) {
                   </div>
                   <div className={`settings-panel ${settingsTab === "appearance" ? "on" : ""}`}>
                     <form className="settings-card" onSubmit={saveAppearance}>
-                      <div className="settings-card-title">Brand Colors</div>
+                      <div className="settings-card-title">Store Appearance</div>
+                      <div className="field">
+                        <label>Store / Location</label>
+                        <select
+                          value={selectedLocationId}
+                          onChange={(event) => {
+                            const location = locations.find((item) => item.id === event.target.value);
+                            setSelectedLocationId(event.target.value);
+                            if (location) setAppearanceForm(location.appearance);
+                          }}
+                        >
+                          {locations.map((location) => (
+                            <option key={location.id} value={location.id}>
+                              {location.name}{location.isPrimary ? " (primary)" : ""} - /{location.slug}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="hint">
+                          Each storefront location can have its own customer-facing and dashboard accent colors.
+                        </div>
+                      </div>
                       <div className="field-row">
                         <div className="field">
                           <label>Store Primary Color</label>

@@ -11,6 +11,7 @@ import {
   getTenantAppearance,
   getTenantEmailNotifications,
   getTenantById,
+  getTenantLocationById,
   getPackageVoucherStock,
   getTransaction,
   getTransactionByVoucherCode,
@@ -29,6 +30,7 @@ import { buildLegacyGeneratedVoucherCode, buildRadiusVoucherCode } from "@/lib/v
 
 async function sendVoucherNotifications(params: {
   tenantId: string;
+  locationId?: string | null;
   transaction: {
     email: string;
     phone: string;
@@ -44,6 +46,7 @@ async function sendVoucherNotifications(params: {
     return { smsSent, emailSent };
   }
   const tenant = await getTenantById(params.tenantId);
+  const location = params.locationId ? await getTenantLocationById(params.locationId) : null;
 
   const message = [
     "Payment confirmed!",
@@ -69,10 +72,10 @@ async function sendVoucherNotifications(params: {
       voucherCode: params.voucherCode,
       packageName: pkg.name,
       reference: params.transaction.reference,
-      tenantName: tenant?.name,
-      tenantSlug: tenant?.slug,
+      tenantName: location?.name ?? tenant?.name,
+      tenantSlug: location?.slug ?? tenant?.slug,
       amountNgn: pkg.price_ngn,
-      primaryColor: tenant ? (await getTenantAppearance(tenant.id)).storePrimaryColor : undefined,
+      primaryColor: tenant ? (await getTenantAppearance(tenant.id, location?.id ?? null)).storePrimaryColor : undefined,
     });
     emailSent = true;
   } catch (error) {
@@ -85,11 +88,14 @@ async function sendVoucherNotifications(params: {
 async function sendLowVoucherStockAlertIfNeeded(params: {
   tenantId: string;
   packageId: string;
+  locationId?: string | null;
 }) {
   const tenant = await getTenantById(params.tenantId);
-  if (!tenant || normalizeVoucherSourceMode(tenant.voucher_source_mode) !== "import_csv") return;
+  const location = params.locationId ? await getTenantLocationById(params.locationId) : null;
+  const source = location ?? tenant;
+  if (!tenant || !source || normalizeVoucherSourceMode(source.voucher_source_mode) !== "import_csv") return;
 
-  const notifications = await getTenantEmailNotifications(params.tenantId);
+  const notifications = await getTenantEmailNotifications(params.tenantId, location?.id ?? null);
   if (!notifications.lowVoucherStockAlerts) return;
 
   const stock = await getPackageVoucherStock({
@@ -167,7 +173,7 @@ async function provisionMikrotikVoucherForTransaction(params: {
 
   const [pkg, mikrotikConfig] = await Promise.all([
     getPackageById(params.tenantId, transaction.package_id),
-    resolveTenantMikrotikConfigIfPresent(params.tenantId),
+    resolveTenantMikrotikConfigIfPresent(params.tenantId, transaction.location_id ?? null),
   ]);
 
   if (!pkg || !mikrotikConfig) {
@@ -290,9 +296,14 @@ export async function handleSuccessfulPayment(params: {
     };
   }
 
+  const location = transaction.location_id ? await getTenantLocationById(transaction.location_id) : null;
+  const source = location ?? tenant;
+  const sourcePortalAuthMode = source?.portal_auth_mode ?? tenant?.portal_auth_mode ?? null;
+  const sourceVoucherMode = normalizeVoucherSourceMode(source?.voucher_source_mode ?? tenant?.voucher_source_mode);
+
   const shouldActivateAccess =
     transaction.delivery_mode === "account_access" ||
-    tenant?.portal_auth_mode === "external_radius_portal";
+    sourcePortalAuthMode === "external_radius_portal";
   if (shouldActivateAccess) {
     const activation = await activateSubscriberAccessForTransaction({
       tenantId: params.tenantId,
@@ -323,9 +334,9 @@ export async function handleSuccessfulPayment(params: {
   let result:
     | { status: "already" | "assigned"; voucherCode: string }
     | { status: string; voucherCode?: string };
-  if (tenant?.voucher_source_mode === "mikrotik_rest") {
+  if (sourceVoucherMode === "mikrotik_rest") {
     result = await provisionMikrotikVoucherForTransaction(params);
-  } else if (tenant?.voucher_source_mode === "radius_voucher") {
+  } else if (sourceVoucherMode === "radius_voucher") {
     result = await provisionRadiusVoucherForTransaction(params);
   } else {
     result = await transactionAssignVoucher({
@@ -334,7 +345,7 @@ export async function handleSuccessfulPayment(params: {
       email: transaction.email,
       phone: transaction.phone,
       packageId: transaction.package_id,
-      voucherSourceMode: normalizeVoucherSourceMode(tenant?.voucher_source_mode),
+      voucherSourceMode: sourceVoucherMode,
     });
   }
 
@@ -345,12 +356,14 @@ export async function handleSuccessfulPayment(params: {
     }
     const notificationDelivery = await sendVoucherNotifications({
       tenantId: params.tenantId,
+      locationId: transaction.location_id ?? null,
       transaction,
       voucherCode,
     });
     await sendLowVoucherStockAlertIfNeeded({
       tenantId: params.tenantId,
       packageId: transaction.package_id,
+      locationId: transaction.location_id ?? null,
     });
     await updateTransactionNotificationDelivery({
       tenantId: params.tenantId,

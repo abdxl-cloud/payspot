@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import {
-  getTenantBySlug,
+  resolveStorefrontContextBySlug,
   getTransactionByReferenceEmail,
   getTransactionByReferencePhone,
 } from "@/lib/store";
@@ -18,10 +18,11 @@ const schema = z.object({
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant || tenant.status !== "active") {
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront || storefront.tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
+  const { tenant, accessMode } = storefront;
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "local";
   const limiter = rateLimit(`status:${tenant.slug}:${ip}`, 12, 60_000);
@@ -36,7 +37,7 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const { reference, phone, email } = parsed.data;
-  const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
+  const accountAccessMode = accessMode === "account_access";
   if (accountAccessMode && !email) {
     return Response.json({ error: "Email is required" }, { status: 400 });
   }

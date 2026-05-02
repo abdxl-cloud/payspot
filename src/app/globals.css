@@ -644,6 +644,7 @@
 .prototype-nav-button {
   display: inline-flex;
   align-items: center;
+  gap: 0.4rem;
   height: 2rem;
   border: 1px solid var(--ac-bd);
   border-radius: 999px;
@@ -654,6 +655,12 @@
   font-size: 0.68rem;
   font-weight: 500;
   text-transform: uppercase;
+  text-decoration: none;
+}
+
+.prototype-nav-button svg {
+  width: 0.85rem;
+  height: 0.85rem;
 }
 
 .portal-public-container {
@@ -666,6 +673,8 @@
   align-items: center;
   min-width: 0;
   gap: 0.85rem;
+  text-decoration: none;
+  color: inherit;
 }
 
 .portal-venue-mark {
@@ -787,6 +796,133 @@
 .auth-prototype-card,
 .setup-prototype-panel {
   min-width: 0;
+}
+
+.auth-prototype-card {
+  border: 1px solid var(--bd);
+  border-radius: 1.25rem;
+  background: color-mix(in oklch, var(--s1), transparent 5%);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgb(255 255 255 / 0.035);
+  backdrop-filter: blur(18px);
+  display: grid;
+  align-content: start;
+}
+
+.auth-card-title {
+  margin: 0.5rem 0 0.65rem;
+  color: var(--tx);
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(1.65rem, 3.5vw, 2.2rem);
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 0.96;
+}
+
+.auth-card-sub {
+  margin-bottom: 1.5rem;
+  color: var(--tx2);
+  font-size: 0.93rem;
+  line-height: 1.65;
+}
+
+.auth-card-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.auth-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.auth-field label {
+  display: block;
+  color: var(--tx3);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.auth-field input {
+  width: 100%;
+  height: 44px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--s2);
+  color: var(--tx);
+  font-size: 0.96rem;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.auth-field input:focus {
+  border-color: var(--ac-bd);
+  background: var(--s1);
+  box-shadow: 0 0 0 3px var(--ac-dim);
+}
+
+.auth-field-hint {
+  color: var(--tx3);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.auth-card-submit {
+  width: 100%;
+  height: 48px;
+  margin-top: 0.25rem;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--ac);
+  color: #0d0d0d;
+  font-size: 0.96rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+
+.auth-card-submit:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.auth-card-error,
+.auth-card-success {
+  padding: 0.75rem 1rem;
+  border-radius: var(--r);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.auth-card-error {
+  border: 1px solid oklch(0.65 0.18 25 / 0.25);
+  background: oklch(0.65 0.18 25 / 0.12);
+  color: var(--red);
+}
+
+.auth-card-success {
+  border: 1px solid oklch(0.72 0.17 155 / 0.3);
+  background: oklch(0.72 0.17 155 / 0.12);
+  color: var(--green);
+}
+
+.auth-card-footer {
+  margin-top: 1.25rem;
+  text-align: center;
+  color: var(--tx3);
+  font-size: 0.875rem;
+}
+
+.auth-card-footer a {
+  color: var(--tx2);
+  text-decoration: none;
+}
+
+.auth-card-footer a:hover {
+  color: var(--ac);
 }
 
 .auth-signal-grid,

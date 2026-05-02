@@ -4,6 +4,7 @@ import { isPaystackSecretKey } from "@/lib/paystack-key";
 import {
   deleteTenant,
   getTenantById,
+  listTenantLocations,
   setTenantPaystackSecret,
   updateTenant,
 } from "@/lib/store";
@@ -23,6 +24,7 @@ const patchSchema = z.object({
   adminEmail: z.string().email().max(120).optional(),
   status: z.string().min(2).max(50).optional(),
   paystackSecretKey: z.string().min(10).max(200).optional(),
+  maxLocations: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 export async function PATCH(request: Request, { params }: Props) {
@@ -47,6 +49,7 @@ export async function PATCH(request: Request, { params }: Props) {
     name: parsed.data.name,
     adminEmail: parsed.data.adminEmail,
     status: parsed.data.status,
+    maxLocations: parsed.data.maxLocations,
   });
 
   if (result.status === "missing") {
@@ -90,6 +93,7 @@ export async function PATCH(request: Request, { params }: Props) {
   if (!latestTenant) {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
+  const locations = await listTenantLocations(latestTenant.id);
 
   return Response.json({
     status: "ok",
@@ -99,6 +103,8 @@ export async function PATCH(request: Request, { params }: Props) {
       name: latestTenant.name,
       adminEmail: latestTenant.admin_email,
       status: latestTenant.status,
+      locationCount: locations.length,
+      maxLocations: latestTenant.max_locations,
       paystackLast4: latestTenant.paystack_secret_last4,
     },
   });

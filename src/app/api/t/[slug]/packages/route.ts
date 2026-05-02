@@ -1,4 +1,4 @@
-import { getPackagesWithAvailability, getTenantBySlug } from "@/lib/store";
+import { getPackagesWithAvailability, resolveStorefrontContextBySlug } from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -6,19 +6,17 @@ type Props = {
 
 export async function GET(_request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant || tenant.status !== "active") {
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront || storefront.tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
+  const { tenant, location, accessMode, voucherSourceMode } = storefront;
 
-  const accessMode = tenant.portal_auth_mode === "external_radius_portal"
-    ? "account_access"
-    : "voucher_access";
   const autoProvisionVoucherMode =
-    tenant.voucher_source_mode === "omada_openapi" ||
-    tenant.voucher_source_mode === "mikrotik_rest" ||
-    tenant.voucher_source_mode === "radius_voucher";
-  const packages = (await getPackagesWithAvailability(tenant.id))
+    voucherSourceMode === "omada_openapi" ||
+    voucherSourceMode === "mikrotik_rest" ||
+    voucherSourceMode === "radius_voucher";
+  const packages = (await getPackagesWithAvailability(tenant.id, location?.id ?? null))
     .filter((pkg) =>
       accessMode === "account_access"
         ? pkg.price_ngn > 0

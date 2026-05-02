@@ -1,7 +1,8 @@
-import { verifyWebhookSignature } from "@/lib/paystack";
+import { verifyTransaction, verifyWebhookSignature } from "@/lib/paystack";
 import { verifyAndProcess } from "@/lib/payments";
 import { requirePlatformPaystackSecretKey, usesPlatformPaystack } from "@/lib/paystack-routing";
-import { getTransactionByReference } from "@/lib/store";
+import { sendTenantSubscriptionReceiptEmail } from "@/lib/tenant-subscription-email";
+import { getTenantBySubscriptionReference, getTransactionByReference, markTenantSubscriptionPaid } from "@/lib/store";
 
 export async function POST(request: Request) {
   const signature = request.headers.get("x-paystack-signature");
@@ -26,21 +27,9 @@ export async function POST(request: Request) {
     return Response.json({ error: "Missing reference" }, { status: 400 });
   }
 
-  const transaction = await getTransactionByReference(reference);
-  if (!transaction) {
-    return Response.json({ error: "Unknown transaction" }, { status: 404 });
-  }
-
-  if (!usesPlatformPaystack(transaction)) {
-    return Response.json(
-      { error: "This transaction belongs to a tenant Paystack integration. Use /api/t/<slug>/payments/webhook." },
-      { status: 409 },
-    );
-  }
-
   let paystackSecretKey: string;
   try {
-    paystackSecretKey = requirePlatformPaystackSecretKey();
+    paystackSecretKey = await requirePlatformPaystackSecretKey();
   } catch (error) {
     const message =
       error instanceof Error && error.message === "Platform Paystack key is invalid"
@@ -58,6 +47,37 @@ export async function POST(request: Request) {
     })
   ) {
     return Response.json({ error: "Invalid signature" }, { status: 401 });
+  }
+
+  const transaction = await getTransactionByReference(reference);
+  if (!transaction) {
+    const tenant = await getTenantBySubscriptionReference(reference);
+    if (!tenant) {
+      return Response.json({ error: "Unknown transaction" }, { status: 404 });
+    }
+
+    const verification = await verifyTransaction({ secretKey: paystackSecretKey, reference });
+    const expectedAmount = Math.round(Number(tenant.platform_subscription_amount_ngn ?? 0)) * 100;
+    if (verification.status?.toLowerCase() !== "success" || Number(verification.amount) !== expectedAmount) {
+      return Response.json({ status: "failed", reason: "subscription_mismatch" });
+    }
+    const result = await markTenantSubscriptionPaid({ tenantId: tenant.id, reference });
+    if (result.status === "ok") {
+      await sendTenantSubscriptionReceiptEmail({
+        tenant: result.tenant,
+        reference,
+      }).catch((error) => {
+        console.error("Tenant subscription receipt email failed", error);
+      });
+    }
+    return Response.json({ status: "ok" });
+  }
+
+  if (!usesPlatformPaystack(transaction)) {
+    return Response.json(
+      { error: "This transaction belongs to a tenant Paystack integration. Use /api/t/<slug>/payments/webhook." },
+      { status: 409 },
+    );
   }
 
   try {

@@ -2,13 +2,13 @@ import { parse } from "csv-parse/sync";
 import { randomUUID } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { getSessionUserFromRequest } from "@/lib/auth";
-import { getTenantBySlug } from "@/lib/store";
+import { getTenantBySlug, listTenantLocations, type TenantLocationRow } from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
 };
 
-type PackageLite = { id: string; code: string; duration_minutes: number | null };
+type PackageLite = { id: string; code: string; duration_minutes: number | null; location_id?: string | null };
 
 type NormalizedRow = {
   code: string | null;
@@ -185,6 +185,16 @@ function buildPlan(normalized: NormalizedRow): PlanInfo | null {
   };
 }
 
+function scopePlanForLocation(plan: PlanInfo, location: TenantLocationRow | null): PlanInfo {
+  if (!location) return plan;
+  return {
+    ...plan,
+    code: `${location.slug}-${plan.code}`,
+    name: `${location.name} - ${plan.name}`,
+    description: `${plan.description} Location: ${location.name}.`,
+  };
+}
+
 function isExpiredRow(normalized: NormalizedRow) {
   if (normalized.statusLabel?.includes("expired")) return true;
   if (!normalized.expirationTime) return false;
@@ -202,10 +212,11 @@ function isInUseRow(normalized: NormalizedRow) {
 async function ensurePackage(params: {
   db: ReturnType<typeof getDb>;
   tenantId: string;
+  locationId: string | null;
   packagesByCode: Map<string, PackageLite>;
   plan: PlanInfo;
 }) {
-  const { db, tenantId, packagesByCode, plan } = params;
+  const { db, tenantId, locationId, packagesByCode, plan } = params;
   const existing = packagesByCode.get(plan.code);
   if (existing) return { pkg: existing, created: false };
   const now = new Date().toISOString();
@@ -213,12 +224,13 @@ async function ensurePackage(params: {
   await db.prepare(
     `
     INSERT INTO voucher_packages (
-      id, tenant_id, code, name, duration_minutes, data_limit_mb, price_ngn, active, description, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, tenant_id, location_id, code, name, duration_minutes, data_limit_mb, price_ngn, active, description, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     id,
     tenantId,
+    locationId,
     plan.code,
     plan.name,
     plan.durationMinutes,
@@ -233,6 +245,7 @@ async function ensurePackage(params: {
     id,
     code: plan.code,
     duration_minutes: plan.durationMinutes,
+    location_id: locationId,
   };
   packagesByCode.set(plan.code, pkg);
   return { pkg, created: true };
@@ -244,24 +257,6 @@ export async function POST(request: Request, { params }: Props) {
     const tenant = await getTenantBySlug(slug);
     if (!tenant) {
       return Response.json({ error: "Tenant not found" }, { status: 404 });
-    }
-
-    if (
-      tenant.voucher_source_mode === "omada_openapi" ||
-      tenant.voucher_source_mode === "mikrotik_rest" ||
-      tenant.voucher_source_mode === "radius_voucher"
-    ) {
-      return Response.json(
-        {
-          error:
-            tenant.voucher_source_mode === "omada_openapi"
-              ? "CSV import is disabled in Omada API automation mode. Vouchers are provisioned automatically after customer payment."
-              : tenant.voucher_source_mode === "mikrotik_rest"
-                ? "CSV import is disabled in MikroTik direct mode. Vouchers are created automatically after customer payment."
-                : "CSV import is disabled in RADIUS voucher mode. Vouchers are issued automatically after customer payment.",
-        },
-        { status: 409 },
-      );
     }
 
     const user = await getSessionUserFromRequest(request);
@@ -278,6 +273,38 @@ export async function POST(request: Request, { params }: Props) {
     const form = await request.formData();
     const file = form.get("file");
     const forcedPackageCode = (form.get("packageCode") as string | null) ?? null;
+    const locationId = (form.get("locationId") as string | null)?.trim() || null;
+
+    let targetLocation: TenantLocationRow | null = null;
+    if (locationId) {
+      const locations = await listTenantLocations(tenant.id);
+      targetLocation = locations.find((location) => location.id === locationId) ?? null;
+      if (!targetLocation) {
+        return Response.json({ error: "Location not found for this tenant." }, { status: 404 });
+      }
+      if (targetLocation.voucher_source_mode !== "import_csv") {
+        return Response.json(
+          { error: "CSV import is only available for locations using CSV vouchers." },
+          { status: 409 },
+        );
+      }
+    } else if (
+      tenant.voucher_source_mode === "omada_openapi" ||
+      tenant.voucher_source_mode === "mikrotik_rest" ||
+      tenant.voucher_source_mode === "radius_voucher"
+    ) {
+      return Response.json(
+        {
+          error:
+            tenant.voucher_source_mode === "omada_openapi"
+              ? "CSV import is disabled in Omada API automation mode. Vouchers are provisioned automatically after customer payment."
+              : tenant.voucher_source_mode === "mikrotik_rest"
+                ? "CSV import is disabled in MikroTik direct mode. Vouchers are created automatically after customer payment."
+                : "CSV import is disabled in RADIUS voucher mode. Vouchers are issued automatically after customer payment.",
+        },
+        { status: 409 },
+      );
+    }
 
     if (!file || typeof file === "string") {
       return Response.json({ error: "Missing CSV file" }, { status: 400 });
@@ -297,15 +324,15 @@ export async function POST(request: Request, { params }: Props) {
     const db = getDb();
     const packages = await db
       .prepare(
-        "SELECT id, code, duration_minutes FROM voucher_packages WHERE tenant_id = ?",
+        "SELECT id, code, duration_minutes, location_id FROM voucher_packages WHERE tenant_id = ?",
       )
       .all(tenant.id) as PackageLite[];
     const packagesByCode = new Map(packages.map((pkg) => [pkg.code, pkg]));
 
     const insert = db.prepare(`
       INSERT INTO voucher_pool (
-        id, tenant_id, voucher_code, duration_minutes, status, package_id, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        id, tenant_id, location_id, voucher_code, duration_minutes, status, package_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const now = new Date().toISOString();
@@ -346,8 +373,11 @@ export async function POST(request: Request, { params }: Props) {
             const created = await ensurePackage({
               db,
               tenantId: tenant.id,
+              locationId: targetLocation?.id ?? null,
               packagesByCode,
-              plan: { ...plan, code: forcedPackageCode },
+              plan: targetLocation
+                ? scopePlanForLocation({ ...plan, code: forcedPackageCode }, targetLocation)
+                : { ...plan, code: forcedPackageCode },
             });
             pkg = created.pkg;
             if (created.created) packagesCreated += 1;
@@ -361,8 +391,9 @@ export async function POST(request: Request, { params }: Props) {
           const created = await ensurePackage({
             db,
             tenantId: tenant.id,
+            locationId: targetLocation?.id ?? null,
             packagesByCode,
-            plan,
+            plan: scopePlanForLocation(plan, targetLocation),
           });
           pkg = created.pkg;
           if (created.created) packagesCreated += 1;
@@ -386,6 +417,7 @@ export async function POST(request: Request, { params }: Props) {
         await insert.run(
           randomUUID(),
           tenant.id,
+          targetLocation?.id ?? null,
           normalized.code,
           pkg.duration_minutes,
           "UNUSED",
@@ -406,6 +438,7 @@ export async function POST(request: Request, { params }: Props) {
       inUse,
       missingPlan,
       packagesCreated,
+      locationId: targetLocation?.id ?? null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Import failed.";

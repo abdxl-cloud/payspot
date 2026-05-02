@@ -2,11 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { readJsonResponse } from "@/lib/http";
 
 type Props = {
@@ -50,9 +45,7 @@ export function ResetPasswordForm({ token }: Props) {
         body: JSON.stringify({ newPassword }),
       });
       const data = await readJsonResponse<{ error?: string }>(response);
-      if (!response.ok) {
-        throw new Error(data?.error || "Reset failed.");
-      }
+      if (!response.ok) throw new Error(data?.error || "Reset failed.");
       setSuccess("Password updated. Redirecting to login...");
       window.location.href = "/login";
     } catch (err) {
@@ -68,68 +61,49 @@ export function ResetPasswordForm({ token }: Props) {
       : null;
 
   return (
-    <Card className="border-slate-200/85 bg-white/92">
-      <CardHeader className="space-y-2">
-        <p className="section-kicker">Password update</p>
-        <CardTitle className="section-title">Set a new password</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Reset failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
+    <>
+      <p className="section-kicker">Password update</p>
+      <h2 className="auth-card-title">Set a new password</h2>
+      <p className="auth-card-sub">Use a strong password — at least 8 characters with upper/lowercase and a number.</p>
 
-        {success ? (
-          <Alert variant="success">
-            <AlertTitle>Success</AlertTitle>
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        ) : null}
+      {error ? <div className="auth-card-error">{error}</div> : null}
+      {success ? <div className="auth-card-success">{success}</div> : null}
 
-        <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="newPassword">New password</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              className="h-11"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              At least 8 characters, with upper/lowercase and a number.
-            </p>
-          </div>
+      <form className="auth-card-form" onSubmit={handleSubmit}>
+        <div className="auth-field">
+          <label htmlFor="newPassword">New password</label>
+          <input
+            id="newPassword"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+          />
+          {passwordError ? <p className="auth-field-hint" style={{ color: "var(--red)" }}>{passwordError}</p> : null}
+        </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="confirmPassword">Confirm password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              className="h-11"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-          </div>
+        <div className="auth-field">
+          <label htmlFor="confirmPassword">Confirm password</label>
+          <input
+            id="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+          />
+          {mismatch ? <p className="auth-field-hint" style={{ color: "var(--red)" }}>{mismatch}</p> : null}
+        </div>
 
-          {passwordError ? <p className="text-sm text-red-700">{passwordError}</p> : null}
-          {mismatch ? <p className="text-sm text-red-700">{mismatch}</p> : null}
+        <button className="auth-card-submit" type="submit" disabled={!canSubmit}>
+          {loading ? "Saving..." : "Set new password →"}
+        </button>
+      </form>
 
-          <Button type="submit" className="h-12" disabled={!canSubmit}>
-            {loading ? "Saving..." : "Set new password"}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-slate-600">
-          <Link href="/login" className="underline underline-offset-4">
-            Back to login
-          </Link>
-        </p>
-      </CardContent>
-    </Card>
+      <p className="auth-card-footer">
+        <Link href="/login">← Back to sign in</Link>
+      </p>
+    </>
   );
 }

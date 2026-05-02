@@ -2,7 +2,7 @@ import { verifyWebhookSignature } from "@/lib/paystack";
 import { verifyAndProcess } from "@/lib/payments";
 import { requirePaystackSecretForTransaction } from "@/lib/paystack-routing";
 import {
-  getTenantBySlug,
+  resolveStorefrontContextBySlug,
   getTransaction,
 } from "@/lib/store";
 
@@ -12,10 +12,11 @@ type Props = {
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant || tenant.status !== "active") {
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront || storefront.tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
+  const { tenant } = storefront;
 
   const signature = request.headers.get("x-paystack-signature");
   const bodyText = await request.text();

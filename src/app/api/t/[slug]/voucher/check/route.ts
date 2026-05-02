@@ -2,10 +2,9 @@ import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import {
   getPackageById,
-  getTenantBySlug,
+  resolveStorefrontContextBySlug,
   getTransactionByVoucherCode,
   getVoucherPoolEntryByCode,
-  normalizeVoucherSourceMode,
   resolveTenantOmadaConfigIfPresent,
 } from "@/lib/store";
 import { lookupOmadaVoucherStatus } from "@/lib/omada";
@@ -18,10 +17,11 @@ const codeSchema = z.string().trim().min(1).max(64);
 
 export async function GET(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant || tenant.status !== "active") {
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront || storefront.tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
+  const { tenant, location, voucherSourceMode } = storefront;
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "local";
   const limiter = rateLimit(`voucher-check:${tenant.slug}:${ip}`, 10, 60_000);
@@ -35,13 +35,12 @@ export async function GET(request: Request, { params }: Props) {
     return Response.json({ error: "A voucher code is required" }, { status: 400 });
   }
   const code = parsed.data;
-  const voucherSourceMode = normalizeVoucherSourceMode(tenant.voucher_source_mode);
   const shouldCheckPool = voucherSourceMode === "import_csv";
 
   // Primary source of truth: our own database
   const [transaction, poolEntry] = await Promise.all([
-    getTransactionByVoucherCode(tenant.id, code, voucherSourceMode),
-    shouldCheckPool ? getVoucherPoolEntryByCode(tenant.id, code) : Promise.resolve(null),
+    getTransactionByVoucherCode(tenant.id, code, voucherSourceMode, location?.id ?? null),
+    shouldCheckPool ? getVoucherPoolEntryByCode(tenant.id, code, location?.id ?? null) : Promise.resolve(null),
   ]);
 
   if (!transaction && !poolEntry) {
@@ -82,7 +81,7 @@ export async function GET(request: Request, { params }: Props) {
 
   let omadaStatus: OmadaStatusPayload = null;
 
-  const omadaConfig = await resolveTenantOmadaConfigIfPresent(tenant.id);
+  const omadaConfig = await resolveTenantOmadaConfigIfPresent(tenant.id, location?.id ?? null);
   if (omadaConfig) {
     try {
       const result = await lookupOmadaVoucherStatus(omadaConfig, code);

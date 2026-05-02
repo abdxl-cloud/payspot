@@ -2,12 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Mail } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { readJsonResponse } from "@/lib/http";
 
 export function ForgotPasswordForm() {
@@ -34,9 +28,7 @@ export function ForgotPasswordForm() {
         body: JSON.stringify({ email: email.trim() }),
       });
       const data = await readJsonResponse<{ error?: string }>(response);
-      if (!response.ok) {
-        throw new Error(data?.error || "Request failed.");
-      }
+      if (!response.ok) throw new Error(data?.error || "Request failed.");
       setSuccess("If an account exists for that email, we sent a reset link.");
       setEmail("");
     } catch (err) {
@@ -47,54 +39,34 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <Card className="border-slate-200/85 bg-white/92">
-      <CardHeader className="space-y-2">
-        <p className="section-kicker">Account recovery</p>
-        <CardTitle className="section-title">Send password reset link</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Request failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
+    <>
+      <p className="section-kicker">Account recovery</p>
+      <h2 className="auth-card-title">Send reset link</h2>
+      <p className="auth-card-sub">Enter your admin email and we&apos;ll send a secure link if an account exists.</p>
 
-        {success ? (
-          <Alert>
-            <AlertTitle>Check your inbox</AlertTitle>
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        ) : null}
+      {error ? <div className="auth-card-error">{error}</div> : null}
+      {success ? <div className="auth-card-success">{success}</div> : null}
 
-        <form className="grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                id="email"
-                type="email"
-                className="h-11 pl-9"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-          </div>
+      <form className="auth-card-form" onSubmit={handleSubmit}>
+        <div className="auth-field">
+          <label htmlFor="fpEmail">Email address</label>
+          <input
+            id="fpEmail"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@company.com"
+            required
+          />
+        </div>
+        <button className="auth-card-submit" type="submit" disabled={!canSubmit}>
+          {loading ? "Sending..." : "Send reset link →"}
+        </button>
+      </form>
 
-          <Button type="submit" className="h-12" disabled={!canSubmit}>
-            {loading ? "Sending..." : "Send reset link"}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-slate-600">
-          <Link href="/login" className="underline underline-offset-4">
-            Back to login
-          </Link>
-        </p>
-      </CardContent>
-    </Card>
+      <p className="auth-card-footer">
+        <Link href="/login">← Back to sign in</Link>
+      </p>
+    </>
   );
 }

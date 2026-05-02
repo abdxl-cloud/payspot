@@ -9,7 +9,7 @@ import {
   getAvailableCount,
   getPackageByCode,
   getPortalSubscriberSession,
-  getTenantBySlug,
+  resolveStorefrontContextBySlug,
   markTransactionFailed,
   normalizeVoucherSourceMode,
   previewEntitlementWindow,
@@ -59,10 +59,11 @@ function resolvePaystackEmail(candidate: string, fallbackPhone: string) {
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant || tenant.status !== "active") {
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront || storefront.tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
+  const { tenant, location, accessMode, voucherSourceMode, storefrontSlug } = storefront;
 
   const body = await request.json();
   const parsed = schema.safeParse(body);
@@ -75,7 +76,7 @@ export async function POST(request: Request, { params }: Props) {
 
   const { email: inputEmail, phone, packageCode, subscriberToken } = parsed.data;
   const portalContext = normalizeCaptivePortalContext(parsed.data.portalContext);
-  const accountAccessMode = tenant.portal_auth_mode === "external_radius_portal";
+  const accountAccessMode = accessMode === "account_access";
   const bearer = request.headers.get("authorization");
   const headerToken =
     bearer && bearer.toLowerCase().startsWith("bearer ")
@@ -107,7 +108,7 @@ export async function POST(request: Request, { params }: Props) {
     normalizedPhone = session.phone || session.email;
   }
 
-  const pkg = await getPackageByCode(tenant.id, packageCode);
+  const pkg = await getPackageByCode(tenant.id, packageCode, location?.id ?? null);
   if (!pkg) {
     return Response.json({ error: "Package not found" }, { status: 404 });
   }
@@ -130,9 +131,9 @@ export async function POST(request: Request, { params }: Props) {
 
   const available = await getAvailableCount(tenant.id, pkg.id);
   const autoProvisionVoucherMode =
-    tenant.voucher_source_mode === "omada_openapi" ||
-    tenant.voucher_source_mode === "mikrotik_rest" ||
-    tenant.voucher_source_mode === "radius_voucher";
+    voucherSourceMode === "omada_openapi" ||
+    voucherSourceMode === "mikrotik_rest" ||
+    voucherSourceMode === "radius_voucher";
   if (!accountAccessMode && !autoProvisionVoucherMode && available <= 0) {
     return Response.json(
       { error: "No vouchers available for this package" },
@@ -163,7 +164,7 @@ export async function POST(request: Request, { params }: Props) {
     let paystackSecretKey: string;
     try {
       paystackSecretKey = requiresPaystackSplit
-        ? requirePlatformPaystackSecretKey()
+        ? await requirePlatformPaystackSecretKey()
         : await requireTenantPaystackSecretKey(tenant.id);
     } catch (error) {
       const message =
@@ -182,6 +183,7 @@ export async function POST(request: Request, { params }: Props) {
 
     await createTransaction({
       tenantId: tenant.id,
+      locationId: location?.id ?? null,
       reference,
       email,
       phone: normalizedPhone,
@@ -195,13 +197,13 @@ export async function POST(request: Request, { params }: Props) {
       packageId: pkg.id,
       subscriberId,
       deliveryMode: accountAccessMode ? "account_access" : "voucher",
-      voucherSourceMode: accountAccessMode ? null : normalizeVoucherSourceMode(tenant.voucher_source_mode),
+      voucherSourceMode: accountAccessMode ? null : normalizeVoucherSourceMode(voucherSourceMode),
       authorizationUrl: null,
       expiresAt,
     });
 
     const callbackUrl = getCallbackUrl({
-      tenantSlug: tenant.slug,
+      tenantSlug: storefrontSlug,
       reference,
       portalContext,
     });

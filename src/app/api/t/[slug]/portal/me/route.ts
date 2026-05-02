@@ -1,7 +1,7 @@
 import {
   getRadiusUsageForEntitlements,
   getPortalSubscriberSession,
-  getTenantBySlug,
+  resolveStorefrontContextBySlug,
   listActiveEntitlementsForSubscriber,
 } from "@/lib/store";
 
@@ -17,10 +17,11 @@ function getBearerToken(request: Request) {
 
 export async function GET(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant || tenant.status !== "active") {
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront || storefront.tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
+  const { tenant } = storefront;
 
   const token = getBearerToken(request);
   if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });

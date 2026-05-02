@@ -10,6 +10,7 @@ import {
   setTenantArchitecture,
   setTenantPaystackSecret,
   setTenantPaystackPublicKey,
+  tenantRequiresPlatformSubscription,
   type PortalAuthMode,
   setUserMustChangePassword,
   type VoucherSourceMode,
@@ -22,6 +23,7 @@ type Props = {
 };
 
 const schema = z.object({
+  draft: z.boolean().optional(),
   newPassword: z.string().min(8).max(200).optional(),
   paystackSecretKey: z.string().min(10).max(200).optional(),
   paystackPublicKey: z.string().min(10).max(200).optional(),
@@ -114,8 +116,9 @@ export async function POST(request: Request, { params }: Props) {
   const mustChangePassword = userRow.must_change_password === 1;
   const requirePaystackKey = !isTenantPaymentConfigured(tenant);
   const requestedSlug = parsed.data.newSlug?.toLowerCase() ?? tenant.slug;
+  const isDraft = parsed.data.draft === true;
 
-  if (mustChangePassword) {
+  if (!isDraft && mustChangePassword) {
     if (!parsed.data.newPassword) {
       return Response.json({ error: "New password is required" }, { status: 400 });
     }
@@ -125,7 +128,7 @@ export async function POST(request: Request, { params }: Props) {
     }
   }
 
-  if (requirePaystackKey && !parsed.data.paystackSecretKey) {
+  if (!isDraft && requirePaystackKey && !parsed.data.paystackSecretKey) {
     return Response.json({ error: "Paystack secret key is required" }, { status: 400 });
   }
 
@@ -293,18 +296,25 @@ export async function POST(request: Request, { params }: Props) {
 
   let latest = await getTenantBySlug(requestedSlug) ?? tenant;
   const passwordReady = mustChangePassword ? !!parsed.data.newPassword : true;
-  if (passwordReady && latest.status !== "active" && isTenantPaymentConfigured(latest)) {
-    const activated = await updateTenant({
-      tenantId: latest.id,
-      status: "active",
-    });
-    if (activated.status === "ok") {
-      latest = activated.tenant;
+  if (!isDraft && passwordReady && isTenantPaymentConfigured(latest)) {
+    const requiresSubscription = tenantRequiresPlatformSubscription(latest);
+    const nextStatus = requiresSubscription ? "pending_subscription" : "active";
+    if (latest.status !== nextStatus) {
+      const activated = await updateTenant({
+        tenantId: latest.id,
+        status: nextStatus,
+      });
+      if (activated.status === "ok") {
+        latest = activated.tenant;
+      }
     }
   }
+  const requiresSubscription = tenantRequiresPlatformSubscription(latest);
 
   return Response.json({
     status: "ok",
-    redirectTo: `/t/${latest.slug}/admin`,
+    tenantSlug: latest.slug,
+    requiresSubscription,
+    redirectTo: requiresSubscription ? `/t/${latest.slug}/setup?step=subscription` : `/t/${latest.slug}/admin`,
   });
 }

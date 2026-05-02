@@ -22,8 +22,42 @@ export type TenantRow = {
   platform_fee_percent: number | null;
   platform_subscription_amount_ngn: number | null;
   platform_subscription_interval: PlatformSubscriptionInterval | null;
+  platform_subscription_status: string | null;
+  platform_subscription_reference: string | null;
+  platform_subscription_paid_at: string | null;
+  platform_subscription_expires_at: string | null;
   approval_message: string | null;
+  max_locations: number;
   admin_api_key_hash: string | null;
+  voucher_source_mode: string | null;
+  portal_auth_mode: string | null;
+  omada_api_base_url: string | null;
+  omada_omadac_id: string | null;
+  omada_site_id: string | null;
+  omada_client_id: string | null;
+  omada_client_secret_enc: string | null;
+  omada_hotspot_operator_username: string | null;
+  omada_hotspot_operator_password_enc: string | null;
+  mikrotik_base_url: string | null;
+  mikrotik_username: string | null;
+  mikrotik_password_enc: string | null;
+  mikrotik_hotspot_server: string | null;
+  mikrotik_default_profile: string | null;
+  mikrotik_verify_tls: number;
+  radius_adapter_secret_enc: string | null;
+  radius_adapter_secret_last4: string | null;
+  ui_config_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TenantLocationRow = {
+  id: string;
+  tenant_id: string;
+  slug: string;
+  name: string;
+  status: string;
+  is_primary: number;
   voucher_source_mode: string | null;
   portal_auth_mode: string | null;
   omada_api_base_url: string | null;
@@ -56,6 +90,15 @@ export type TenantApprovalOptions = {
   subscriptionInterval?: PlatformSubscriptionInterval;
   paystackSubaccountCode?: string | null;
   approvalMessage?: string | null;
+  maxLocations?: number;
+  storeSlug?: string;
+};
+
+export type PlatformPaystackSettings = {
+  hasSecretKey: boolean;
+  secretKeyLast4: string;
+  hasPublicKey: boolean;
+  publicKeyLast4: string;
 };
 
 export type VoucherSourceMode = "import_csv" | "omada_openapi" | "mikrotik_rest" | "radius_voucher";
@@ -226,6 +269,7 @@ export type SessionUser = {
 export type PackageRow = {
   id: string;
   tenant_id: string;
+  location_id?: string | null;
   code: string;
   name: string;
   duration_minutes: number | null;
@@ -245,6 +289,7 @@ export type PackageRow = {
 export type TransactionRow = {
   id: string;
   tenant_id: string;
+  location_id?: string | null;
   reference: string;
   email: string;
   phone: string;
@@ -293,6 +338,7 @@ export type PortalSubscriberSessionRow = {
 export type SubscriberEntitlementRow = {
   id: string;
   tenant_id: string;
+  location_id?: string | null;
   subscriber_id: string;
   package_id: string;
   transaction_reference: string;
@@ -324,6 +370,17 @@ export type SubscriberAccessUsage = {
 export type RadiusVoucherUsage = {
   usedBytes: number;
   activeSessions: number;
+};
+
+export type StorefrontContext = {
+  tenant: TenantRow;
+  location: TenantLocationRow | null;
+  requestedSlug: string;
+  storefrontSlug: string;
+  displayName: string;
+  portalAuthMode: PortalAuthMode;
+  voucherSourceMode: VoucherSourceMode;
+  accessMode: AccessMode;
 };
 
 export type SubscriberAccessState =
@@ -398,7 +455,25 @@ function normalizeTenantApprovalOptions(options?: TenantApprovalOptions) {
     subscriptionInterval: normalizePlatformSubscriptionInterval(options?.subscriptionInterval),
     paystackSubaccountCode: normalizePaystackSubaccountCode(options?.paystackSubaccountCode),
     approvalMessage: options?.approvalMessage?.trim() || null,
+    maxLocations: normalizeMaxLocations(options?.maxLocations),
+    storeSlug: normalizeOptionalSlug(options?.storeSlug),
   };
+}
+
+function normalizeOptionalSlug(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  if (!normalized) return null;
+  return normalized;
+}
+
+function isValidSlug(value: string) {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+}
+
+function normalizeMaxLocations(value: number | string | null | undefined) {
+  const parsed = Math.floor(Number(value ?? 1));
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.min(50, parsed));
 }
 
 function normalizePaystackSubaccountCode(value: string | null | undefined) {
@@ -443,6 +518,28 @@ export function isTenantPaymentConfigured(
     return !!tenant.paystack_subaccount_code;
   }
   return !!tenant.paystack_secret_enc;
+}
+
+export function tenantRequiresPlatformSubscription(
+  tenant: Pick<
+    TenantRow,
+    | "platform_billing_model"
+    | "platform_subscription_amount_ngn"
+    | "platform_subscription_status"
+    | "platform_subscription_expires_at"
+  >,
+) {
+  if (normalizePlatformBillingModel(tenant.platform_billing_model) !== "fixed_subscription") {
+    return false;
+  }
+  if (Number(tenant.platform_subscription_amount_ngn ?? 0) <= 0) {
+    return false;
+  }
+  if (tenant.platform_subscription_status !== "active") {
+    return true;
+  }
+  const expiresAt = parseIsoTime(tenant.platform_subscription_expires_at ?? null);
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
 }
 
 export function normalizeVoucherSourceMode(
@@ -1356,7 +1453,11 @@ export async function getRadiusVoucherAccessState(params: {
   };
 }
 
-export async function resolveTenantRadiusAdapterSecret(tenantId: string) {
+export async function resolveTenantRadiusAdapterSecret(tenantId: string, locationId?: string | null) {
+  const scopedLocation = locationId ? await getTenantLocationById(locationId) : null;
+  if (scopedLocation?.radius_adapter_secret_enc) {
+    return decryptSecret(scopedLocation.radius_adapter_secret_enc);
+  }
   const tenant = await getTenantById(tenantId);
   if (!tenant?.radius_adapter_secret_enc) return null;
   return decryptSecret(tenant.radius_adapter_secret_enc);
@@ -1364,9 +1465,10 @@ export async function resolveTenantRadiusAdapterSecret(tenantId: string) {
 
 export async function verifyTenantRadiusAdapterSecret(params: {
   tenantId: string;
+  locationId?: string | null;
   adapterSecret: string;
 }) {
-  const secret = await resolveTenantRadiusAdapterSecret(params.tenantId);
+  const secret = await resolveTenantRadiusAdapterSecret(params.tenantId, params.locationId);
   if (!secret) return false;
   return secret === params.adapterSecret;
 }
@@ -1752,12 +1854,339 @@ export async function getTenantBySlug(slug: string) {
     .get(slug) as TenantRow | undefined;
 }
 
+export async function getTenantLocationById(locationId: string) {
+  const db = getDb();
+  return await db
+    .prepare("SELECT * FROM tenant_locations WHERE id = ?")
+    .get(locationId) as TenantLocationRow | undefined;
+}
+
+export async function getTenantLocationBySlug(slug: string) {
+  const db = getDb();
+  return await db
+    .prepare("SELECT * FROM tenant_locations WHERE slug = ?")
+    .get(slug) as TenantLocationRow | undefined;
+}
+
+export function getStorefrontModes(source: Pick<TenantRow | TenantLocationRow, "portal_auth_mode" | "voucher_source_mode">) {
+  const portalAuthMode = normalizePortalAuthMode(source.portal_auth_mode);
+  const accessMode: AccessMode =
+    portalAuthMode === "external_radius_portal" ? "account_access" : "voucher_access";
+  const voucherSourceMode =
+    portalAuthMode === "external_radius_portal"
+      ? "import_csv"
+      : normalizeVoucherSourceMode(source.voucher_source_mode);
+
+  return {
+    portalAuthMode,
+    accessMode,
+    voucherSourceMode,
+  };
+}
+
+export async function resolveStorefrontContextBySlug(slug: string) {
+  const tenant = await getTenantBySlug(slug);
+  if (tenant) {
+    const location = await ensureTenantPrimaryLocation(tenant.id);
+    const source = location ?? tenant;
+    const modes = getStorefrontModes(source);
+    return {
+      tenant,
+      location,
+      requestedSlug: slug,
+      storefrontSlug: slug,
+      displayName: location?.name || tenant.name,
+      ...modes,
+    } satisfies StorefrontContext;
+  }
+
+  const location = await getTenantLocationBySlug(slug);
+  if (!location) return null;
+  const parentTenant = await getTenantById(location.tenant_id);
+  if (!parentTenant) return null;
+  const modes = getStorefrontModes(location);
+  return {
+    tenant: parentTenant,
+    location,
+    requestedSlug: slug,
+    storefrontSlug: slug,
+    displayName: location.name,
+    ...modes,
+  } satisfies StorefrontContext;
+}
+
 export async function getTenantById(tenantId: string) {
   const db = getDb();
   return await db
     .prepare("SELECT * FROM tenants WHERE id = ?")
     .get(tenantId) as TenantRow | undefined;
 }
+
+export async function ensureTenantPrimaryLocation(tenantId: string) {
+  const db = getDb();
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) return null;
+
+  const existing = await db
+    .prepare("SELECT * FROM tenant_locations WHERE tenant_id = ? AND is_primary = 1 ORDER BY created_at ASC LIMIT 1")
+    .get(tenantId) as TenantLocationRow | undefined;
+  if (existing) return existing;
+
+  const fallback = await db
+    .prepare("SELECT * FROM tenant_locations WHERE tenant_id = ? ORDER BY created_at ASC LIMIT 1")
+    .get(tenantId) as TenantLocationRow | undefined;
+  if (fallback) {
+    const now = nowIso();
+    await db.prepare(
+      `
+        UPDATE tenant_locations
+        SET is_primary = 1,
+            slug = ?,
+            name = ?,
+            status = ?,
+            updated_at = ?
+        WHERE id = ?
+      `,
+    ).run(
+      tenant.slug,
+      tenant.name,
+      tenant.status === "suspended" ? "suspended" : "active",
+      now,
+      fallback.id,
+    );
+
+    return await db
+      .prepare("SELECT * FROM tenant_locations WHERE id = ?")
+      .get(fallback.id) as TenantLocationRow;
+  }
+
+  const now = nowIso();
+  const id = randomUUID();
+  await db.prepare(
+    `
+      INSERT INTO tenant_locations (
+        id, tenant_id, slug, name, status, is_primary,
+        voucher_source_mode, portal_auth_mode,
+        omada_api_base_url, omada_omadac_id, omada_site_id, omada_client_id,
+        omada_client_secret_enc, omada_hotspot_operator_username, omada_hotspot_operator_password_enc,
+        mikrotik_base_url, mikrotik_username, mikrotik_password_enc, mikrotik_hotspot_server,
+        mikrotik_default_profile, mikrotik_verify_tls,
+        radius_adapter_secret_enc, radius_adapter_secret_last4,
+        ui_config_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+  ).run(
+    id,
+    tenant.id,
+    tenant.slug,
+    tenant.name,
+    tenant.status === "suspended" ? "suspended" : "active",
+    1,
+    normalizeVoucherSourceMode(tenant.voucher_source_mode),
+    normalizePortalAuthMode(tenant.portal_auth_mode),
+    tenant.omada_api_base_url,
+    tenant.omada_omadac_id,
+    tenant.omada_site_id,
+    tenant.omada_client_id,
+    tenant.omada_client_secret_enc,
+    tenant.omada_hotspot_operator_username,
+    tenant.omada_hotspot_operator_password_enc,
+    tenant.mikrotik_base_url,
+    tenant.mikrotik_username,
+    tenant.mikrotik_password_enc,
+    tenant.mikrotik_hotspot_server,
+    tenant.mikrotik_default_profile,
+    tenant.mikrotik_verify_tls ?? 1,
+    tenant.radius_adapter_secret_enc,
+    tenant.radius_adapter_secret_last4,
+    tenant.ui_config_json,
+    now,
+    now,
+  );
+
+  return await db
+    .prepare("SELECT * FROM tenant_locations WHERE id = ?")
+    .get(id) as TenantLocationRow;
+}
+
+export async function listTenantLocations(tenantId: string) {
+  const db = getDb();
+  await ensureTenantPrimaryLocation(tenantId);
+  return await db
+    .prepare("SELECT * FROM tenant_locations WHERE tenant_id = ? ORDER BY is_primary DESC, created_at ASC")
+    .all(tenantId) as TenantLocationRow[];
+}
+
+export async function createTenantLocation(params: {
+  tenantId: string;
+  name: string;
+  slug: string;
+  appearance?: Partial<TenantAppearance>;
+  voucherSourceMode?: VoucherSourceMode;
+  portalAuthMode?: PortalAuthMode;
+}) {
+  const db = getDb();
+  const tenant = await getTenantById(params.tenantId);
+  if (!tenant) return { status: "missing" as const };
+
+  const locations = await listTenantLocations(params.tenantId);
+  if (locations.length >= normalizeMaxLocations(tenant.max_locations)) {
+    return { status: "limit_reached" as const };
+  }
+
+  const slug = params.slug.trim().toLowerCase();
+  if (!isValidSlug(slug)) return { status: "invalid_slug" as const };
+
+  const slugConflict = await db
+    .prepare(
+      `
+        SELECT 1 FROM tenants WHERE slug = ?
+        UNION
+        SELECT 1 FROM tenant_locations WHERE slug = ?
+        LIMIT 1
+      `,
+    )
+    .get(slug, slug);
+  if (slugConflict) return { status: "slug_taken" as const };
+
+  const primary = await ensureTenantPrimaryLocation(params.tenantId);
+  const primaryConfig = normalizeTenantUiConfig(primary?.ui_config_json ?? tenant.ui_config_json);
+  const appearance = {
+    ...primaryConfig.appearance,
+    ...(isHexColor(params.appearance?.storePrimaryColor) ? { storePrimaryColor: params.appearance?.storePrimaryColor } : {}),
+    ...(isHexColor(params.appearance?.dashboardPrimaryColor)
+      ? { dashboardPrimaryColor: params.appearance?.dashboardPrimaryColor }
+      : {}),
+  };
+  const now = nowIso();
+  const id = randomUUID();
+  await db.prepare(
+    `
+      INSERT INTO tenant_locations (
+        id, tenant_id, slug, name, status, is_primary,
+        voucher_source_mode, portal_auth_mode,
+        ui_config_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+  ).run(
+    id,
+    params.tenantId,
+    slug,
+    params.name.trim() || slug,
+    "active",
+    0,
+    normalizeVoucherSourceMode(params.voucherSourceMode ?? primary?.voucher_source_mode ?? tenant.voucher_source_mode),
+    normalizePortalAuthMode(params.portalAuthMode ?? primary?.portal_auth_mode ?? tenant.portal_auth_mode),
+    JSON.stringify({
+      ...primaryConfig,
+      appearance,
+      notifications: defaultTenantEmailNotifications(params.voucherSourceMode ?? primary?.voucher_source_mode ?? tenant.voucher_source_mode),
+    }),
+    now,
+    now,
+  );
+
+  return { status: "created" as const, location: (await db
+    .prepare("SELECT * FROM tenant_locations WHERE id = ?")
+    .get(id)) as TenantLocationRow };
+}
+
+export async function updateTenantLocation(params: {
+  tenantId: string;
+  locationId: string;
+  name?: string;
+  slug?: string;
+  appearance?: Partial<TenantAppearance>;
+  voucherSourceMode?: VoucherSourceMode;
+  portalAuthMode?: PortalAuthMode;
+}) {
+  const db = getDb();
+  const location = await db
+    .prepare("SELECT * FROM tenant_locations WHERE id = ? AND tenant_id = ?")
+    .get(params.locationId, params.tenantId) as TenantLocationRow | undefined;
+  if (!location) return { status: "missing" as const };
+
+  const slug = params.slug ? params.slug.trim().toLowerCase() : location.slug;
+  if (!isValidSlug(slug)) return { status: "invalid_slug" as const };
+
+  if (slug !== location.slug) {
+    const slugConflict = await db
+      .prepare(
+        `
+          SELECT 1 FROM tenants WHERE slug = ?
+          UNION
+          SELECT 1 FROM tenant_locations WHERE slug = ? AND id != ?
+          LIMIT 1
+        `,
+      )
+      .get(slug, slug, params.locationId);
+    if (slugConflict) return { status: "slug_taken" as const };
+  }
+
+  const currentUiConfig = normalizeTenantUiConfig(location.ui_config_json);
+  const appearance = {
+    ...currentUiConfig.appearance,
+    ...(isHexColor(params.appearance?.storePrimaryColor) ? { storePrimaryColor: params.appearance?.storePrimaryColor } : {}),
+    ...(isHexColor(params.appearance?.dashboardPrimaryColor)
+      ? { dashboardPrimaryColor: params.appearance?.dashboardPrimaryColor }
+      : {}),
+  };
+  const nextUiConfig = JSON.stringify({
+    ...currentUiConfig,
+    appearance,
+  });
+  const voucherSourceMode =
+    params.voucherSourceMode === undefined ? location.voucher_source_mode : normalizeVoucherSourceMode(params.voucherSourceMode);
+  const portalAuthMode =
+    params.portalAuthMode === undefined ? location.portal_auth_mode : normalizePortalAuthMode(params.portalAuthMode);
+  const now = nowIso();
+
+  await db.prepare(
+    `
+      UPDATE tenant_locations
+      SET slug = ?,
+          name = ?,
+          voucher_source_mode = ?,
+          portal_auth_mode = ?,
+          ui_config_json = ?,
+          updated_at = ?
+      WHERE id = ? AND tenant_id = ?
+    `,
+  ).run(
+    slug,
+    params.name?.trim() || location.name,
+    voucherSourceMode,
+    portalAuthMode,
+    nextUiConfig,
+    now,
+    params.locationId,
+    params.tenantId,
+  );
+
+  if (location.is_primary === 1) {
+    const tenantConfig = normalizeTenantUiConfig((await getTenantById(params.tenantId))?.ui_config_json);
+    await db.prepare(
+      `
+        UPDATE tenants
+        SET ui_config_json = ?, updated_at = ?
+        WHERE id = ?
+      `,
+    ).run(
+      JSON.stringify({
+        ...tenantConfig,
+        appearance,
+      }),
+      now,
+      params.tenantId,
+    );
+  }
+
+  return { status: "ok" as const, location: (await db
+    .prepare("SELECT * FROM tenant_locations WHERE id = ?")
+    .get(params.locationId)) as TenantLocationRow };
+}
+
+export const updateTenantLocationAppearance = updateTenantLocation;
 
 export async function getTenantPrimaryUser(tenantId: string) {
   const db = getDb();
@@ -1780,6 +2209,7 @@ export async function createTenant(params: {
   name: string;
   adminEmail: string;
   status?: string;
+  maxLocations?: number;
 }) {
   const db = getDb();
   const now = nowIso();
@@ -1794,8 +2224,8 @@ export async function createTenant(params: {
   await db.prepare(
     `
       INSERT INTO tenants (
-        id, slug, name, admin_email, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        id, slug, name, admin_email, status, max_locations, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -1803,9 +2233,12 @@ export async function createTenant(params: {
     params.name.trim(),
     params.adminEmail.trim(),
     params.status ?? "pending_setup",
+    normalizeMaxLocations(params.maxLocations),
     now,
     now,
   );
+
+  await ensureTenantPrimaryLocation(id);
 
   return { status: "created" as const, tenant: (await getTenantById(id))! };
 }
@@ -1816,6 +2249,7 @@ export async function updateTenant(params: {
   name?: string;
   adminEmail?: string;
   status?: string;
+  maxLocations?: number;
 }) {
   const db = getDb();
   const now = nowIso();
@@ -1826,6 +2260,10 @@ export async function updateTenant(params: {
   const name = params.name ? params.name.trim() : existing.name;
   const adminEmail = params.adminEmail ? params.adminEmail.trim() : existing.admin_email;
   const status = params.status ?? existing.status;
+  const maxLocations =
+    params.maxLocations === undefined
+      ? normalizeMaxLocations(existing.max_locations)
+      : normalizeMaxLocations(params.maxLocations);
 
   const nextUserEmail = params.adminEmail ? normalizeEmail(params.adminEmail) : null;
   const slugChanged = slug !== existing.slug;
@@ -1838,9 +2276,13 @@ export async function updateTenant(params: {
             SELECT 1
             FROM tenants
             WHERE slug = ? AND id != ?
+            UNION
+            SELECT 1
+            FROM tenant_locations
+            WHERE slug = ? AND tenant_id != ?
           `,
         )
-        .get(slug, params.tenantId);
+        .get(slug, params.tenantId, slug, params.tenantId);
       if (slugConflict) {
         return { status: "slug_taken" as const };
       }
@@ -1865,10 +2307,19 @@ export async function updateTenant(params: {
     await db.prepare(
       `
         UPDATE tenants
-        SET slug = ?, name = ?, admin_email = ?, status = ?, updated_at = ?
+        SET slug = ?, name = ?, admin_email = ?, status = ?, max_locations = ?, updated_at = ?
         WHERE id = ?
       `,
-    ).run(slug, name, adminEmail, status, now, params.tenantId);
+    ).run(slug, name, adminEmail, status, maxLocations, now, params.tenantId);
+
+    await ensureTenantPrimaryLocation(params.tenantId);
+    await db.prepare(
+      `
+        UPDATE tenant_locations
+        SET slug = ?, name = ?, status = ?, updated_at = ?
+        WHERE tenant_id = ? AND is_primary = 1
+      `,
+    ).run(slug, name, status === "suspended" ? "suspended" : "active", now, params.tenantId);
 
     if (nextUserEmail) {
       await db.prepare(
@@ -1913,6 +2364,7 @@ export async function deleteTenant(tenantId: string) {
     await db.prepare("DELETE FROM voucher_packages WHERE tenant_id = ?").run(tenantId);
     await db.prepare("DELETE FROM tenant_requests WHERE tenant_id = ?").run(tenantId);
     await db.prepare("DELETE FROM tenant_setup_tokens WHERE tenant_id = ?").run(tenantId);
+    await db.prepare("DELETE FROM tenant_locations WHERE tenant_id = ?").run(tenantId);
     await db.prepare("DELETE FROM tenants WHERE id = ?").run(tenantId);
   });
 
@@ -1940,6 +2392,11 @@ export async function isTenantSlugAvailable(slug: string) {
     .prepare("SELECT 1 FROM tenants WHERE slug = ?")
     .get(slug);
   if (existingTenant) return false;
+
+  const existingLocation = await db
+    .prepare("SELECT 1 FROM tenant_locations WHERE slug = ?")
+    .get(slug);
+  if (existingLocation) return false;
 
   const pendingRequest = await db
     .prepare(
@@ -2066,9 +2523,21 @@ export async function approveTenantRequestById(
       return { status: "already_reviewed" as const, request };
     }
 
+    const storeSlug = approvalOptions.storeSlug || request.requested_slug;
+    if (!isValidSlug(storeSlug)) {
+      return { status: "invalid_slug" as const, request };
+    }
+
     const tenantExists = await db
-      .prepare("SELECT 1 FROM tenants WHERE slug = ?")
-      .get(request.requested_slug);
+      .prepare(
+        `
+          SELECT 1 FROM tenants WHERE slug = ?
+          UNION
+          SELECT 1 FROM tenant_locations WHERE slug = ?
+          LIMIT 1
+        `,
+      )
+      .get(storeSlug, storeSlug);
     if (tenantExists) {
       await db.prepare(
         `
@@ -2080,7 +2549,7 @@ export async function approveTenantRequestById(
       return { status: "slug_taken" as const, request };
     }
 
-    const normalizedUsername = normalizeUsername(request.requested_slug);
+    const normalizedUsername = normalizeUsername(storeSlug);
     const normalizedEmail = normalizeEmail(request.requested_email);
 
     const userConflict = await db
@@ -2105,13 +2574,13 @@ export async function approveTenantRequestById(
           id, slug, name, admin_email, status,
           paystack_subaccount_code, paystack_subaccount_last4,
           platform_billing_model, platform_fee_percent, platform_subscription_amount_ngn,
-          platform_subscription_interval, approval_message,
+          platform_subscription_interval, approval_message, max_locations,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     ).run(
       tenantId,
-      request.requested_slug,
+      storeSlug,
       request.requested_name,
       request.requested_email,
       "pending_setup",
@@ -2122,9 +2591,11 @@ export async function approveTenantRequestById(
       approvalOptions.subscriptionAmountNgn,
       approvalOptions.subscriptionInterval,
       approvalOptions.approvalMessage,
+      approvalOptions.maxLocations,
       now,
       now,
     );
+    await ensureTenantPrimaryLocation(tenantId);
 
     const temporaryPassword = `Temp-${generateToken(9)}`;
     const created = await createUser({
@@ -2214,9 +2685,21 @@ export async function approveTenantRequest(
       return { status: "already_reviewed" as const, request };
     }
 
+    const storeSlug = approvalOptions.storeSlug || request.requested_slug;
+    if (!isValidSlug(storeSlug)) {
+      return { status: "invalid_slug" as const, request };
+    }
+
     const tenantExists = await db
-      .prepare("SELECT 1 FROM tenants WHERE slug = ?")
-      .get(request.requested_slug);
+      .prepare(
+        `
+          SELECT 1 FROM tenants WHERE slug = ?
+          UNION
+          SELECT 1 FROM tenant_locations WHERE slug = ?
+          LIMIT 1
+        `,
+      )
+      .get(storeSlug, storeSlug);
     if (tenantExists) {
       await db.prepare(
         `
@@ -2228,7 +2711,7 @@ export async function approveTenantRequest(
       return { status: "slug_taken" as const };
     }
 
-    const normalizedUsername = normalizeUsername(request.requested_slug);
+    const normalizedUsername = normalizeUsername(storeSlug);
     const normalizedEmail = normalizeEmail(request.requested_email);
 
     const userConflict = await db
@@ -2253,13 +2736,13 @@ export async function approveTenantRequest(
           id, slug, name, admin_email, status,
           paystack_subaccount_code, paystack_subaccount_last4,
           platform_billing_model, platform_fee_percent, platform_subscription_amount_ngn,
-          platform_subscription_interval, approval_message,
+          platform_subscription_interval, approval_message, max_locations,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     ).run(
       tenantId,
-      request.requested_slug,
+      storeSlug,
       request.requested_name,
       request.requested_email,
       "pending_setup",
@@ -2270,9 +2753,11 @@ export async function approveTenantRequest(
       approvalOptions.subscriptionAmountNgn,
       approvalOptions.subscriptionInterval,
       approvalOptions.approvalMessage,
+      approvalOptions.maxLocations,
       now,
       now,
     );
+    await ensureTenantPrimaryLocation(tenantId);
 
     const temporaryPassword = `Temp-${generateToken(9)}`;
     const created = await createUser({
@@ -2398,22 +2883,172 @@ export async function setTenantPaystackSubaccountCode(params: {
   return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
 }
 
-export async function getTenantArchitecture(tenantId: string) {
-  const tenant = await getTenantById(tenantId);
-  if (!tenant) return null;
+async function getPlatformSetting(key: string) {
+  const db = getDb();
+  return await db
+    .prepare("SELECT * FROM platform_settings WHERE key = ?")
+    .get(key) as
+    | { key: string; value_enc: string | null; value_text: string | null; value_last4: string | null; updated_at: string }
+    | undefined;
+}
 
-  const portalAuthMode = normalizePortalAuthMode(tenant.portal_auth_mode);
-  const accessMode: AccessMode =
-    portalAuthMode === "external_radius_portal" ? "account_access" : "voucher_access";
-  const voucherSourceMode = portalAuthMode === "external_radius_portal"
-    ? "import_csv"
-    : normalizeVoucherSourceMode(tenant.voucher_source_mode);
+export async function getPlatformPaystackSettings(): Promise<PlatformPaystackSettings> {
+  const secret = await getPlatformSetting("paystack_secret_key");
+  const publicKey = await getPlatformSetting("paystack_public_key");
+  return {
+    hasSecretKey: !!secret?.value_enc,
+    secretKeyLast4: secret?.value_last4 ?? "",
+    hasPublicKey: !!publicKey?.value_text,
+    publicKeyLast4: publicKey?.value_last4 ?? "",
+  };
+}
+
+export async function setPlatformPaystackKeys(params: {
+  secretKey?: string | null;
+  publicKey?: string | null;
+}) {
+  const db = getDb();
+  const now = nowIso();
+  const secretKey = params.secretKey?.trim();
+  const publicKey = params.publicKey?.trim();
+
+  if (secretKey !== undefined && secretKey !== "" && !isPaystackSecretKey(secretKey)) {
+    return { status: "invalid_secret_key" as const };
+  }
+  if (publicKey !== undefined && publicKey !== "" && !isPaystackPublicKey(publicKey)) {
+    return { status: "invalid_public_key" as const };
+  }
+
+  if (secretKey !== undefined && secretKey !== "") {
+    await db.prepare(
+      `
+        INSERT INTO platform_settings (key, value_enc, value_text, value_last4, updated_at)
+        VALUES (?, ?, NULL, ?, ?)
+        ON CONFLICT (key) DO UPDATE
+        SET value_enc = EXCLUDED.value_enc,
+            value_text = NULL,
+            value_last4 = EXCLUDED.value_last4,
+            updated_at = EXCLUDED.updated_at
+      `,
+    ).run("paystack_secret_key", encryptSecret(secretKey), secretKey.slice(-4), now);
+  }
+
+  if (publicKey !== undefined && publicKey !== "") {
+    await db.prepare(
+      `
+        INSERT INTO platform_settings (key, value_enc, value_text, value_last4, updated_at)
+        VALUES (?, NULL, ?, ?, ?)
+        ON CONFLICT (key) DO UPDATE
+        SET value_enc = NULL,
+            value_text = EXCLUDED.value_text,
+            value_last4 = EXCLUDED.value_last4,
+            updated_at = EXCLUDED.updated_at
+      `,
+    ).run("paystack_public_key", publicKey, publicKey.slice(-4), now);
+  }
+
+  return { status: "ok" as const, settings: await getPlatformPaystackSettings() };
+}
+
+export async function getPlatformPaystackSecretKey() {
+  const setting = await getPlatformSetting("paystack_secret_key");
+  if (!setting?.value_enc) return null;
+  return decryptSecret(setting.value_enc);
+}
+
+export async function getPlatformPaystackPublicKey() {
+  const setting = await getPlatformSetting("paystack_public_key");
+  return setting?.value_text?.trim() || null;
+}
+
+function getTenantSubscriptionExpiresAt(interval: PlatformSubscriptionInterval) {
+  const expiresAt = new Date();
+  if (interval === "yearly") {
+    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+  } else {
+    expiresAt.setMonth(expiresAt.getMonth() + 1);
+  }
+  return expiresAt.toISOString();
+}
+
+export async function setTenantSubscriptionPending(params: {
+  tenantId: string;
+  reference: string;
+}) {
+  const db = getDb();
+  const now = nowIso();
+  await db.prepare(
+    `
+      UPDATE tenants
+      SET status = 'pending_subscription',
+          platform_subscription_status = 'pending',
+          platform_subscription_reference = ?,
+          updated_at = ?
+      WHERE id = ?
+    `,
+  ).run(params.reference, now, params.tenantId);
+  return await getTenantById(params.tenantId);
+}
+
+export async function markTenantSubscriptionPaid(params: {
+  tenantId: string;
+  reference: string;
+}) {
+  const tenant = await getTenantById(params.tenantId);
+  if (!tenant) return { status: "missing" as const };
+  if (tenant.platform_subscription_reference && tenant.platform_subscription_reference !== params.reference) {
+    return { status: "reference_mismatch" as const, tenant };
+  }
+  if (tenant.platform_subscription_status === "active" && tenant.platform_subscription_paid_at) {
+    return { status: "already_paid" as const, tenant };
+  }
+
+  const db = getDb();
+  const now = nowIso();
+  const interval = normalizePlatformSubscriptionInterval(tenant.platform_subscription_interval);
+  await db.prepare(
+    `
+      UPDATE tenants
+      SET status = 'active',
+          platform_subscription_status = 'active',
+          platform_subscription_reference = ?,
+          platform_subscription_paid_at = ?,
+          platform_subscription_expires_at = ?,
+          updated_at = ?
+      WHERE id = ?
+    `,
+  ).run(params.reference, now, getTenantSubscriptionExpiresAt(interval), now, params.tenantId);
+
+  return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
+}
+
+export async function getTenantBySubscriptionReference(reference: string) {
+  const db = getDb();
+  return await db
+    .prepare("SELECT * FROM tenants WHERE platform_subscription_reference = ?")
+    .get(reference) as TenantRow | undefined;
+}
+
+export async function getTenantArchitecture(tenantId: string) {
+  return await getTenantArchitectureForContext({ tenantId });
+}
+
+export async function getTenantArchitectureForContext(params: {
+  tenantId: string;
+  locationId?: string | null;
+}) {
+  const tenant = await getTenantById(params.tenantId);
+  if (!tenant) return null;
+  const scopedLocation = params.locationId ? await getTenantLocationById(params.locationId) : null;
+  const primaryLocation = scopedLocation ?? await ensureTenantPrimaryLocation(params.tenantId);
+  const network = primaryLocation ?? tenant;
+  const { accessMode, voucherSourceMode } = getStorefrontModes(network);
 
   return {
     accessMode,
     voucherSourceMode,
-    dashboardVisibility: normalizeTenantDashboardVisibility(tenant.ui_config_json),
-    appearance: normalizeTenantAppearance(tenant.ui_config_json),
+    dashboardVisibility: normalizeTenantDashboardVisibility(network.ui_config_json),
+    appearance: normalizeTenantAppearance(network.ui_config_json),
     payment: {
       hasPublicKey: !!tenant.paystack_public_key,
       publicKeyLast4: tenant.paystack_public_key_last4 ?? "",
@@ -2424,41 +3059,46 @@ export async function getTenantArchitecture(tenantId: string) {
       subscriptionAmountNgn: Number(tenant.platform_subscription_amount_ngn ?? 0),
       subscriptionInterval: normalizePlatformSubscriptionInterval(tenant.platform_subscription_interval),
     },
-    notifications: normalizeTenantEmailNotifications(tenant.ui_config_json, tenant.voucher_source_mode),
+    notifications: normalizeTenantEmailNotifications(network.ui_config_json, network.voucher_source_mode),
     omada: {
-      apiBaseUrl: tenant.omada_api_base_url ?? "",
-      omadacId: tenant.omada_omadac_id ?? "",
-      siteId: tenant.omada_site_id ?? "",
-      clientId: tenant.omada_client_id ?? "",
-      hasClientSecret: !!tenant.omada_client_secret_enc,
-      hotspotOperatorUsername: tenant.omada_hotspot_operator_username ?? "",
-      hasHotspotOperatorPassword: !!tenant.omada_hotspot_operator_password_enc,
+      apiBaseUrl: network.omada_api_base_url ?? "",
+      omadacId: network.omada_omadac_id ?? "",
+      siteId: network.omada_site_id ?? "",
+      clientId: network.omada_client_id ?? "",
+      hasClientSecret: !!network.omada_client_secret_enc,
+      hotspotOperatorUsername: network.omada_hotspot_operator_username ?? "",
+      hasHotspotOperatorPassword: !!network.omada_hotspot_operator_password_enc,
     },
     mikrotik: {
-      baseUrl: tenant.mikrotik_base_url ?? "",
-      username: tenant.mikrotik_username ?? "",
-      hasPassword: !!tenant.mikrotik_password_enc,
-      hotspotServer: tenant.mikrotik_hotspot_server ?? "",
-      defaultProfile: tenant.mikrotik_default_profile ?? "",
-      verifyTls: tenant.mikrotik_verify_tls !== 0,
+      baseUrl: network.mikrotik_base_url ?? "",
+      username: network.mikrotik_username ?? "",
+      hasPassword: !!network.mikrotik_password_enc,
+      hotspotServer: network.mikrotik_hotspot_server ?? "",
+      defaultProfile: network.mikrotik_default_profile ?? "",
+      verifyTls: network.mikrotik_verify_tls !== 0,
     },
     radius: {
-      hasAdapterSecret: !!tenant.radius_adapter_secret_enc,
-      adapterSecretLast4: tenant.radius_adapter_secret_last4 ?? "",
+      hasAdapterSecret: !!network.radius_adapter_secret_enc,
+      adapterSecretLast4: network.radius_adapter_secret_last4 ?? "",
     },
   } satisfies TenantArchitecture;
 }
 
-export async function getTenantAppearance(tenantId: string) {
+export async function getTenantAppearance(tenantId: string, locationId?: string | null) {
   const tenant = await getTenantById(tenantId);
   if (!tenant) return defaultTenantAppearance();
-  return normalizeTenantAppearance(tenant.ui_config_json);
+  const scopedLocation = locationId ? await getTenantLocationById(locationId) : null;
+  const primaryLocation = scopedLocation ?? await ensureTenantPrimaryLocation(tenantId);
+  return normalizeTenantAppearance((primaryLocation ?? tenant).ui_config_json);
 }
 
-export async function getTenantEmailNotifications(tenantId: string) {
+export async function getTenantEmailNotifications(tenantId: string, locationId?: string | null) {
   const tenant = await getTenantById(tenantId);
   if (!tenant) return defaultTenantEmailNotifications();
-  return normalizeTenantEmailNotifications(tenant.ui_config_json, tenant.voucher_source_mode);
+  const scopedLocation = locationId ? await getTenantLocationById(locationId) : null;
+  const primaryLocation = scopedLocation ?? await ensureTenantPrimaryLocation(tenantId);
+  const source = primaryLocation ?? tenant;
+  return normalizeTenantEmailNotifications(source.ui_config_json, source.voucher_source_mode);
 }
 
 export async function getPackageVoucherStock(params: {
@@ -2520,6 +3160,7 @@ export async function setTenantArchitecture(params: {
 }) {
   const tenant = await getTenantById(params.tenantId);
   if (!tenant) return { status: "missing" as const };
+  const primaryLocation = await ensureTenantPrimaryLocation(params.tenantId);
 
   const now = nowIso();
   const db = getDb();
@@ -2721,35 +3362,92 @@ export async function setTenantArchitecture(params: {
       params.tenantId,
     );
 
+  if (primaryLocation) {
+    await db
+      .prepare(
+        `
+        UPDATE tenant_locations
+        SET name = ?,
+            status = ?,
+            voucher_source_mode = ?,
+            portal_auth_mode = ?,
+            omada_api_base_url = ?,
+            omada_omadac_id = ?,
+            omada_site_id = ?,
+            omada_client_id = ?,
+            omada_client_secret_enc = ?,
+            omada_hotspot_operator_username = ?,
+            omada_hotspot_operator_password_enc = ?,
+            mikrotik_base_url = ?,
+            mikrotik_username = ?,
+            mikrotik_password_enc = ?,
+            mikrotik_hotspot_server = ?,
+            mikrotik_default_profile = ?,
+            mikrotik_verify_tls = ?,
+            radius_adapter_secret_enc = ?,
+            radius_adapter_secret_last4 = ?,
+            ui_config_json = ?,
+            updated_at = ?
+        WHERE id = ?
+      `,
+      )
+      .run(
+        tenant.name,
+        tenant.status === "suspended" ? "suspended" : "active",
+        effectiveVoucherSourceMode,
+        portalAuthMode,
+        apiBaseUrl || null,
+        omadacId || null,
+        siteId || null,
+        clientId || null,
+        omadaClientSecretEnc,
+        hotspotOperatorUsername || null,
+        omadaHotspotOperatorPasswordEnc,
+        mikrotikBaseUrl || null,
+        mikrotikUsername || null,
+        mikrotikPasswordEnc,
+        mikrotikHotspotServer || null,
+        mikrotikDefaultProfile || null,
+        mikrotikVerifyTls ? 1 : 0,
+        radiusAdapterSecretEnc,
+        radiusAdapterSecretLast4,
+        JSON.stringify({ dashboardVisibility, appearance, notifications }),
+        now,
+        primaryLocation.id,
+      );
+  }
+
   return { status: "ok" as const, tenant: (await getTenantById(params.tenantId))! };
 }
 
-export async function resolveTenantOmadaOpenApiConfig(tenantId: string) {
+export async function resolveTenantOmadaOpenApiConfig(tenantId: string, locationId?: string | null) {
   const tenant = await getTenantById(tenantId);
   if (!tenant) return null;
-  if (normalizePortalAuthMode(tenant.portal_auth_mode) === "external_radius_portal") {
+  const scopedLocation = locationId ? await getTenantLocationById(locationId) : null;
+  const source = scopedLocation ?? tenant;
+  if (normalizePortalAuthMode(source.portal_auth_mode) === "external_radius_portal") {
     return null;
   }
-  if (normalizeVoucherSourceMode(tenant.voucher_source_mode) !== "omada_openapi") {
+  if (normalizeVoucherSourceMode(source.voucher_source_mode) !== "omada_openapi") {
     return null;
   }
 
   if (
-    !tenant.omada_api_base_url ||
-    !tenant.omada_omadac_id ||
-    !tenant.omada_site_id ||
-    !tenant.omada_client_id ||
-    !tenant.omada_client_secret_enc
+    !source.omada_api_base_url ||
+    !source.omada_omadac_id ||
+    !source.omada_site_id ||
+    !source.omada_client_id ||
+    !source.omada_client_secret_enc
   ) {
     return null;
   }
 
   return {
-    apiBaseUrl: tenant.omada_api_base_url,
-    omadacId: tenant.omada_omadac_id,
-    siteId: tenant.omada_site_id,
-    clientId: tenant.omada_client_id,
-    clientSecret: decryptSecret(tenant.omada_client_secret_enc),
+    apiBaseUrl: source.omada_api_base_url,
+    omadacId: source.omada_omadac_id,
+    siteId: source.omada_site_id,
+    clientId: source.omada_client_id,
+    clientSecret: decryptSecret(source.omada_client_secret_enc),
   } satisfies TenantOmadaOpenApiConfig;
 }
 
@@ -2797,27 +3495,29 @@ export async function resolveTenantOmadaOpenApiConfigForTesting(params: {
   };
 }
 
-export async function resolveTenantMikrotikConfigIfPresent(tenantId: string) {
+export async function resolveTenantMikrotikConfigIfPresent(tenantId: string, locationId?: string | null) {
   const tenant = await getTenantById(tenantId);
   if (!tenant) return null;
-  if (normalizePortalAuthMode(tenant.portal_auth_mode) === "external_radius_portal") {
+  const scopedLocation = locationId ? await getTenantLocationById(locationId) : null;
+  const source = scopedLocation ?? tenant;
+  if (normalizePortalAuthMode(source.portal_auth_mode) === "external_radius_portal") {
     return null;
   }
-  if (normalizeVoucherSourceMode(tenant.voucher_source_mode) !== "mikrotik_rest") {
+  if (normalizeVoucherSourceMode(source.voucher_source_mode) !== "mikrotik_rest") {
     return null;
   }
 
-  if (!tenant.mikrotik_base_url || !tenant.mikrotik_username || !tenant.mikrotik_password_enc) {
+  if (!source.mikrotik_base_url || !source.mikrotik_username || !source.mikrotik_password_enc) {
     return null;
   }
 
   return {
-    baseUrl: tenant.mikrotik_base_url,
-    username: tenant.mikrotik_username,
-    password: decryptSecret(tenant.mikrotik_password_enc),
-    hotspotServer: tenant.mikrotik_hotspot_server ?? "",
-    defaultProfile: tenant.mikrotik_default_profile ?? "",
-    verifyTls: tenant.mikrotik_verify_tls !== 0,
+    baseUrl: source.mikrotik_base_url,
+    username: source.mikrotik_username,
+    password: decryptSecret(source.mikrotik_password_enc),
+    hotspotServer: source.mikrotik_hotspot_server ?? "",
+    defaultProfile: source.mikrotik_default_profile ?? "",
+    verifyTls: source.mikrotik_verify_tls !== 0,
   } satisfies TenantMikrotikConfig;
 }
 
@@ -2920,11 +3620,27 @@ export async function seedDefaultPackagesForTenantId(tenantId: string) {
   await seedDefaultPackagesForTenant(db, tenantId);
 }
 
-export async function getPackagesWithAvailability(tenantId: string) {
+export async function getPackagesWithAvailability(tenantId: string, locationId?: string | null) {
   const db = getDb();
-  const rows = await db
-    .prepare(
-      `
+  const query = locationId
+    ? `
+      SELECT p.*, (
+        SELECT COUNT(1) FROM voucher_pool v
+        WHERE v.tenant_id = p.tenant_id
+          AND v.package_id = p.id
+      ) as total_count, (
+        SELECT COUNT(1) FROM voucher_pool v
+        WHERE v.tenant_id = p.tenant_id
+          AND v.package_id = p.id
+          AND v.status = 'UNUSED'
+      ) as available_count
+      FROM voucher_packages p
+      WHERE p.tenant_id = ?
+        AND p.active = 1
+        AND (p.location_id IS NULL OR p.location_id = ?)
+      ORDER BY COALESCE(p.duration_minutes, 2147483647) ASC
+    `
+    : `
       SELECT p.*, (
         SELECT COUNT(1) FROM voucher_pool v
         WHERE v.tenant_id = p.tenant_id
@@ -2939,25 +3655,35 @@ export async function getPackagesWithAvailability(tenantId: string) {
       WHERE p.tenant_id = ?
         AND p.active = 1
       ORDER BY COALESCE(p.duration_minutes, 2147483647) ASC
-    `,
-    )
-    .all(tenantId);
+    `;
+  const rows = await db
+    .prepare(query)
+    .all(...(locationId ? [tenantId, locationId] : [tenantId]));
   return rows as Array<PackageRow & { available_count: number; total_count: number }>;
 }
 
-export async function getPackageByCode(tenantId: string, code: string) {
+export async function getPackageByCode(tenantId: string, code: string, locationId?: string | null) {
   const db = getDb();
-  return await db
-    .prepare(
-      `
+  const query = locationId
+    ? `
       SELECT *
       FROM voucher_packages
       WHERE tenant_id = ?
         AND code = ?
         AND active = 1
-    `,
-    )
-    .get(tenantId, code) as PackageRow | undefined;
+        AND (location_id IS NULL OR location_id = ?)
+    `
+    : `
+      SELECT *
+      FROM voucher_packages
+      WHERE tenant_id = ?
+        AND code = ?
+        AND active = 1
+        AND location_id IS NULL
+    `;
+  return await db
+    .prepare(query)
+    .get(...(locationId ? [tenantId, code, locationId] : [tenantId, code])) as PackageRow | undefined;
 }
 
 export async function getPackageById(tenantId: string, id: string) {
@@ -3017,6 +3743,7 @@ export async function getAvailableCount(tenantId: string, packageId: string) {
 
 export async function createTransaction(params: {
   tenantId: string;
+  locationId?: string | null;
   reference: string;
   email: string;
   phone: string;
@@ -3041,16 +3768,17 @@ export async function createTransaction(params: {
   await db.prepare(
     `
       INSERT INTO transactions (
-        id, tenant_id, reference, email, phone, amount_ngn,
+        id, tenant_id, location_id, reference, email, phone, amount_ngn,
         platform_billing_model, platform_fee_percent, platform_fee_ngn, tenant_net_amount_ngn,
         paystack_transaction_charge_kobo, paystack_subaccount_code,
         package_id, authorization_url,
         subscriber_id, delivery_mode, voucher_source_mode, payment_status, created_at, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
     params.tenantId,
+    params.locationId ?? null,
     params.reference,
     email,
     params.phone,
@@ -3365,13 +4093,14 @@ export async function activateSubscriberAccessForTransaction(params: {
     await db.prepare(
       `
       INSERT INTO subscriber_entitlements (
-        id, tenant_id, subscriber_id, package_id, transaction_reference, status,
+        id, tenant_id, location_id, subscriber_id, package_id, transaction_reference, status,
         starts_at, ends_at, max_devices, bandwidth_profile, data_limit_mb, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
     `,
     ).run(
       randomUUID(),
       params.tenantId,
+      transaction.location_id ?? null,
       transaction.subscriber_id,
       transaction.package_id,
       transaction.reference,
@@ -3800,35 +4529,58 @@ export async function getTransactionByVoucherCode(
   tenantId: string,
   voucherCode: string,
   voucherSourceMode?: VoucherSourceMode | null,
+  locationId?: string | null,
 ) {
   const db = getDb();
   if (voucherSourceMode) {
-    return await db
-      .prepare(
-        `SELECT * FROM transactions
+    const query = locationId
+      ? `SELECT * FROM transactions
          WHERE tenant_id = ?
            AND UPPER(voucher_code) = UPPER(?)
            AND payment_status = 'success'
            AND voucher_source_mode = ?
+           AND (location_id IS NULL OR location_id = ?)
          ORDER BY paid_at DESC
-         LIMIT 1`,
-      )
-      .get(tenantId, voucherCode.trim(), voucherSourceMode) as TransactionRow | undefined;
+         LIMIT 1`
+      : `SELECT * FROM transactions
+         WHERE tenant_id = ?
+           AND UPPER(voucher_code) = UPPER(?)
+           AND payment_status = 'success'
+           AND voucher_source_mode = ?
+           AND location_id IS NULL
+         ORDER BY paid_at DESC
+         LIMIT 1`;
+    return await db
+      .prepare(query)
+      .get(
+        ...(locationId
+          ? [tenantId, voucherCode.trim(), voucherSourceMode, locationId]
+          : [tenantId, voucherCode.trim(), voucherSourceMode]),
+      ) as TransactionRow | undefined;
   }
 
-  return await db
-    .prepare(
-      `SELECT * FROM transactions
+  const query = locationId
+    ? `SELECT * FROM transactions
        WHERE tenant_id = ? AND UPPER(voucher_code) = UPPER(?) AND payment_status = 'success'
+         AND (location_id IS NULL OR location_id = ?)
        ORDER BY paid_at DESC
-       LIMIT 1`,
-    )
-    .get(tenantId, voucherCode.trim()) as TransactionRow | undefined;
+       LIMIT 1`
+    : `SELECT * FROM transactions
+       WHERE tenant_id = ? AND UPPER(voucher_code) = UPPER(?) AND payment_status = 'success'
+         AND location_id IS NULL
+       ORDER BY paid_at DESC
+       LIMIT 1`;
+  return await db
+    .prepare(query)
+    .get(...(locationId ? [tenantId, voucherCode.trim(), locationId] : [tenantId, voucherCode.trim()])) as
+    | TransactionRow
+    | undefined;
 }
 
 export type VoucherPoolEntryRow = {
   id: string;
   tenant_id: string;
+  location_id?: string | null;
   voucher_code: string;
   status: string;
   package_id: string;
@@ -3837,15 +4589,26 @@ export type VoucherPoolEntryRow = {
   assigned_at: string | null;
 };
 
-export async function getVoucherPoolEntryByCode(tenantId: string, voucherCode: string) {
+export async function getVoucherPoolEntryByCode(tenantId: string, voucherCode: string, locationId?: string | null) {
   const db = getDb();
+  const query = locationId
+    ? `SELECT * FROM voucher_pool
+       WHERE tenant_id = ?
+         AND UPPER(voucher_code) = UPPER(?)
+         AND (location_id IS NULL OR location_id = ?)
+       LIMIT 1`
+    : `SELECT * FROM voucher_pool
+       WHERE tenant_id = ?
+         AND UPPER(voucher_code) = UPPER(?)
+         AND location_id IS NULL
+       LIMIT 1`;
   return await db
-    .prepare(
-      `SELECT * FROM voucher_pool WHERE tenant_id = ? AND UPPER(voucher_code) = UPPER(?) LIMIT 1`,
-    )
-    .get(tenantId, voucherCode.trim()) as VoucherPoolEntryRow | undefined;
+    .prepare(query)
+    .get(...(locationId ? [tenantId, voucherCode.trim(), locationId] : [tenantId, voucherCode.trim()])) as
+    | VoucherPoolEntryRow
+    | undefined;
 }
 
-export async function resolveTenantOmadaConfigIfPresent(tenantId: string) {
-  return await resolveTenantOmadaOpenApiConfig(tenantId);
+export async function resolveTenantOmadaConfigIfPresent(tenantId: string, locationId?: string | null) {
+  return await resolveTenantOmadaOpenApiConfig(tenantId, locationId);
 }

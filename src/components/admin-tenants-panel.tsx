@@ -35,6 +35,8 @@ type TenantDto = {
   name: string;
   adminEmail: string;
   status: string;
+  locationCount: number;
+  maxLocations: number;
   paystackLast4: string | null;
   createdAt: string;
   updatedAt: string;
@@ -45,6 +47,8 @@ type TenantStatsDto = {
   slug: string;
   name: string;
   status: string;
+  locationCount: number;
+  maxLocations: number;
   paystackLast4: string | null;
   stats: {
     voucherPool: Array<{
@@ -101,6 +105,13 @@ type PlatformTransaction = {
   paymentStatus: string;
   createdAt: string;
   paidAt: string | null;
+};
+
+type PlatformPaystackDto = {
+  hasSecretKey: boolean;
+  secretKeyLast4: string;
+  hasPublicKey: boolean;
+  publicKeyLast4: string;
 };
 
 type Pagination = {
@@ -317,6 +328,8 @@ export function AdminTenantsPanel() {
   const [statsTenants, setStatsTenants] = useState<TenantStatsDto[]>([]);
   const [requests, setRequests] = useState<TenantRequestDto[]>([]);
   const [transactions, setTransactions] = useState<PlatformTransaction[]>([]);
+  const [platformPaystack, setPlatformPaystack] = useState<PlatformPaystackDto | null>(null);
+  const [platformPaystackForm, setPlatformPaystackForm] = useState({ secretKey: "", publicKey: "" });
   const [pagination, setPagination] = useState<Pagination>({ page: 1, pageSize: 25, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(false);
   const [txLoading, setTxLoading] = useState(false);
@@ -332,6 +345,7 @@ export function AdminTenantsPanel() {
     name: "",
     adminEmail: "",
     password: "",
+    maxLocations: "1",
   });
 
   const statByTenantId = useMemo(() => new Map(statsTenants.map((tenant) => [tenant.id, tenant])), [statsTenants]);
@@ -438,14 +452,16 @@ export function AdminTenantsPanel() {
     setLoading(true);
     setError(null);
     try {
-      const [tenantsData, statsData, requestsData] = await Promise.all([
+      const [tenantsData, statsData, requestsData, paystackData] = await Promise.all([
         readJson<{ tenants: TenantDto[] }>("/api/admin/tenants"),
         readJson<{ tenants: TenantStatsDto[] }>("/api/admin/stats"),
         readJson<{ requests: TenantRequestDto[] }>("/api/admin/tenant-requests?status=all&limit=120"),
+        readJson<{ settings: PlatformPaystackDto }>("/api/admin/platform/paystack"),
       ]);
       setTenants(tenantsData.tenants);
       setStatsTenants(statsData.tenants);
       setRequests(requestsData.requests);
+      setPlatformPaystack(paystackData.settings);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load admin dashboard.");
     } finally {
@@ -506,12 +522,13 @@ export function AdminTenantsPanel() {
           name: newTenant.name.trim(),
           adminEmail: newTenant.adminEmail.trim(),
           password: newTenant.password.trim() || undefined,
+          maxLocations: Number(newTenant.maxLocations || 1),
         }),
       });
       setNotice(
         `Created ${data.tenant.slug}. Login: ${data.credentials.email}. Temp password: ${data.credentials.temporaryPassword}.`,
       );
-      setNewTenant({ slug: "", name: "", adminEmail: "", password: "" });
+      setNewTenant({ slug: "", name: "", adminEmail: "", password: "", maxLocations: "1" });
       setShowCreate(false);
       await refreshAll();
     } catch (err) {
@@ -565,6 +582,65 @@ export function AdminTenantsPanel() {
       await refreshAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update tenant.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateTenantLocationLimit(tenant: TenantDto) {
+    const nextValue = window.prompt(
+      `How many storefront locations can ${tenant.name} have?`,
+      String(tenant.maxLocations ?? 1),
+    );
+    if (nextValue === null) return;
+    const maxLocations = Math.floor(Number(nextValue));
+    if (!Number.isFinite(maxLocations) || maxLocations < 1 || maxLocations > 50) {
+      setError("Location limit must be between 1 and 50.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      await readJson(`/api/admin/tenants/${tenant.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: tenant.slug,
+          name: tenant.name,
+          adminEmail: tenant.adminEmail,
+          status: tenant.status,
+          maxLocations,
+        }),
+      });
+      setNotice(`${tenant.name} can now have up to ${maxLocations} storefront location${maxLocations === 1 ? "" : "s"}.`);
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update location limit.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function savePlatformPaystack(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await readJson<{ settings: PlatformPaystackDto }>("/api/admin/platform/paystack", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          secretKey: platformPaystackForm.secretKey.trim() || undefined,
+          publicKey: platformPaystackForm.publicKey.trim() || undefined,
+        }),
+      });
+      setPlatformPaystack(data.settings);
+      setPlatformPaystackForm({ secretKey: "", publicKey: "" });
+      setNotice("Platform Paystack keys saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save platform Paystack keys.");
     } finally {
       setLoading(false);
     }
@@ -762,6 +838,7 @@ export function AdminTenantsPanel() {
                             loading={loading}
                             onActivate={() => updateTenantStatus(tenant, "active")}
                             onSuspend={() => updateTenantStatus(tenant, "suspended")}
+                            onSetLocations={() => updateTenantLocationLimit(tenant)}
                             onReset={() => resetPassword(tenant)}
                             onDelete={() => deleteTenant(tenant)}
                           />
@@ -1009,13 +1086,42 @@ export function AdminTenantsPanel() {
                       </div>
                     </div>
                     <div className={`settings-panel ${settingsTab === "billing" ? "on" : ""}`}>
-                      <div className="settings-card">
-                        <div className="settings-card-title">Billing Rules</div>
+                      <form className="settings-card" onSubmit={savePlatformPaystack}>
+                        <div className="settings-card-title">Platform Paystack Keys</div>
+                        <p className="td-muted" style={{ margin: "0 0 14px", lineHeight: 1.6 }}>
+                          These are the admin live keys used for percentage billing and tenant subscription payments.
+                          Get them from Paystack Dashboard -&gt; Settings -&gt; API Keys &amp; Webhooks.
+                        </p>
                         <div className="field-row">
-                          <Field label="Platform Fee" value="2 percent estimate" readOnly />
-                          <Field label="Processor" value="Paystack tenant sub-accounts" readOnly />
+                          <Field
+                            label="Live Public Key"
+                            value={platformPaystackForm.publicKey}
+                            placeholder={
+                              platformPaystack?.hasPublicKey
+                                ? `Saved key ending ${platformPaystack.publicKeyLast4}`
+                                : "pk_live_..."
+                            }
+                            onChange={(publicKey) => setPlatformPaystackForm((form) => ({ ...form, publicKey }))}
+                          />
+                          <Field
+                            label="Live Secret Key"
+                            type="password"
+                            value={platformPaystackForm.secretKey}
+                            placeholder={
+                              platformPaystack?.hasSecretKey
+                                ? `Saved key ending ${platformPaystack.secretKeyLast4}`
+                                : "sk_live_..."
+                            }
+                            onChange={(secretKey) => setPlatformPaystackForm((form) => ({ ...form, secretKey }))}
+                          />
                         </div>
-                      </div>
+                        <div className="approval-review-actions" style={{ marginTop: 14 }}>
+                          <button type="submit" disabled={loading}>
+                            {loading ? "Saving..." : "Save Paystack keys"}
+                            <KeyRound size={15} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </form>
                     </div>
                     <div className={`settings-panel ${settingsTab === "notifications" ? "on" : ""}`}>
                       <div className="settings-card">
@@ -1131,9 +1237,9 @@ function CreateTenantCard({
   onCancel,
   onSubmit,
 }: {
-  value: { slug: string; name: string; adminEmail: string; password: string };
+  value: { slug: string; name: string; adminEmail: string; password: string; maxLocations: string };
   loading: boolean;
-  onChange: (value: { slug: string; name: string; adminEmail: string; password: string }) => void;
+  onChange: (value: { slug: string; name: string; adminEmail: string; password: string; maxLocations: string }) => void;
   onCancel: () => void;
   onSubmit: (event: React.FormEvent) => void;
 }) {
@@ -1145,6 +1251,15 @@ function CreateTenantCard({
         <Field label="Business Name" value={value.name} onChange={(name) => onChange({ ...value, name })} placeholder="WALLSTREET" />
         <Field label="Admin Email" type="email" value={value.adminEmail} onChange={(adminEmail) => onChange({ ...value, adminEmail })} placeholder="operator@example.com" />
         <Field label="Temp Password" value={value.password} onChange={(password) => onChange({ ...value, password })} placeholder="Optional" />
+        <Field
+          label="Max Locations"
+          type="number"
+          value={value.maxLocations}
+          onChange={(maxLocations) => onChange({ ...value, maxLocations })}
+          placeholder="1"
+          min={1}
+          max={50}
+        />
       </div>
       <div className="settings-foot">
         <button className="btn btn-muted" type="button" onClick={onCancel}>Cancel</button>
@@ -1162,6 +1277,7 @@ function TenantRow({
   loading,
   onActivate,
   onSuspend,
+  onSetLocations,
   onReset,
   onDelete,
 }: {
@@ -1170,6 +1286,7 @@ function TenantRow({
   loading: boolean;
   onActivate: () => void;
   onSuspend: () => void;
+  onSetLocations: () => void;
   onReset: () => void;
   onDelete: () => void;
 }) {
@@ -1179,6 +1296,9 @@ function TenantRow({
       <div className="t-mid">
         <div className="t-name">{tenant.name}</div>
         <div className="t-slug">/{tenant.slug} - {tenant.adminEmail}</div>
+        <div className="t-slug">
+          {tenant.locationCount ?? 1} / {tenant.maxLocations ?? 1} storefront location{(tenant.maxLocations ?? 1) === 1 ? "" : "s"} allowed
+        </div>
       </div>
       <div className="t-rev">
         <span>{money(stats?.stats.transactions.revenueNgn ?? 0)}</span>
@@ -1197,6 +1317,9 @@ function TenantRow({
         )}
         <button className="btn btn-ghost btn-xs" type="button" disabled={loading} onClick={onReset}>
           <ShieldCheck size={12} /> Reset
+        </button>
+        <button className="btn btn-muted btn-xs" type="button" disabled={loading} onClick={onSetLocations}>
+          Locations
         </button>
         <button className="btn btn-red btn-xs" type="button" disabled={loading} onClick={onDelete}>
           <Trash2 size={12} /> Delete
@@ -1350,6 +1473,8 @@ function Field({
   placeholder,
   type = "text",
   readOnly = false,
+  min,
+  max,
 }: {
   label: string;
   value: string;
@@ -1357,6 +1482,8 @@ function Field({
   placeholder?: string;
   type?: string;
   readOnly?: boolean;
+  min?: number;
+  max?: number;
 }) {
   return (
     <label className="field">
@@ -1366,6 +1493,8 @@ function Field({
         value={value}
         placeholder={placeholder}
         readOnly={readOnly}
+        min={min}
+        max={max}
         onChange={(event) => onChange?.(event.target.value)}
       />
     </label>

@@ -11,7 +11,7 @@ import { verifyAndProcess } from "@/lib/payments";
 import { requirePaystackSecretForTransaction } from "@/lib/paystack-routing";
 import {
   getPackageById,
-  getTenantBySlug,
+  resolveStorefrontContextBySlug,
   getTransaction,
 } from "@/lib/store";
 
@@ -27,8 +27,9 @@ export const dynamic = "force-dynamic";
 export default async function TenantPaymentVerifyPage({ params, searchParams }: Props) {
   const { slug, reference } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant) notFound();
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront) notFound();
+  const { tenant, displayName, storefrontSlug, voucherSourceMode } = storefront;
   const portalContext = getCaptivePortalContextFromSearchParams(resolvedSearchParams);
   const portalReturnQuery = createCaptivePortalSearchParams(portalContext).toString();
 
@@ -36,7 +37,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
 
   if (!transaction) {
     return (
-      <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
+      <VerifyFrame tenantName={displayName} tenantSlug={storefrontSlug}>
           <div className="status-card">
             <h1 className="status-title">Transaction not found</h1>
             <p className="status-copy">
@@ -49,7 +50,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
 
   if (transaction.payment_status === "cancelled") {
     return (
-      <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
+      <VerifyFrame tenantName={displayName} tenantSlug={storefrontSlug}>
           <div className="status-card">
             <h1 className="status-title">Payment cancelled</h1>
             <p className="status-copy">
@@ -78,7 +79,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
               ? "Admin Paystack key is not configured. Contact PaySpot support."
           : "Payments are not configured for this tenant.";
       return (
-        <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
+        <VerifyFrame tenantName={displayName} tenantSlug={storefrontSlug}>
             <div className="status-card">
               <h1 className="status-title">Unable to verify payment</h1>
               <p className="status-copy">{message}</p>
@@ -96,7 +97,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
     } catch (error) {
       console.error("Payment verification failed", error);
       return (
-        <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
+        <VerifyFrame tenantName={displayName} tenantSlug={storefrontSlug}>
             <div className="status-card">
               <h1 className="status-title">Unable to verify payment right now</h1>
               <p className="status-copy">
@@ -125,7 +126,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
             ? "This voucher was also delivered to your phone by SMS."
             : "Your voucher is shown above and ready to use.";
     return (
-      <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
+      <VerifyFrame tenantName={displayName} tenantSlug={storefrontSlug}>
           <div className="status-card">
             <p className="section-kicker">Payment confirmed</p>
             <h1 className="mt-2 status-title">
@@ -144,8 +145,8 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
             ) : (
               <VoucherDisplay
                 code={updated.voucher_code ?? ""}
-                tenantSlug={tenant.slug}
-                voucherSourceMode={tenant.voucher_source_mode ?? "import_csv"}
+                tenantSlug={storefrontSlug}
+                voucherSourceMode={voucherSourceMode}
                 planName={pkg?.name}
                 reference={reference}
               />
@@ -190,7 +191,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
             {isAccountAccess ? (
               <div className="mt-6">
                 <CaptiveBrowserAuth
-                  tenantSlug={tenant.slug}
+                  tenantSlug={storefrontSlug}
                   portalContext={portalContext}
                   defaultUsername={updated.email}
                   autoSubmitWhenReady
@@ -202,7 +203,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
               <>
                 <div className="mt-6">
                   <a
-                    href={portalContext?.originUrl ?? `/t/${tenant.slug}`}
+                    href={portalContext?.originUrl ?? `/t/${storefrontSlug}`}
                     className="inline-flex items-center justify-center rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-800"
                   >
                     Go to network sign-in
@@ -246,7 +247,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
       "This payment could not be completed. Please contact us at payspot@abdxl.cloud.";
 
     return (
-      <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
+      <VerifyFrame tenantName={displayName} tenantSlug={storefrontSlug}>
           <div className="status-card">
             <h1 className="status-title">Payment not completed</h1>
             <p className="status-copy">{message}</p>
@@ -257,7 +258,7 @@ export default async function TenantPaymentVerifyPage({ params, searchParams }: 
   }
 
   return (
-    <VerifyFrame tenantName={tenant.name} tenantSlug={tenant.slug}>
+    <VerifyFrame tenantName={displayName} tenantSlug={storefrontSlug}>
         <div className="status-card">
           <h1 className="status-title">Payment pending</h1>
           <p className="status-copy">We are verifying your payment. Please refresh this page in a moment.</p>

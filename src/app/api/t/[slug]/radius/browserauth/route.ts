@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authorizeSubscriberRadiusAccess, getTenantBySlug } from "@/lib/store";
+import { authorizeSubscriberRadiusAccess, resolveStorefrontContextBySlug } from "@/lib/store";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -23,12 +23,13 @@ const schema = z.object({
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant || tenant.status !== "active") {
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront || storefront.tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
+  const { tenant, accessMode } = storefront;
 
-  if (tenant.portal_auth_mode !== "external_radius_portal") {
+  if (accessMode !== "account_access") {
     return Response.json({ error: "Not supported" }, { status: 400 });
   }
 

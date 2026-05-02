@@ -92,6 +92,20 @@ export default async function TenantRequestReviewPage({ params }: Props) {
                 </label>
 
                 <div className="approval-review-field">
+                  <label htmlFor="storeSlug">Store slug</label>
+                  <input
+                    id="storeSlug"
+                    name="storeSlug"
+                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                    defaultValue={request.requested_slug}
+                    placeholder="store-location"
+                  />
+                  <small>
+                    This becomes the public storefront path, for example /t/{request.requested_slug}.
+                  </small>
+                </div>
+
+                <div className="approval-review-field">
                   <label htmlFor="feePercent">Platform fee percent</label>
                   <input id="feePercent" name="feePercent" type="number" min="0" max="100" step="0.01" defaultValue="5" />
                 </div>
@@ -105,6 +119,14 @@ export default async function TenantRequestReviewPage({ params }: Props) {
                   />
                   <small>
                     Required for percentage billing. This is the tenant subaccount inside the PaySpot/admin Paystack integration.
+                  </small>
+                </div>
+
+                <div className="approval-review-field">
+                  <label htmlFor="maxLocations">Allowed storefront locations</label>
+                  <input id="maxLocations" name="maxLocations" type="number" min="1" max="50" step="1" defaultValue="1" />
+                  <small>
+                    Only platform admins can change this. The operator can create storefronts up to this limit.
                   </small>
                 </div>
 

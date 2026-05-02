@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   authenticatePortalSubscriber,
   createPortalSubscriberSession,
-  getTenantBySlug,
+  resolveStorefrontContextBySlug,
 } from "@/lib/store";
 
 type Props = {
@@ -16,10 +16,11 @@ const schema = z.object({
 
 export async function POST(request: Request, { params }: Props) {
   const { slug } = await params;
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant || tenant.status !== "active") {
+  const storefront = await resolveStorefrontContextBySlug(slug);
+  if (!storefront || storefront.tenant.status !== "active") {
     return Response.json({ error: "Tenant not found" }, { status: 404 });
   }
+  const { tenant } = storefront;
 
   const body = await request.json();
   const parsed = schema.safeParse(body);

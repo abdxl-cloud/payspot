@@ -16,6 +16,13 @@ const approvalSettingsSchema = z.object({
   subscriptionInterval: z.enum(["monthly", "yearly"]).optional(),
   paystackSubaccountCode: z.string().trim().max(80).optional(),
   approvalMessage: z.string().max(1200).optional(),
+  maxLocations: z.coerce.number().int().min(1).max(50).default(1),
+  storeSlug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .optional(),
 });
 
 function mapRequest(row: Awaited<ReturnType<typeof listTenantRequests>>[number]) {
@@ -107,7 +114,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "A valid tenant Paystack subaccount code (ACCT_...) is required for percentage billing." }, { status: 400 });
     }
     try {
-      requirePlatformPaystackKeys();
+      await requirePlatformPaystackKeys();
     } catch (error) {
       return Response.json({
         error:
@@ -131,6 +138,9 @@ export async function POST(request: Request) {
   }
   if (result.status === "slug_taken") {
     return Response.json({ error: "Tenant slug is already taken" }, { status: 409 });
+  }
+  if (result.status === "invalid_slug") {
+    return Response.json({ error: "Store slug is invalid" }, { status: 400 });
   }
   if (result.status === "user_conflict") {
     return Response.json({ error: "A user with that email or slug already exists" }, { status: 409 });
@@ -161,6 +171,7 @@ export async function POST(request: Request) {
       name: result.tenant.name,
       adminEmail: result.tenant.admin_email,
       status: result.tenant.status,
+      maxLocations: result.tenant.max_locations,
     },
     credentials: {
       email: result.email,

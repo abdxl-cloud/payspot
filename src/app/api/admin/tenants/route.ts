@@ -6,6 +6,7 @@ import {
   createTenant,
   createUser,
   isTenantSlugAvailable,
+  listTenantLocations,
   listTenants,
 } from "@/lib/store";
 import { generateToken } from "@/lib/tokens";
@@ -20,6 +21,7 @@ const createSchema = z.object({
   adminEmail: z.string().email().max(120),
   username: z.string().min(2).max(80).optional(),
   password: z.string().min(8).max(200).optional(),
+  maxLocations: z.coerce.number().int().min(1).max(50).default(1),
 });
 
 export async function GET(request: Request) {
@@ -29,16 +31,23 @@ export async function GET(request: Request) {
   }
 
   const tenantRows = await listTenants();
-  const tenants = tenantRows.map((t) => ({
-    id: t.id,
-    slug: t.slug,
-    name: t.name,
-    adminEmail: t.admin_email,
-    status: t.status,
-    paystackLast4: t.paystack_secret_last4,
-    createdAt: t.created_at,
-    updatedAt: t.updated_at,
-  }));
+  const tenants = await Promise.all(
+    tenantRows.map(async (t) => {
+      const locations = await listTenantLocations(t.id);
+      return {
+        id: t.id,
+        slug: t.slug,
+        name: t.name,
+        adminEmail: t.admin_email,
+        status: t.status,
+        locationCount: locations.length,
+        maxLocations: t.max_locations ?? 1,
+        paystackLast4: t.paystack_secret_last4,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+      };
+    }),
+  );
 
   return Response.json({ tenants });
 }
@@ -58,7 +67,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { slug, name, adminEmail, username, password } = parsed.data;
+  const { slug, name, adminEmail, username, password, maxLocations } = parsed.data;
   if (!await isTenantSlugAvailable(slug)) {
     return Response.json(
       { error: "That tenant slug is not available" },
@@ -71,6 +80,7 @@ export async function POST(request: Request) {
     name,
     adminEmail,
     status: "pending_setup",
+    maxLocations,
   });
 
   if (tenantResult.status !== "created") {
@@ -125,6 +135,8 @@ export async function POST(request: Request) {
       name: tenantResult.tenant.name,
       adminEmail: tenantResult.tenant.admin_email,
       status: tenantResult.tenant.status,
+      locationCount: 1,
+      maxLocations: tenantResult.tenant.max_locations,
     },
     credentials: {
       email: userResult.user.email,

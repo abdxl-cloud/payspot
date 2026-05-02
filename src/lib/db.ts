@@ -118,7 +118,12 @@ async function initSchema() {
       platform_fee_percent REAL NOT NULL DEFAULT 0,
       platform_subscription_amount_ngn INTEGER NOT NULL DEFAULT 0,
       platform_subscription_interval TEXT NOT NULL DEFAULT 'monthly',
+      platform_subscription_status TEXT NOT NULL DEFAULT 'not_required',
+      platform_subscription_reference TEXT,
+      platform_subscription_paid_at TEXT,
+      platform_subscription_expires_at TEXT,
       approval_message TEXT,
+      max_locations INTEGER NOT NULL DEFAULT 1,
       admin_api_key_hash TEXT,
       voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv',
       portal_auth_mode TEXT NOT NULL DEFAULT 'omada_builtin',
@@ -207,9 +212,55 @@ async function initSchema() {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      key TEXT PRIMARY KEY,
+      value_enc TEXT,
+      value_text TEXT,
+      value_last4 TEXT,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS tenant_locations (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      slug TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      is_primary INTEGER NOT NULL DEFAULT 0,
+      voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv',
+      portal_auth_mode TEXT NOT NULL DEFAULT 'omada_builtin',
+      omada_api_base_url TEXT,
+      omada_omadac_id TEXT,
+      omada_site_id TEXT,
+      omada_client_id TEXT,
+      omada_client_secret_enc TEXT,
+      omada_hotspot_operator_username TEXT,
+      omada_hotspot_operator_password_enc TEXT,
+      mikrotik_base_url TEXT,
+      mikrotik_username TEXT,
+      mikrotik_password_enc TEXT,
+      mikrotik_hotspot_server TEXT,
+      mikrotik_default_profile TEXT,
+      mikrotik_verify_tls INTEGER NOT NULL DEFAULT 1,
+      radius_adapter_secret_enc TEXT,
+      radius_adapter_secret_last4 TEXT,
+      ui_config_json TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_locations_tenant_slug
+      ON tenant_locations(tenant_id, slug);
+    CREATE INDEX IF NOT EXISTS idx_tenant_locations_tenant
+      ON tenant_locations(tenant_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_locations_primary
+      ON tenant_locations(tenant_id)
+      WHERE is_primary = 1;
+
     CREATE TABLE IF NOT EXISTS voucher_packages (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      location_id TEXT REFERENCES tenant_locations(id),
       code TEXT NOT NULL,
       name TEXT NOT NULL,
       duration_minutes INTEGER,
@@ -232,6 +283,7 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS voucher_pool (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      location_id TEXT REFERENCES tenant_locations(id),
       voucher_code TEXT NOT NULL,
       duration_minutes INTEGER NOT NULL,
       status TEXT NOT NULL,
@@ -247,6 +299,7 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS transactions (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      location_id TEXT REFERENCES tenant_locations(id),
       reference TEXT NOT NULL UNIQUE,
       email TEXT NOT NULL,
       phone TEXT NOT NULL,
@@ -274,6 +327,7 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS portal_subscribers (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      location_id TEXT REFERENCES tenant_locations(id),
       email TEXT NOT NULL,
       phone TEXT,
       full_name TEXT,
@@ -296,6 +350,7 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS subscriber_entitlements (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      location_id TEXT REFERENCES tenant_locations(id),
       subscriber_id TEXT NOT NULL REFERENCES portal_subscribers(id),
       package_id TEXT NOT NULL REFERENCES voucher_packages(id),
       transaction_reference TEXT NOT NULL UNIQUE,
@@ -312,6 +367,7 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS radius_accounting_sessions (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      location_id TEXT REFERENCES tenant_locations(id),
       subscriber_id TEXT NOT NULL REFERENCES portal_subscribers(id),
       entitlement_id TEXT NOT NULL REFERENCES subscriber_entitlements(id),
       session_id TEXT NOT NULL,
@@ -330,6 +386,7 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS radius_voucher_sessions (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      location_id TEXT REFERENCES tenant_locations(id),
       transaction_reference TEXT NOT NULL REFERENCES transactions(reference),
       session_id TEXT NOT NULL,
       calling_station_id TEXT,
@@ -394,7 +451,17 @@ async function initSchema() {
     ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS platform_subscription_interval TEXT NOT NULL DEFAULT 'monthly';
     ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS platform_subscription_status TEXT NOT NULL DEFAULT 'not_required';
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS platform_subscription_reference TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS platform_subscription_paid_at TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS platform_subscription_expires_at TEXT;
+    ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS approval_message TEXT;
+    ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS max_locations INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS voucher_source_mode TEXT NOT NULL DEFAULT 'import_csv';
     ALTER TABLE tenants
@@ -433,6 +500,20 @@ async function initSchema() {
       ADD COLUMN IF NOT EXISTS ui_config_json TEXT;
     ALTER TABLE tenant_requests
       ADD COLUMN IF NOT EXISTS hotspot_type TEXT;
+    ALTER TABLE voucher_packages
+      ADD COLUMN IF NOT EXISTS location_id TEXT REFERENCES tenant_locations(id);
+    ALTER TABLE voucher_pool
+      ADD COLUMN IF NOT EXISTS location_id TEXT REFERENCES tenant_locations(id);
+    ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS location_id TEXT REFERENCES tenant_locations(id);
+    ALTER TABLE portal_subscribers
+      ADD COLUMN IF NOT EXISTS location_id TEXT REFERENCES tenant_locations(id);
+    ALTER TABLE subscriber_entitlements
+      ADD COLUMN IF NOT EXISTS location_id TEXT REFERENCES tenant_locations(id);
+    ALTER TABLE radius_accounting_sessions
+      ADD COLUMN IF NOT EXISTS location_id TEXT REFERENCES tenant_locations(id);
+    ALTER TABLE radius_voucher_sessions
+      ADD COLUMN IF NOT EXISTS location_id TEXT REFERENCES tenant_locations(id);
     ALTER TABLE voucher_packages
       ADD COLUMN IF NOT EXISTS max_devices INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE voucher_packages
@@ -487,6 +568,15 @@ async function initSchema() {
     WHERE voucher_code IS NOT NULL
       AND delivery_mode = 'voucher'
       AND voucher_source_mode IS NULL;
+  `);
+
+  await p.query(`
+    CREATE INDEX IF NOT EXISTS idx_voucher_packages_location_active
+      ON voucher_packages(location_id, active);
+    CREATE INDEX IF NOT EXISTS idx_voucher_pool_location_status
+      ON voucher_pool(location_id, status);
+    CREATE INDEX IF NOT EXISTS idx_transactions_location_status
+      ON transactions(location_id, payment_status);
   `);
 }
 

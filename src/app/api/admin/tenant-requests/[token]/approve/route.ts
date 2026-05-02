@@ -22,6 +22,13 @@ const approvalSchema = z.object({
   subscriptionInterval: z.enum(["monthly", "yearly"]).default("monthly"),
   paystackSubaccountCode: z.string().trim().max(80).optional(),
   approvalMessage: z.string().max(1200).optional(),
+  maxLocations: z.coerce.number().int().min(1).max(50).default(1),
+  storeSlug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .optional(),
 });
 
 async function parseApprovalBody(request: Request) {
@@ -38,6 +45,8 @@ async function parseApprovalBody(request: Request) {
     subscriptionInterval: form.get("subscriptionInterval"),
     paystackSubaccountCode: form.get("paystackSubaccountCode"),
     approvalMessage: form.get("approvalMessage"),
+    maxLocations: form.get("maxLocations"),
+    storeSlug: form.get("storeSlug"),
   });
 }
 
@@ -65,7 +74,7 @@ export async function POST(request: Request, { params }: Props) {
       return htmlResponse("A valid tenant Paystack subaccount code (ACCT_...) is required for percentage billing.", 400);
     }
     try {
-      requirePlatformPaystackKeys();
+      await requirePlatformPaystackKeys();
     } catch (error) {
       const message =
         error instanceof Error && error.message === "Platform Paystack key is invalid"
@@ -87,6 +96,10 @@ export async function POST(request: Request, { params }: Props) {
 
   if (result.status === "slug_taken") {
     return htmlResponse("Cannot approve: slug is already taken. Request was denied.", 409);
+  }
+
+  if (result.status === "invalid_slug") {
+    return htmlResponse("Cannot approve: store slug is invalid.", 400);
   }
 
   if (result.status === "user_conflict") {
