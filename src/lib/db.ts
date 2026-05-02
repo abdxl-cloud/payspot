@@ -702,8 +702,21 @@ async function ensureInitialized() {
   if (initialized) return;
   if (!initPromise) {
     initPromise = (async () => {
-      await initSchema();
-      await seedInitialData();
+      const p = getPool();
+      // Use a session-level advisory lock to prevent concurrent schema init
+      // across multiple Next.js worker processes (each has its own module state).
+      const lockClient = await p.connect();
+      try {
+        await lockClient.query("SELECT pg_advisory_lock(73298465)");
+        try {
+          await initSchema();
+          await seedInitialData();
+        } finally {
+          await lockClient.query("SELECT pg_advisory_unlock(73298465)");
+        }
+      } finally {
+        lockClient.release();
+      }
       initialized = true;
     })();
   }
